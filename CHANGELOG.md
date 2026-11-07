@@ -9,7 +9,7 @@ All notable changes to this project are listed here. The format follows
 ## [0.21.0]
 
 The first public release. Penitent maps Oracle PL/SQL packages to Java interfaces, driven by the database dictionary:
-see the [README](README.md) and the [documentation](docs/README.md).
+see the [README](https://github.com/rponte/penitent#readme) and the [documentation](https://github.com/rponte/penitent/tree/main/docs).
 
 ### Fixed
 

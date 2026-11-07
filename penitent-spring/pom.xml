@@ -10,6 +10,8 @@
 	</parent>
 
 	<artifactId>penitent-spring</artifactId>
+	<name>Penitent Spring</name>
+	<description>Spring integration for Penitent: transactions, Spring exceptions and interfaces as beans.</description>
 
 	<properties>
 		<automatic-module-name>io.github.rponte.penitent.spring</automatic-module-name>

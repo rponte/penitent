@@ -1,0 +1,71 @@
+name: Release
+
+on:
+  # a tag vX.Y.Z publishes that version to Maven Central
+  push:
+    tags: ['v*']
+  # a dry run: builds, tests and signs with a throwaway key, and publishes nothing
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # writes a settings.xml whose server "central" reads the token from the environment, and imports the key
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+          server-id: central
+          server-username: CENTRAL_USERNAME
+          server-password: CENTRAL_PASSWORD
+          gpg-private-key: ${{ env.DRY_RUN == 'false' && secrets.GPG_PRIVATE_KEY || '' }}
+          gpg-passphrase: MAVEN_GPG_PASSPHRASE
+
+      - name: Check that the tag is the version in the POM
+        if: env.DRY_RUN == 'false'
+        run: |
+          version=$(./mvnw -q -B help:evaluate -Dexpression=project.version -DforceStdout)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match the version in the POM, $version"
+            exit 1
+          fi
+
+      - name: Publish to Maven Central
+        if: env.DRY_RUN == 'false'
+        run: ./mvnw -B -Prelease deploy
+        env:
+          CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
+          CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+
+      - name: Build and sign with a throwaway key
+        if: env.DRY_RUN == 'true'
+        run: |
+          gpg --batch --passphrase dry-run --quick-gen-key "Penitent dry run <dry-run@example.invalid>" default default 1d
+          ./mvnw -B -Prelease verify
+          ls -1 */target/*.asc
+        env:
+          MAVEN_GPG_PASSPHRASE: dry-run
+
+      - name: Create the GitHub release, with its section of the changelog
+        if: env.DRY_RUN == 'false'
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '
+            index($0, "## [" v "]") == 1 { found = 1; next }
+            found && (/^## \[/ || /^\[.*\]: /) { exit }
+            found { print }
+          ' CHANGELOG.md > notes.md
+          gh release create "$GITHUB_REF_NAME" --verify-tag --title "Penitent $version" --notes-file notes.md
+        env:
+          GH_TOKEN: ${{ github.token }}

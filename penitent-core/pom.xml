@@ -10,6 +10,8 @@
 	</parent>
 
 	<artifactId>penitent-core</artifactId>
+	<name>Penitent Core</name>
+	<description>Maps Oracle PL/SQL packages to Java interfaces, driven by the database dictionary, with no framework.</description>
 
 	<properties>
 		<automatic-module-name>io.github.rponte.penitent.core</automatic-module-name>
