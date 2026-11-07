@@ -10,6 +10,7 @@ import java.sql.Struct;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
@@ -161,7 +162,7 @@ public final class CallLog {
 	/** One log record per line, and only the first one with the label. */
 	private static void lines(Logger logger, boolean trace, String label, String text) {
 		String[] lines = text.split("\n", -1);
-		String first = String.format("%-" + LABEL + "s : %s", label, lines[0]);
+		String first = String.format(Locale.ROOT, "%-" + LABEL + "s : %s", label, lines[0]);
 		log(logger, trace, first);
 		for (int i = 1; i < lines.length; i++) {
 			log(logger, trace, CONTINUATION + lines[i]);

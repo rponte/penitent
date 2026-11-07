@@ -1,7 +1,9 @@
 package io.github.rponte.penitent.internal.convert;
 
 import java.math.BigDecimal;
+import java.sql.CallableStatement;
 import java.sql.Connection;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Struct;
 import java.time.Instant;
@@ -158,9 +160,69 @@ public final class ScalarCodec {
 	}
 
 	/**
-	 * In a cursor, the driver returns its own types. The two with a time zone become
-	 * {@link ZonedDateTime}, the only one that does not lose the region, and {@link TIMESTAMPLTZ}
-	 * needs the connection because it does not store a time zone: the session decides it.
+	 * A parameter or a function's return value. A {@code LocalDateTime} or {@code LocalDate} is asked
+	 * of the driver as such, because its default, a {@code Timestamp}, goes through the JVM's time
+	 * zone and moves a local time that zone skips.
+	 *
+	 * @param declared the Java type the value becomes, or the converter's database type
+	 */
+	public static Object read(CallableStatement statement, int position, Class<?> declared) throws SQLException {
+		return isLocalTemporal(declared) ? statement.getObject(position, declared) : statement.getObject(position);
+	}
+
+	/**
+	 * A cursor column, for the reason in {@link #read(CallableStatement, int, Class)}. Only a
+	 * {@code DATE} or {@code TIMESTAMP} column: asked for a {@code LocalDateTime}, the driver would also
+	 * drop the time zone of a column that has one, which has to be refused instead. A parameter needs
+	 * no such check, because the dictionary already refused it before the call.
+	 */
+	public static Object read(ResultSet rs, int column, Class<?> declared) throws SQLException {
+		if (isLocalTemporal(declared)) {
+			int type = rs.getMetaData().getColumnType(column);
+			if (type == java.sql.Types.DATE || type == java.sql.Types.TIMESTAMP) {
+				return rs.getObject(column, declared);
+			}
+		}
+		return rs.getObject(column);
+	}
+
+	/**
+	 * What goes to the driver for an encoded value. A {@code LocalDateTime} or {@code LocalDate} goes as
+	 * the driver's own {@code TIMESTAMP} or {@code DATE}, built from the local date and time: as a
+	 * {@code Timestamp} it would go through the JVM's time zone; as itself, {@code createStruct} refuses
+	 * it, and a parameter loses its SQL type, so Oracle can no longer choose between overloads. The log
+	 * keeps the encoded value, which reads better.
+	 */
+	public static Object forDriver(Object encoded) throws SQLException {
+		if (encoded instanceof LocalDateTime local) {
+			return TIMESTAMP.of(local);
+		}
+		if (encoded instanceof LocalDate date) {
+			return oracle.sql.DATE.of(date);
+		}
+		return encoded;
+	}
+
+	/** {@link #forDriver(Object)} for the attributes of a {@code Struct} or the elements of an array. */
+	public static Object[] forComposite(Object[] encoded) throws SQLException {
+		Object[] values = encoded.clone();
+		for (int i = 0; i < values.length; i++) {
+			values[i] = forDriver(values[i]);
+		}
+		return values;
+	}
+
+	/** The types without a time zone that the driver can deliver without going through the JVM's. */
+	public static boolean isLocalTemporal(Class<?> type) {
+		return type == LocalDateTime.class || type == LocalDate.class;
+	}
+
+	/**
+	 * In a cursor, an attribute or an element, the driver may return its own types. The two with a
+	 * time zone become {@link ZonedDateTime}, the only one that does not lose the region, and
+	 * {@link TIMESTAMPLTZ} needs the connection because it does not store a time zone: the session
+	 * decides it. {@code DATE} and {@code TIMESTAMP} become {@link LocalDateTime} straight from their
+	 * bytes, without the JVM's time zone.
 	 */
 	private static Object unwrapOracleTimestamp(Object value, Connection connection) {
 		try {
@@ -171,7 +233,10 @@ public final class ScalarCodec {
 				return t.zonedDateTimeValue(connection);
 			}
 			if (value instanceof TIMESTAMP t) {
-				return t.timestampValue();
+				return t.toLocalDateTime();
+			}
+			if (value instanceof oracle.sql.DATE d) {
+				return d.toLocalDateTime();
 			}
 			if (value instanceof oracle.sql.INTERVALDS interval) {
 				return interval.getDuration();

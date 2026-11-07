@@ -25,7 +25,7 @@ BigDecimal value = freight.calculateFreight("SP", "CE");
 
 ## Status
 
-Version `0.20.0`. The library is complete enough to use, and every feature listed in the
+Version `0.21.0`. The library is complete enough to use, and every feature listed in the
 [compatibility table](docs/compatibility.md) has a test against a real Oracle. Keep in mind:
 
 - It is only measured on **Java 21, `ojdbc17` and Oracle 23ai**. Older versions are on the [roadmap](docs/roadmap.md).
@@ -55,7 +55,7 @@ Then add the module that fits your application. The driver is `provided`: your a
 <dependency>
     <groupId>io.github.rponte</groupId>
     <artifactId>penitent-spring-boot-starter</artifactId>
-    <version>0.20.0</version>
+    <version>0.21.0</version>
 </dependency>
 <dependency>
     <groupId>com.oracle.database.jdbc</groupId>

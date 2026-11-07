@@ -291,7 +291,7 @@ final class RoutineCall {
 		} else if (parameter.isBoolean() && bindable instanceof Boolean) {
 			statement.setObject(position, bindable, Types.BOOLEAN);
 		} else {
-			statement.setObject(position, bindable);
+			statement.setObject(position, ScalarCodec.forDriver(bindable));
 		}
 	}
 

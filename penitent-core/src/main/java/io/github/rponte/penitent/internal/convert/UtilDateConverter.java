@@ -20,6 +20,10 @@ final class UtilDateConverter implements BuiltInConverter<Date> {
 		if (raw instanceof Date date) {
 			return new Date(date.getTime());
 		}
+		if (raw instanceof java.time.LocalDateTime local) {
+			// a java.util.Date lives in the JVM's time zone by definition: this is the one place it applies
+			return new Date(Timestamp.valueOf(local).getTime());
+		}
 		throw new ScalarCodec.ConversionException("cannot convert " + raw.getClass().getName() + " to java.util.Date");
 	}
 }

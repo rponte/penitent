@@ -23,9 +23,15 @@ class LocalDateTimeConverterTest {
 	private final LocalDateTimeConverter converter = new LocalDateTimeConverter();
 
 	@Test
-	@DisplayName("writes as Timestamp, without losing the fraction")
+	@DisplayName("writes as itself, with the fraction: a Timestamp would go through the JVM's time zone")
 	void writes() {
-		assertThat(converter.toDatabase(MOMENT)).isEqualTo(Timestamp.valueOf(MOMENT));
+		assertThat(converter.toDatabase(MOMENT)).isEqualTo(MOMENT);
+	}
+
+	@Test
+	@DisplayName("reads from LocalDateTime, which the driver delivers without the JVM's time zone")
+	void reads_java_time() {
+		assertThat(converter.fromDatabase(MOMENT)).isEqualTo(MOMENT);
 	}
 
 	@Test

@@ -1,6 +1,6 @@
 # Compatibility
 
-Status of version `0.20.0`, measured only on Oracle 23ai (`gvenzl/oracle-free:23.26.3`) with `ojdbc17`.
+Status of version `0.21.0`, measured only on Oracle 23ai (`gvenzl/oracle-free:23.26.3`) with `ojdbc17`.
 
 | Status | Meaning |
 |---|---|
@@ -50,6 +50,8 @@ For what each feature does, see the [documentation](README.md).
 | Overload between `TIMESTAMP` and `TIMESTAMP WITH TIME ZONE` | The Java type picks the version | Validated |
 | `INTERVAL DAY TO SECOND` | `Duration` | Validated |
 | `INTERVAL YEAR TO MONTH` | `Period` | Validated |
+| `DATE` and `TIMESTAMP` with the JVM in a time zone with daylight saving time: a local time that zone skips (02:30 when the clocks jump) or repeats, and a day without midnight | `LocalDateTime`, `LocalDate`, unchanged as parameter, return value, `OUT`, block, cursor column, attribute and collection element | Validated |
+| Session `NLS_LANGUAGE` and `NLS_TERRITORY` of `AMERICA` and `BRAZIL`, as the driver derives them from the JVM locale | Dates, timestamps with and without time zone, and intervals cross unchanged, also as attribute, element and cursor column | Validated |
 | `BOOLEAN` as return value | `boolean`, `Boolean` | Validated |
 | `BOOLEAN` as parameter, including `null` | `boolean`, `Boolean` | Validated |
 | `NUMBER` as parameter | `boolean`, `Boolean`, as `1`/`0` or the numeric literals of `@PlsqlBoolean` | Validated |
@@ -83,7 +85,7 @@ For what each feature does, see the [documentation](README.md).
 | `VARCHAR2` | `Boolean` by `Y`/`N`, or by the literals of `@PlsqlBoolean`, such as `S`/`N` | Validated |
 | `NUMBER` | `Boolean` as `1`/`0`, or by the literals of `@PlsqlBoolean` | Validated |
 | `TIMESTAMP` | `LocalDateTime` | Validated |
-| `TIMESTAMP WITH TIME ZONE` | `OffsetDateTime`, `ZonedDateTime`, `Instant` | Validated |
+| `TIMESTAMP WITH TIME ZONE` | `OffsetDateTime`, `ZonedDateTime` (keeps the region), `Instant` | Validated |
 | `TIMESTAMP WITH LOCAL TIME ZONE` | `OffsetDateTime`, `Instant` | Validated |
 | Type with time zone in `LocalDateTime` | Rejected with `PlsqlMappingException` | Validated |
 | `DATE` or `TIMESTAMP` in `Instant`, `OffsetDateTime` or `ZonedDateTime` | Rejected with `PlsqlMappingException` | Validated |
@@ -277,3 +279,5 @@ For what each feature does, see the [documentation](README.md).
 - A collection column in a cursor, and a collection of collections as an attribute, beyond the clear error.
 - `isX()` getters and `@PlsqlBoolean` on JavaBeans.
 - A signature change in the database after the proxy has cached the metadata.
+- `java.util.Date`, `java.sql.Date` and `java.sql.Timestamp` for a local time that the JVM's time zone skips: they
+  hold an instant in that zone, so they cannot represent it. Declare `LocalDateTime` or `LocalDate`.

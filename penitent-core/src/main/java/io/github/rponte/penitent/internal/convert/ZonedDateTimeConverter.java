@@ -18,7 +18,7 @@ final class ZonedDateTimeConverter implements BuiltInConverter<ZonedDateTime> {
 		if (raw instanceof OffsetDateTime o) {
 			return o.toZonedDateTime();
 		}
-		if (raw instanceof java.util.Date) {
+		if (raw instanceof java.util.Date || raw instanceof java.time.LocalDateTime) {
 			throw new ScalarCodec.ConversionException(targetType.getSimpleName()
 					+ " would need a time zone, and the value has none; declare LocalDateTime");
 		}

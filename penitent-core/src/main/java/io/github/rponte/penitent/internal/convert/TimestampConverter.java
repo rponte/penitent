@@ -11,6 +11,10 @@ final class TimestampConverter implements BuiltInConverter<Timestamp> {
 		if (raw instanceof Timestamp timestamp) {
 			return timestamp;
 		}
+		if (raw instanceof java.time.LocalDateTime local) {
+			// a Timestamp lives in the JVM's time zone by definition: this is the one place it applies
+			return Timestamp.valueOf(local);
+		}
 		if (raw instanceof Date date) {
 			return new Timestamp(date.getTime());
 		}

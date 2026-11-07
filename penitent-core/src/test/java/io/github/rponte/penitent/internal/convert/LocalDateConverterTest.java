@@ -22,9 +22,16 @@ class LocalDateConverterTest {
 	private final LocalDateConverter converter = new LocalDateConverter();
 
 	@Test
-	@DisplayName("writes as java.sql.Date")
+	@DisplayName("writes as itself: a java.sql.Date would go through the JVM's time zone")
 	void writes() {
-		assertThat(converter.toDatabase(DAY)).isEqualTo(Date.valueOf(DAY));
+		assertThat(converter.toDatabase(DAY)).isEqualTo(DAY);
+	}
+
+	@Test
+	@DisplayName("reads from LocalDate and LocalDateTime, which the driver delivers without the JVM's time zone")
+	void reads_java_time() {
+		assertThat(converter.fromDatabase(DAY)).isEqualTo(DAY);
+		assertThat(converter.fromDatabase(DAY.atTime(10, 30))).isEqualTo(DAY);
 	}
 
 	@Test

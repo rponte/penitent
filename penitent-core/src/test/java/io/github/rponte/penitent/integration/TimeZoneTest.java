@@ -255,20 +255,20 @@ class TimeZoneTest extends OracleIntegrationTest {
 	@Test
 	@DisplayName("TIMESTAMP WITH TIME ZONE becomes OffsetDateTime, with the offset intact")
 	void tstz_to_offset() {
-		assertThat(timeZones.tstzOffset(WITH_OFFSET)).isEqualTo(WITH_OFFSET);
+		assertExactly(timeZones.tstzOffset(WITH_OFFSET), WITH_OFFSET);
 	}
 
 	@Test
 	@DisplayName("TIMESTAMP WITH TIME ZONE becomes ZonedDateTime, with the region intact")
 	void tstz_to_zoned() {
-		assertThat(timeZones.tstzZoned(WITH_REGION)).isEqualTo(WITH_REGION);
-		assertThat(timeZones.tokyoZoned()).isEqualTo(WITH_REGION);
+		assertExactly(timeZones.tstzZoned(WITH_REGION), WITH_REGION);
+		assertExactly(timeZones.tokyoZoned(), WITH_REGION);
 	}
 
 	@Test
 	@DisplayName("OffsetDateTime loses the region name, but not the instant")
 	void region_to_offset() {
-		assertThat(timeZones.tokyoOffset()).isEqualTo(WITH_REGION.toOffsetDateTime());
+		assertExactly(timeZones.tokyoOffset(), WITH_REGION.toOffsetDateTime());
 	}
 
 	@Test
@@ -307,7 +307,7 @@ class TimeZoneTest extends OracleIntegrationTest {
 	void out_parameters() {
 		PlsqlOut<ZonedDateTime> zoned = new PlsqlOut<>();
 		timeZones.outTstz(zoned);
-		assertThat(zoned.get()).isEqualTo(WITH_REGION);
+		assertExactly(zoned.get(), WITH_REGION);
 
 		PlsqlOut<OffsetDateTime> changed = PlsqlOut.of(WITH_OFFSET);
 		timeZones.changeTstz(changed);
@@ -321,10 +321,10 @@ class TimeZoneTest extends OracleIntegrationTest {
 	@Test
 	@DisplayName("OBJECT attribute with a time zone, in all three types")
 	void attributes() {
-		assertThat(timeZones.attributeOffset(new AttributeOffset(WITH_OFFSET)).v()).isEqualTo(WITH_OFFSET);
+		assertExactly(timeZones.attributeOffset(new AttributeOffset(WITH_OFFSET)).v(), WITH_OFFSET);
 		assertThat(timeZones.attributeInstant(new AttributeInstant(INSTANT)).v()).isEqualTo(INSTANT);
-		assertThat(timeZones.attributeZoned(new AttributeZoned(WITH_REGION)).v()).isEqualTo(WITH_REGION);
-		assertThat(timeZones.attributeInTokyo().v()).isEqualTo(WITH_REGION);
+		assertExactly(timeZones.attributeZoned(new AttributeZoned(WITH_REGION)).v(), WITH_REGION);
+		assertExactly(timeZones.attributeInTokyo().v(), WITH_REGION);
 		assertThat(timeZones.attributeTsltz(new AttributeOffset(WITH_OFFSET)).v()).isAtSameInstantAs(WITH_OFFSET);
 	}
 
@@ -333,10 +333,10 @@ class TimeZoneTest extends OracleIntegrationTest {
 	void cursor() {
 		ZonedItem item = timeZones.cursor().get(0);
 
-		assertThat(item.withTimeZone()).isEqualTo(WITH_REGION.toOffsetDateTime());
+		assertExactly(item.withTimeZone(), WITH_REGION.toOffsetDateTime());
 		assertThat(item.sessionLocal()).isEqualTo(WITH_REGION.toInstant());
 		assertThat(item.withoutTimeZone()).isEqualTo(WITH_REGION.toLocalDateTime());
-		assertThat(timeZones.cursorZoned().get(0).withTimeZone()).isEqualTo(WITH_REGION);
+		assertExactly(timeZones.cursorZoned().get(0).withTimeZone(), WITH_REGION);
 	}
 
 	@Test
@@ -350,9 +350,9 @@ class TimeZoneTest extends OracleIntegrationTest {
 	@Test
 	@DisplayName("anonymous block: the type of :result comes from Java")
 	void anonymous_block() {
-		assertThat(timeZones.blockOffset(WITH_OFFSET)).isEqualTo(WITH_OFFSET);
+		assertExactly(timeZones.blockOffset(WITH_OFFSET), WITH_OFFSET);
 		assertThat(timeZones.blockInstant(INSTANT)).isEqualTo(INSTANT);
-		assertThat(timeZones.blockZoned(WITH_REGION)).isEqualTo(WITH_REGION);
+		assertExactly(timeZones.blockZoned(WITH_REGION), WITH_REGION);
 	}
 
 	@Test
@@ -514,5 +514,13 @@ class TimeZoneTest extends OracleIntegrationTest {
 		OffsetDateTime inUtc = WITH_OFFSET.withOffsetSameInstant(ZoneOffset.UTC);
 
 		assertThat(timeZones.tstzOffset(inUtc)).isAtSameInstantAs(WITH_OFFSET);
+	}
+
+	/**
+	 * AssertJ compares a {@code ZonedDateTime} or {@code OffsetDateTime} by its instant, so a lost region
+	 * or offset would pass; this compares with {@code equals}.
+	 */
+	private static void assertExactly(Object actual, Object expected) {
+		assertThat(actual).isEqualTo(expected);
 	}
 }

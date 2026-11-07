@@ -46,8 +46,20 @@ class ScalarCodecTest {
 		assertThat(write(Status.NEW)).isEqualTo("NEW");
 		assertThat(write(true)).isEqualTo("Y");
 		assertThat(write(instant)).isEqualTo(instant.atOffset(ZoneOffset.UTC));
-		assertThat(write(LocalDate.parse("2018-01-15"))).isInstanceOf(java.sql.Date.class);
-		assertThat(write(LocalDateTime.parse("2018-01-15T10:30:00"))).isInstanceOf(Timestamp.class);
+		assertThat(write(LocalDate.parse("2018-01-15"))).isEqualTo(LocalDate.parse("2018-01-15"));
+		assertThat(write(LocalDateTime.parse("2018-01-15T10:30:00"))).isEqualTo(LocalDateTime.parse("2018-01-15T10:30:00"));
+	}
+
+	@Test
+	@DisplayName("a local date and time reach the driver as its own DATE and TIMESTAMP, built without the JVM's time zone")
+	void for_driver() throws java.sql.SQLException {
+		LocalDateTime gap = LocalDateTime.parse("2025-03-09T02:30:15");
+
+		assertThat(ScalarCodec.forDriver(gap)).isInstanceOf(oracle.sql.TIMESTAMP.class);
+		assertThat(((oracle.sql.TIMESTAMP) ScalarCodec.forDriver(gap)).toLocalDateTime()).isEqualTo(gap);
+		assertThat(((oracle.sql.DATE) ScalarCodec.forDriver(gap.toLocalDate())).toLocalDate())
+				.isEqualTo(gap.toLocalDate());
+		assertThat(ScalarCodec.forDriver("text")).isEqualTo("text");
 	}
 
 	@Test

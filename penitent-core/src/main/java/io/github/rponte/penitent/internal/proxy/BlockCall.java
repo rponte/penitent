@@ -200,7 +200,7 @@ final class BlockCall {
 		} else {
 			Object bindable = ScalarCodec.encode(value, ValueConversion.from(literals));
 			log.sent(name, bindable);
-			statement.setObject(position, bindable);
+			statement.setObject(position, ScalarCodec.forDriver(bindable));
 		}
 	}
 
@@ -302,15 +302,17 @@ final class BlockCall {
 			return decoder.decodeCursor((java.sql.ResultSet) statement.getObject(metadata.resultPosition()), target,
 					":result of the block", connection);
 		}
-		Object raw = statement.getObject(metadata.resultPosition());
 		if (metadata.resultType().isBlank()) {
 			AppliedConverter applied = scalarInBlock(RoutineMetadata.converterOfReturn(method, types.converters()),
 					method);
+			Object raw = ScalarCodec.read(statement, metadata.resultPosition(),
+					applied == null ? ReturnType.of(method) : applied.databaseType());
 			return applied == null
 					? ScalarCodec.decode(raw, ReturnType.of(method), JavaTarget.returnConversion(method), connection)
 					: applied.fromDatabase(ScalarCodec.decode(raw, applied.databaseType(),
 							JavaTarget.returnConversion(method), connection));
 		}
+		Object raw = statement.getObject(metadata.resultPosition());
 		BlockMetadata.DeclaredType declared = sessionTypes.of(metadata.resultType());
 		if (declared.isCollection()) {
 			scalarInBlock(target.converter(), method);

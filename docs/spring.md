@@ -71,7 +71,7 @@ application's packages, as `@EnablePlsqlPackages` would, with no annotation.
 <dependency>
 	<groupId>io.github.rponte</groupId>
 	<artifactId>penitent-spring-boot-starter</artifactId>
-	<version>0.20.0</version>
+	<version>0.21.0</version>
 </dependency>
 ```
 

@@ -5,7 +5,7 @@
 
 	<groupId>io.github.rponte</groupId>
 	<artifactId>penitent-parent</artifactId>
-	<version>0.20.0</version>
+	<version>0.21.0</version>
 	<packaging>pom</packaging>
 
 	<name>Penitent</name>
@@ -81,6 +81,14 @@
 					<groupId>org.apache.maven.plugins</groupId>
 					<artifactId>maven-surefire-plugin</artifactId>
 					<version>3.5.6</version>
+					<configuration>
+						<!--
+							The same JVM everywhere: the driver takes the session's NLS settings and time
+							zone from it. The hostile ones are covered on purpose, by LocaleTest and
+							JvmTimeZoneTest.
+						-->
+						<argLine>-Duser.language=en -Duser.country=US -Duser.timezone=UTC</argLine>
+					</configuration>
 				</plugin>
 				<plugin>
 					<groupId>org.apache.maven.plugins</groupId>
@@ -124,7 +132,40 @@
 						<failOnWarnings>true</failOnWarnings>
 					</configuration>
 				</plugin>
+				<plugin>
+					<groupId>de.thetaphi</groupId>
+					<artifactId>forbiddenapis</artifactId>
+					<version>3.11</version>
+					<configuration>
+						<!--
+							Fails the build on an API that depends on the JVM's default locale, charset or
+							time zone, such as toUpperCase() or String.format without a Locale, whatever
+							locale the build runs in.
+						-->
+						<bundledSignatures>
+							<bundledSignature>jdk-unsafe</bundledSignature>
+							<bundledSignature>jdk-deprecated</bundledSignature>
+							<bundledSignature>jdk-non-portable</bundledSignature>
+							<bundledSignature>jdk-internal</bundledSignature>
+						</bundledSignatures>
+						<failOnUnsupportedJava>false</failOnUnsupportedJava>
+					</configuration>
+					<executions>
+						<execution>
+							<goals>
+								<goal>check</goal>
+							</goals>
+						</execution>
+					</executions>
+				</plugin>
 			</plugins>
 		</pluginManagement>
+
+		<plugins>
+			<plugin>
+				<groupId>de.thetaphi</groupId>
+				<artifactId>forbiddenapis</artifactId>
+			</plugin>
+		</plugins>
 	</build>
 </project>

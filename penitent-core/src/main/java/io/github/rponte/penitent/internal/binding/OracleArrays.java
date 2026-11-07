@@ -7,6 +7,7 @@ import java.sql.SQLException;
 import java.time.ZonedDateTime;
 
 import io.github.rponte.penitent.exception.PlsqlMappingException;
+import io.github.rponte.penitent.internal.convert.ScalarCodec;
 import oracle.jdbc.OracleConnection;
 import oracle.sql.ARRAY;
 
@@ -25,7 +26,8 @@ public final class OracleArrays {
 
 	public static Array create(Connection connection, String typeName, Object values) throws SQLException {
 		try {
-			return connection.unwrap(OracleConnection.class).createOracleArray(typeName, values);
+			return connection.unwrap(OracleConnection.class).createOracleArray(typeName,
+					values instanceof Object[] elements ? ScalarCodec.forComposite(elements) : values);
 		} catch (IllegalArgumentException | ClassCastException e) {
 			// the driver converts the elements right here: this is bad data, not a database failure
 			throw new PlsqlMappingException("an element does not fit in " + typeName + ": " + e.getMessage(), e);
@@ -34,12 +36,15 @@ public final class OracleArrays {
 
 	/**
 	 * The elements, to be turned into {@code javaElement}. {@code getArray()} returns a {@code
-	 * TIMESTAMP WITH TIME ZONE} without the region name, which only the driver's own types still
-	 * carry. {@code getResultSet()} also returns them, but yields nulls for an {@code INDEX BY}.
+	 * TIMESTAMP WITH TIME ZONE} without the region name, and a {@code DATE} or {@code TIMESTAMP} as a
+	 * {@code Timestamp}, through the JVM's time zone; only the driver's own types still carry the region
+	 * and the exact local time. {@code getResultSet()} also returns them, but yields nulls for an
+	 * {@code INDEX BY}.
 	 */
 	public static Object[] elements(Array array, Class<?> javaElement) throws SQLException {
-		return javaElement == ZonedDateTime.class && array instanceof ARRAY oracle
-				? oracle.getOracleArray()
-				: (Object[]) array.getArray();
+		return (javaElement == ZonedDateTime.class || ScalarCodec.isLocalTemporal(javaElement))
+				&& array instanceof ARRAY oracle
+						? oracle.getOracleArray()
+						: (Object[]) array.getArray();
 	}
 }

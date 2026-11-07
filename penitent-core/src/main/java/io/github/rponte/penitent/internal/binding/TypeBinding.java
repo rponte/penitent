@@ -373,7 +373,7 @@ public final class TypeBinding {
 			values[attribute.attrNo() - 1] = encodeAttribute(attribute, read(source, attribute), connection);
 		}
 		try {
-			return connection.createStruct(oracleTypeName, values);
+			return connection.createStruct(oracleTypeName, ScalarCodec.forComposite(values));
 		} catch (IllegalArgumentException | ClassCastException e) {
 			// the driver converts the value right here, and does not say which attribute it was
 			throw new PlsqlMappingException("a value does not fit in " + oracleTypeName + ": " + e.getMessage()
@@ -473,7 +473,26 @@ public final class TypeBinding {
 
 	/** {@link Struct} → Java. */
 	public Object fromStruct(Struct struct, Connection connection) throws SQLException {
-		return instantiate(struct.getAttributes(), connection);
+		return instantiate(attributesOf(struct), connection);
+	}
+
+	/**
+	 * {@code getAttributes()} turns a date into a {@code Timestamp}, through the JVM's time zone, and a
+	 * {@code TIMESTAMP WITH TIME ZONE} into an {@code OffsetDateTime}, without the region. The driver's
+	 * own types still carry both, so those attributes are taken from them.
+	 */
+	private static Object[] attributesOf(Struct struct) throws SQLException {
+		Object[] values = struct.getAttributes();
+		if (struct instanceof oracle.sql.STRUCT oracle) {
+			oracle.sql.Datum[] datums = oracle.getOracleAttributes();
+			for (int i = 0; i < values.length; i++) {
+				if (datums[i] instanceof oracle.sql.DATE || datums[i] instanceof oracle.sql.TIMESTAMP
+						|| datums[i] instanceof oracle.sql.TIMESTAMPTZ) {
+					values[i] = datums[i];
+				}
+			}
+		}
+		return values;
 	}
 
 	/** Builds through the record's canonical constructor or the bean's setters. */

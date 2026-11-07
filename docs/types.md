@@ -46,6 +46,12 @@ applies: `Instant`, `OffsetDateTime` and `ZonedDateTime` are rejected, because t
 time zone. The rule also applies to the elements of a collection. To drop the time zone on purpose, declare
 `LocalDateTime` and convert in Java, as in `value.toLocalDateTime()`.
 
+The result does not depend on the machine. A `LocalDateTime` or `LocalDate` crosses the driver as a local date and
+time, never through the JVM's time zone, so a time that zone skips when daylight saving time starts, such as 02:30,
+arrives unchanged; and the session's language and territory, which the driver takes from the JVM locale, do not
+change any value. `java.util.Date`, `java.sql.Date` and `java.sql.Timestamp` are the exception: they hold an instant
+in the JVM's time zone, so prefer `java.time`.
+
 ## Composite types
 
 An OBJECT type, a package RECORD and a table's `%ROWTYPE` map to a Java `record` or to a JavaBean. No type name is

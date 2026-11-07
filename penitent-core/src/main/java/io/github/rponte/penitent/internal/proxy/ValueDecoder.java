@@ -53,9 +53,10 @@ final class ValueDecoder {
 		} else {
 			AppliedConverter applied = target.converter();
 			value = applied == null
-					? ScalarCodec.decode(statement.getObject(position), target.type(), target.conversion(), connection)
-					: applied.fromDatabase(ScalarCodec.decode(statement.getObject(position), applied.databaseType(),
-							target.conversion(), connection));
+					? ScalarCodec.decode(ScalarCodec.read(statement, position, target.type()), target.type(),
+							target.conversion(), connection)
+					: applied.fromDatabase(ScalarCodec.decode(ScalarCodec.read(statement, position,
+							applied.databaseType()), applied.databaseType(), target.conversion(), connection));
 		}
 		received(log, outName, value);
 		return value;

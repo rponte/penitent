@@ -122,7 +122,7 @@ public final class CursorBinding {
 				String label = metadata.getColumnLabel(column.index());
 				try {
 					assignments.add(new JavaProperties.SimpleAssignment(property.name(), property.writer(),
-							decode(rs.getObject(column.index()), label, property, propertyConversion, connection)));
+							decode(rs, column.index(), label, property, propertyConversion, connection)));
 				} catch (ScalarCodec.ConversionException e) {
 					throw new ScalarCodec.ConversionException("cursor column " + label + ": " + e.getMessage(), e);
 				}
@@ -147,7 +147,7 @@ public final class CursorBinding {
 		String label = metadata.getColumnLabel(1);
 		List<Object> rows = new ArrayList<>();
 		while (rs.next()) {
-			Object raw = rs.getObject(1);
+			Object raw = ScalarCodec.read(rs, 1, converter == null ? javaType : converter.databaseType());
 			try {
 				rows.add(converter == null
 						? ScalarCodec.decode(raw, javaType, conversion, connection)
@@ -165,10 +165,12 @@ public final class CursorBinding {
 	 * comes as a {@link Struct}, which carries its own type name, {@code SCHEMA.TYPE}: the dictionary
 	 * does the rest, as for an OBJECT parameter.
 	 */
-	private Object decode(Object raw, String label, JavaProperty property, ValueConversion conversion,
+	private Object decode(ResultSet rs, int column, String label, JavaProperty property, ValueConversion conversion,
 			Connection connection) throws SQLException {
 		AppliedConverter applied = ConverterLookup.find(converters, property.annotation(PlsqlConvert.class),
 				property.type(), property.elementType(), javaType.getSimpleName() + "." + property.name());
+		Object raw = ScalarCodec.read(rs, column,
+				applied == null || applied.elementWise() ? property.type() : applied.databaseType());
 		if (applied == null && raw instanceof Struct struct && JavaProperties.isComposite(property.type())) {
 			return bindings.of(property.type(), objectTypeOf(struct), connection).fromStruct(struct, connection);
 		}
