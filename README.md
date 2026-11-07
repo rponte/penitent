@@ -1,5 +1,7 @@
 # Penitent
 
+[![CI](https://github.com/rponte/penitent/actions/workflows/ci.yml/badge.svg)](https://github.com/rponte/penitent/actions/workflows/ci.yml)
+
 Penitent maps Oracle PL/SQL packages to Java interfaces. You write the interface; Penitent reads the routine
 signatures and type attributes from the database dictionary and builds the calls, so Oracle type names and parameter
 order are never written by hand.
