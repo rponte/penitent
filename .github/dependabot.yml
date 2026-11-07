@@ -19,6 +19,8 @@ updates:
         patterns:
           - "org.apache.maven*"
           - "de.thetaphi:*"
-      # what ends up in the published POMs, such as the Spring Boot BOM
+      # what ends up in the published POMs, such as the Spring Boot BOM: only patch updates are
+      # grouped; a minor or major update comes alone, since it may change behavior
       dependencies:
         patterns: ["*"]
+        update-types: ["patch"]

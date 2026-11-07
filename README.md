@@ -161,7 +161,9 @@ Each module also builds a sources jar and a Javadoc jar. The Javadoc covers only
 `io.github.rponte.penitent.internal` are left out, because they may change in any version. Doclint runs on every build and
 fails it on any problem except missing `@param`/`@return` tags.
 
-Every change of behavior updates the [compatibility table](docs/compatibility.md) in the same commit.
+Every change of behavior updates the [compatibility table](docs/compatibility.md) in the same commit. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for the rules and how to propose a change, and [CHANGELOG.md](CHANGELOG.md) for what
+changed in each version.
 
 ## License
 
