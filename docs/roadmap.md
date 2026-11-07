@@ -1,0 +1,161 @@
+# Roadmap
+
+The library is in `0.x`: it works and is tested, but the public API may still change between minor versions. The
+packages under `io.github.rponte.penitent.internal` are never part of the API.
+
+The items below are in three groups: what comes next, what waits for a real use case, and what is left out on purpose.
+
+## Next
+
+In this order.
+
+### Mocking PL/SQL in tests
+
+Tests of an application that calls PL/SQL often need a routine to return a fixed value, or to fail, without touching
+the real package. The plan is a typed Java API to declare what each routine returns or raises, and to verify how it
+was called. Behind it, the package's body would be replaced in a separate edition, through Oracle's edition-based
+redefinition, only for the duration of the test, and generated from the dictionary as the library already reads it.
+
+Still open: whether it becomes a module of this project or a project of its own.
+
+### Publication
+
+- Continuous integration, with its own Oracle, on every change.
+- Artifacts published to Maven Central. Until then, the library is installed from source (see the
+  [README](../README.md#installation)).
+- The Javadoc and this documentation published online.
+
+### Supported versions
+
+Today everything is measured on a single combination: Java 21, `ojdbc17` and Oracle 23ai. Widening it is planned in
+this order, since the Oracle version is the one that most often decides what a project can use:
+
+1. **Oracle before 23ai**, starting with 19c, the long-term release most projects still run. To check: the
+   dictionary views the library reads (`ALL_ARGUMENTS`, `ALL_PLSQL_TYPES`, `ALL_PLSQL_COLL_TYPES` and the others),
+   native `BOOLEAN`, which only exists from 23ai, and the binding of package types by name. Each version needs its
+   own Oracle in the test suite, with Testcontainers.
+2. **Older Java versions**, such as 17. The code uses Java 21 features, which would have to be replaced, and the build
+   would have to compile and test against each supported version.
+3. **Other JDBC drivers**, such as `ojdbc11` and `ojdbc8`. The driver decides how RECORD, `%ROWTYPE` and collections
+   are addressed, so `DriverAddressingTest` and the round-trip tests would run against each one.
+
+The goal is a test matrix in CI that states which combinations are validated, as the [compatibility table](compatibility.md) does
+today for the one combination.
+
+## On demand
+
+These wait for a real use case: until one shows up, the current behavior stays, and a rejection says so with a clear
+error.
+
+### Metadata cache
+
+Each proxy reads the dictionary on the first call of each method and keeps the result for its whole life, and
+`PlsqlPackages.validate` warms it. Still open:
+
+- **Fewer queries:** each method reads its own `ALL_ARGUMENTS`, an N+1 per interface. The current schema and the
+  package are looked up again for every method, and the same collection more than once within a method. Reading one
+  interface's routines in a single query, and caching the repeated lookups, would cut a scalar interface to a few
+  queries in total. `DictionaryQueriesTest` holds today's numbers.
+- **Cache shared between proxies:** two interfaces that use the same type read it twice. It cannot be static, because
+  of the classloader trap.
+
+### Writing `INDEX BY` and its keys
+
+Currently the library rejects writing an `INDEX BY` and every `INDEX BY VARCHAR2`, and reading an
+`INDEX BY PLS_INTEGER` loses the indexes. The cause is the driver, which only carries a list of values and, when
+writing, numbers from 0. The rejection stays until a real use case shows up, because lifting it later does not break
+existing users of the library.
+
+A path to evaluate, the same one [jOOQ adopted](https://github.com/jOOQ/jOOQ/issues/13957):
+
+- Map to `Map<Integer, V>` and `Map<String, V>`, so that the keys come from the developer. `List<T>` remains
+  read-only.
+- Generate an anonymous block that receives keys and values in parallel arrays and builds the collection with
+  `r(k(i)) := v(i)`. The dictionary already provides the type and the `INDEX_BY` column.
+- When reading, walk the collection with `FIRST`/`NEXT` and return keys and values in separate arrays.
+
+Not measured yet: we only tested the block that fixes the index base, with `NUMBER`. Still to measure: sparse keys,
+`INDEX BY VARCHAR2`, reading with keys, `IN OUT`, `NULL`, empty collections and composite elements, as well as how
+the generated call coexists with `@PlsqlBlock`, converters and error mapping.
+
+### Nested collections in attributes and cursor columns
+
+A collection of collections works as a parameter and a return value, and a cursor column can be an OBJECT. Two
+neighboring cases are refused with a clear error, because they go through other code paths that were not extended:
+
+- A collection of collections as an attribute of an OBJECT or RECORD, such as `CELLS MATRIX_T` in `REPORT_T`. The
+  attributes go through `TypeBinding`, and only the parameter path recurses into nested collections. No driver limit
+  was found; it was not measured.
+- A collection as a cursor column, such as `CAST(MULTISET(...) AS NAME_LIST_T)` read into a `List<String>`. The value
+  carries the type name, as an OBJECT column does, so it looks feasible. Today the error suggests `TABLE()` or wrapping
+  the collection in an OBJECT column.
+
+### Methods of OBJECT types
+
+An OBJECT type is a third container of routines, besides the package and the schema, and today its methods are only
+reachable through `@PlsqlBlock`. Two kinds need a design:
+
+- `STATIC` methods, such as `ADDRESS_T.parse(p_text)`, are routines whose container is the type. They could follow
+  the same rule as `@PlsqlPackage` and `@PlsqlSchema`, with an annotation that names the type.
+- `MEMBER` methods, such as `l_address.format()`, run on an instance, so the call needs the object itself: the Java
+  side might pass it as the first parameter, or the record might declare the methods. The generated call would be a
+  block that builds the object, calls the method and, for a `MEMBER PROCEDURE` that changes `SELF`, reads it back.
+
+Before designing it, check how jOOQ maps the methods of Oracle UDTs, and how it handles `SELF` in `MEMBER`
+procedures.
+
+### Binding by name
+
+Binding by name is opt-in per interface. Deferred until there is a need:
+
+- `@PlsqlParam(omitIfNull = true)`, to omit a `null` parameter and let the `DEFAULT` take effect. For now, one Java
+  overload per way of calling solves it, and the SQL of each method stays fixed.
+- Making `BY_NAME` the library's default, in a major version, once existing applications have a migration path.
+  An application can already choose it for all its interfaces with `PlsqlSettings.withBind`.
+
+### Converters and binding
+
+`PlsqlConverter` remains a pure value conversion, with no connection and no dictionary. Configuration goes in the
+constructor, with `PlsqlConverters.of(...)`. The library's conversions that need no context live in one class per
+type, in `io.github.rponte.penitent.internal.convert`, which is not part of the API and may change. Whatever needs JDBC, such
+as `TIMESTAMPLTZ`, STRUCT and ARRAY, stays in the binding layer.
+
+These steps are deferred until there is a need:
+
+- More ready-made converters, besides enum by code, when a real case shows which ones are worth it.
+- The boolean literals of a schema that uses `S`/`N` in `PlsqlSettings`. Until then,
+  each point declares its own `@PlsqlBoolean`. A plain `Boolean` ↔ `String` converter does not work, because it
+  would also write to `NUMBER`.
+- A public binding API, in the style of jOOQ's `Binding`, only when a real case shows up that a converter cannot
+  solve. The candidates are `XMLTYPE`, `JSON` and LOBs. It would have to cover direct binding as well as attributes
+  and elements, and declare what it writes, so as not to bypass validation against the dictionary.
+
+### Call logging
+
+Deferred until there is a need:
+
+- A way to hide a sensitive parameter even at trace level, through an annotation or configuration.
+- The names of an OBJECT's attributes in the values sent, which are currently shown only in the type's order.
+- A public listener, in the style of jOOQ's `ExecuteListener`, for metrics and tracing.
+
+### Spring and Spring Boot integration
+
+The integration covers registration with `@EnablePlsqlPackages`, a `PlsqlSettings` bean, validation at startup
+and the Spring Boot starter. What remains:
+
+- **More properties in the starter,** such as `penitent.considerNested` or a `DataSource` by name, if an application needs
+  them. Today these go through `@EnablePlsqlPackages`.
+
+## By design
+
+These are decisions, not gaps. Changing one would need a strong case.
+
+- **No framework in the core.** `penitent-core` depends only on the JDK and the driver. Spring, Spring Boot and any
+  future integration live in their own modules.
+- **No static configuration.** `PlsqlSettings` is an object passed to each `create`, so two contexts or two tests can
+  use different settings, and a proxy never changes behavior after it is created.
+- **No silent fallback.** When the Java side and the dictionary disagree, the library fails with a message that says
+  what it looked up and what exists, instead of guessing.
+- **No metadata expiry.** The cache never expires, so with `BY_POSITION` a new parameter in the middle of the list
+  binds the values wrongly, without an error, until a restart. A package spec is a contract and rarely changes in
+  production, so restarting the application is the policy.

@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<groupId>io.github.rponte</groupId>
+	<artifactId>penitent-parent</artifactId>
+	<version>0.20.0</version>
+	<packaging>pom</packaging>
+
+	<name>Penitent</name>
+	<description>Maps Oracle PL/SQL packages to Java interfaces, driven by the database dictionary.</description>
+	<url>https://github.com/rponte/penitent</url>
+
+	<licenses>
+		<license>
+			<name>Apache License, Version 2.0</name>
+			<url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+			<distribution>repo</distribution>
+		</license>
+	</licenses>
+
+	<developers>
+		<developer>
+			<id>rponte</id>
+			<name>Rafael Ponte</name>
+			<url>https://github.com/rponte</url>
+		</developer>
+	</developers>
+
+	<scm>
+		<connection>scm:git:https://github.com/rponte/penitent.git</connection>
+		<developerConnection>scm:git:git@github.com:rponte/penitent.git</developerConnection>
+		<url>https://github.com/rponte/penitent</url>
+	</scm>
+
+	<modules>
+		<module>penitent-core</module>
+		<module>penitent-spring</module>
+		<module>penitent-spring-boot-starter</module>
+	</modules>
+
+	<properties>
+		<maven.compiler.release>21</maven.compiler.release>
+		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+		<spring-boot.version>4.1.1</spring-boot.version>
+	</properties>
+
+	<dependencyManagement>
+		<dependencies>
+			<!--
+				Only the versions, imported: inheriting spring-boot-starter-parent would force Boot
+				on whoever consumes the library.
+			-->
+			<dependency>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-dependencies</artifactId>
+				<version>${spring-boot.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
+
+	<build>
+		<pluginManagement>
+			<plugins>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-compiler-plugin</artifactId>
+					<version>3.15.0</version>
+					<configuration>
+						<!--
+							The Boot parent turns this on by itself. Here it has to be declared: the
+							:name placeholders of a @PlsqlBlock match the Java parameter name.
+						-->
+						<parameters>true</parameters>
+					</configuration>
+				</plugin>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-surefire-plugin</artifactId>
+					<version>3.5.6</version>
+				</plugin>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-resources-plugin</artifactId>
+					<version>3.5.0</version>
+				</plugin>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-jar-plugin</artifactId>
+					<version>3.5.1</version>
+					<configuration>
+						<archive>
+							<manifestEntries>
+								<!-- each module sets its own, until there is a module-info -->
+								<Automatic-Module-Name>${automatic-module-name}</Automatic-Module-Name>
+							</manifestEntries>
+						</archive>
+					</configuration>
+				</plugin>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-install-plugin</artifactId>
+					<version>3.1.4</version>
+				</plugin>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-source-plugin</artifactId>
+					<version>3.4.0</version>
+				</plugin>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-javadoc-plugin</artifactId>
+					<version>3.12.0</version>
+					<configuration>
+						<!--
+							Only the API is documented: internal packages may change in any version.
+							Missing @param/@return tags are not errors; everything else is.
+						-->
+						<excludePackageNames>io.github.rponte.penitent.internal:io.github.rponte.penitent.internal.*</excludePackageNames>
+						<doclint>all,-missing</doclint>
+						<failOnWarnings>true</failOnWarnings>
+					</configuration>
+				</plugin>
+			</plugins>
+		</pluginManagement>
+	</build>
+</project>

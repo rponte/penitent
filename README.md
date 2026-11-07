@@ -1,0 +1,166 @@
+# Penitent
+
+Penitent maps Oracle PL/SQL packages to Java interfaces. You write the interface; Penitent reads the routine
+signatures and type attributes from the database dictionary and builds the calls, so Oracle type names and parameter
+order are never written by hand.
+
+```java
+@PlsqlPackage("FREIGHT_CALCULATOR")
+public interface FreightCalculator {
+    // FUNCTION calculate_freight(p_origin VARCHAR2, p_destination VARCHAR2) RETURN NUMBER
+    BigDecimal calculateFreight(String originState, String destinationState);
+}
+
+FreightCalculator freight = PlsqlPackages.create(FreightCalculator.class, dataSource);
+BigDecimal value = freight.calculateFreight("SP", "CE");
+```
+
+- **The database is the source of truth.** The dictionary says which routine, parameters and types exist, and the
+  interface only has to agree with it. OBJECT, RECORD, `%ROWTYPE`, collections and cursors map to Java records and
+  JavaBeans without naming a type.
+- **Strict.** A method that does not match the database fails with a message that says what was looked up and what
+  exists, never with a guess or a silently swapped value. `PlsqlPackages.validate` checks a whole interface up front.
+- **No framework required.** `penitent-core` depends only on the JDK, SLF4J and the Oracle driver. `penitent-spring`
+  adds Spring transactions and exceptions, and the Spring Boot starter registers the interfaces as beans.
+
+## Status
+
+Version `0.20.0`. The library is complete enough to use, and every feature listed in the
+[compatibility table](docs/compatibility.md) has a test against a real Oracle. Keep in mind:
+
+- It is only measured on **Java 21, `ojdbc17` and Oracle 23ai**. Older versions are on the [roadmap](docs/roadmap.md).
+- It is **not on Maven Central yet**: install it from source, as below.
+- It is in `0.x`, so the public API may still change between minor versions.
+
+## Installation
+
+Build and install the library into your local Maven repository. The tests start their own Oracle, so they need Docker;
+`-DskipTests` installs without them.
+
+```
+git clone https://github.com/rponte/penitent.git
+cd penitent
+./mvnw install
+```
+
+Then add the module that fits your application. The driver is `provided`: your application chooses its version.
+
+| Application | Module |
+|---|---|
+| Plain Java | `penitent-core` |
+| Spring, without Boot | `penitent-spring` |
+| Spring Boot | `penitent-spring-boot-starter` |
+
+```xml
+<dependency>
+    <groupId>io.github.rponte</groupId>
+    <artifactId>penitent-spring-boot-starter</artifactId>
+    <version>0.20.0</version>
+</dependency>
+<dependency>
+    <groupId>com.oracle.database.jdbc</groupId>
+    <artifactId>ojdbc17</artifactId>
+    <!-- managed by Spring Boot; without it, give a version such as 23.26.3.0.0 -->
+</dependency>
+```
+
+## Quick start
+
+### Plain Java
+
+```java
+FreightCalculator freight = PlsqlPackages.create(FreightCalculator.class, dataSource);
+```
+
+Each call takes a connection from the `DataSource`, uses it and gives it back. A database failure arrives as a
+`PlsqlExecutionException`, and an error raised by the routine as its subclass `PlsqlRoutineRaisedException`, with the
+`ORA-` code.
+
+### Spring
+
+```java
+FreightCalculator freight = SpringPlsqlPackages.create(FreightCalculator.class, dataSource);
+```
+
+The call takes part in the current transaction, and database failures arrive as `DataAccessException`, as with a
+`JdbcTemplate`. To register the interfaces as beans instead, use `@EnablePlsqlPackages("com.example.plsql")`.
+
+### Spring Boot
+
+With the starter there is nothing to configure: every interface in the application's packages becomes a bean, and a
+service injects it.
+
+```java
+@Service
+class FreightService {
+
+    private final FreightCalculator freight;
+
+    FreightService(FreightCalculator freight) {
+        this.freight = freight;
+    }
+}
+```
+
+```yaml
+penitent:
+  bind: BY_NAME          # optional: bind parameters by name instead of position
+  validation:
+    enabled: true        # optional: check every interface against the database at startup
+```
+
+## Features
+
+- [Calling routines](docs/routines.md): package and standalone routines, `DEFAULT`, overloads, synonyms, `OUT` and
+  `IN OUT` parameters with `PlsqlOut<T>`, and binding by position or by name.
+- [Types](docs/types.md): scalars, booleans by literal, time zones, OBJECT, RECORD, `%ROWTYPE`, collections at any
+  depth and cursors.
+- [Anonymous blocks](docs/anonymous-blocks.md) with `@PlsqlBlock`, for member methods and anything else that is not a
+  `package.routine` call.
+- [Converters](docs/converters.md) for your own types, and enums stored by code.
+- [Settings](docs/settings.md) shared by every interface, without static state.
+- [Errors](docs/errors.md) that separate the routine's own errors from infrastructure failures.
+- [Validation](docs/validation.md) of every interface up front, with every mismatch in one message.
+- [Spring and Spring Boot](docs/spring.md) integration.
+- [Logging](docs/logging.md) of each call, with the SQL and, separately, the values.
+
+The [documentation index](docs/README.md) lists every page.
+
+## Packages
+
+| Package | What it holds |
+|---|---|
+| `io.github.rponte.penitent` | What you write every day: `PlsqlPackages`, the annotations (`@PlsqlPackage`, `@PlsqlSchema`, `@PlsqlRoutine`, `@PlsqlBlock`, `@PlsqlParam`, `@PlsqlType`, `@PlsqlAttr`, `@PlsqlBoolean`), `PlsqlOut`, `PlsqlBind` and `PlsqlSettings` |
+| `io.github.rponte.penitent.convert` | Conversion: `PlsqlConverter`, `PlsqlConverters`, `PlsqlEnumCodeConverter` and `@PlsqlConvert` |
+| `io.github.rponte.penitent.spring` | The `penitent-spring` module: `SpringPlsqlPackages`, `@EnablePlsqlPackages`, `PlsqlPackagesScanner` and `PlsqlPackagesValidator` |
+| `io.github.rponte.penitent.boot` | The `penitent-spring-boot-starter` module: `PlsqlAutoConfiguration`, `PlsqlProperties` and `PlsqlSettingsCustomizer` |
+| `io.github.rponte.penitent.exception` | Errors and their translation: `PlsqlMappingException`, `PlsqlExecutionException`, `PlsqlRoutineRaisedException`, `PlsqlFailure`, `PlsqlExceptionTranslator` and `DefaultPlsqlExceptionTranslator` |
+
+`io.github.rponte.penitent.internal` and its subpackages are not part of the API: they may change in any version, without
+notice.
+
+## Requirements
+
+- Java 21 and Oracle Database. The code is tested against Oracle 23ai.
+- `ojdbc17` on the classpath of the application using the library (`provided` dependency).
+- An SLF4J implementation, to see the log, such as the Logback that Spring Boot already ships. Without one, SLF4J
+  warns once and discards the log.
+- For `@PlsqlBlock`, and for binding by name without `@PlsqlParam`: compile with `-parameters`. The Spring Boot parent
+  already turns it on.
+
+## Build
+
+```
+./mvnw verify    # requires Docker: the tests start their own Oracle through Testcontainers
+./mvnw install   # installs into ~/.m2
+```
+
+Each module also builds a sources jar and a Javadoc jar. The Javadoc covers only the API: packages under
+`io.github.rponte.penitent.internal` are left out, because they may change in any version. Doclint runs on every build and
+fails it on any problem except missing `@param`/`@return` tags.
+
+Every change of behavior updates the [compatibility table](docs/compatibility.md) in the same commit.
+
+## License
+
+[Apache License 2.0](LICENSE).

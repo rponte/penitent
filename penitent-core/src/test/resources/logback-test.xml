@@ -1,0 +1,19 @@
+<!-- Without this, Logback would log everything at debug, including Testcontainers and Hikari. -->
+<configuration>
+	<appender name="console" class="ch.qos.logback.core.ConsoleAppender">
+		<encoder>
+			<pattern>%d{HH:mm:ss.SSS} %-5level %logger{30} - %msg%n</pattern>
+		</encoder>
+	</appender>
+	<!-- the library's own log, as an application would turn it on: each call and its values -->
+	<logger name="io.github.rponte.penitent.call" level="DEBUG" />
+	<logger name="io.github.rponte.penitent.bind" level="TRACE" />
+	<!-- for troubleshooting the test setup: the migrations applied, and the container started -->
+	<logger name="org.flywaydb" level="INFO" />
+	<logger name="org.testcontainers" level="INFO" />
+	<!-- Testcontainers logs each container under tc.<image>: its start, and its health checks -->
+	<logger name="tc" level="INFO" />
+	<root level="WARN">
+		<appender-ref ref="console" />
+	</root>
+</configuration>
