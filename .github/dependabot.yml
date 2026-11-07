@@ -1,11 +1,24 @@
 version: 2
 updates:
+  # one pull request a week per group, so each one runs the CI once
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
 
   - package-ecosystem: maven
     directory: /
     schedule:
       interval: weekly
+    groups:
+      # what builds the library: Maven, its wrapper and plugins
+      build:
+        patterns:
+          - "org.apache.maven*"
+          - "de.thetaphi:*"
+      # what ends up in the published POMs, such as the Spring Boot BOM
+      dependencies:
+        patterns: ["*"]
