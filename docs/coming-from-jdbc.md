@@ -73,7 +73,8 @@ long id = orderId.get();
 
 ## What stays the same
 
-- **Your `DataSource` and your pool.** Penitent takes a connection for each call and gives it back.
+- **Your `DataSource` and your pool.** Penitent takes a connection for each call and gives it back, and never
+  commits: the transaction is yours, or Spring's. See [Transactions and connections](transactions.md).
 - **Spring transactions and exceptions.** With [`penitent-spring`](spring.md), a call takes part in the current
   transaction, and infrastructure failures are the same `DataAccessException` classes a `JdbcTemplate` throws.
 - **The SQL Oracle sees.** The call is a plain `{call PACKAGE.ROUTINE(?, ?)}`, which you can see in the

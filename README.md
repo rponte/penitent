@@ -117,6 +117,7 @@ penitent:
 - [Converters](docs/converters.md) for your own types, and enums stored by code.
 - [Settings](docs/settings.md) shared by every interface, without static state.
 - [Errors](docs/errors.md) that separate the routine's own errors from infrastructure failures.
+- [Transactions and connections](docs/transactions.md): with Spring, with a pool, or in a transaction you manage.
 - [Validation](docs/validation.md) of every interface up front, with every mismatch in one message.
 - [Spring and Spring Boot](docs/spring.md) integration.
 - [Logging](docs/logging.md) of each call, with the SQL and, separately, the values.

@@ -56,6 +56,21 @@ Each proxy reads the dictionary on the first call of each method and keeps the r
 - **Cache shared between proxies:** two interfaces that use the same type read it twice. It cannot be static, because
   of the classloader trap.
 
+### Transactions without Spring
+
+Without Spring, several calls share a transaction only through a `DataSource` that always hands out the same
+connection, which the application writes itself, as [Transactions](transactions.md#a-transaction-you-manage) shows.
+An interface created for each transaction also reads the dictionary again, because the cache belongs to the
+instance. Still open:
+
+- **A view bound to a connection,** derived from an interface that already exists and sharing its cache, as jOOQ
+  derives a configuration: something like `PlsqlPackages.using(orders, connection)`. The library would still never
+  commit.
+- **Or a transaction helper** in the core, such as `PlsqlTransaction.run(dataSource, () -> ...)`, which needs rules
+  for nesting, threads and a connection already in use.
+
+`TransactionsTest` describes today's behavior, which either of them has to keep.
+
 ### Writing `INDEX BY` and its keys
 
 Currently the library rejects writing an `INDEX BY` and every `INDEX BY VARCHAR2`, and reading an

@@ -57,6 +57,7 @@ Java and from Spring Boot. Every page uses the same orders package, so the examp
 | use my own types, or enums stored by code | [Converters](converters.md) |
 | handle an error raised by the routine | [Errors](errors.md#errors-raised-by-the-routine) |
 | turn errors into my own exceptions | [Errors](errors.md#your-own-exceptions) |
+| run several calls, and my own SQL, in one transaction | [Transactions and connections](transactions.md) |
 | configure every interface at once | [Settings](settings.md) |
 | check every interface against the database | [Validation](validation.md) |
 | use Spring transactions, or inject interfaces as beans | [Spring and Spring Boot](spring.md) |

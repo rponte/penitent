@@ -64,6 +64,19 @@ class DictionaryQueriesTest extends OracleIntegrationTest {
 		assertThat(counter.dictionaryQueries()).isZero();
 	}
 
+	@Test
+	@DisplayName("the cache belongs to each instance: a second create of the same interface reads the dictionary again")
+	void cache_per_instance() {
+		ScalarsTest.Scalars first = PlsqlPackages.create(ScalarsTest.Scalars.class, counter.dataSource());
+		first.plus(BigDecimal.ONE, BigDecimal.ONE);
+
+		ScalarsTest.Scalars second = PlsqlPackages.create(ScalarsTest.Scalars.class, counter.dataSource());
+		counter.reset();
+		second.plus(BigDecimal.ONE, BigDecimal.ONE);
+
+		assertThat(counter.dictionaryQueries()).isEqualTo(5);
+	}
+
 	private <T> void assertQueries(Class<T> type, Consumer<T> call, long firstCall) {
 		T proxy = PlsqlPackages.create(type, counter.dataSource());
 

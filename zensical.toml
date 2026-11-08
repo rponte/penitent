@@ -23,6 +23,7 @@ nav = [
     { "Anonymous blocks" = "anonymous-blocks.md" },
     { "Converters" = "converters.md" },
     { "Errors" = "errors.md" },
+    { "Transactions and connections" = "transactions.md" },
     { "Settings" = "settings.md" },
     { "Validation" = "validation.md" },
     { "Spring and Spring Boot" = "spring.md" },
