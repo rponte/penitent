@@ -1,8 +1,35 @@
-# Documentation
+# Penitent
 
-New to Penitent? Start with [Getting started](getting-started.md): in about ten minutes, it calls a real PL/SQL
-package from plain Java and from Spring Boot. Every page uses the same orders package, so the examples build on each
-other.
+Penitent maps Oracle PL/SQL packages to Java interfaces. You write the interface; Penitent reads the routines'
+signatures and types from the database dictionary, builds the calls, and refuses any method that does not match the
+database, with a message that says what exists.
+
+<!-- snippet: getting-started/interface -->
+```java
+@PlsqlPackage("ORDERS_PKG")
+public interface Orders {
+
+    BigDecimal calculateFreight(String origin, String destination);
+
+    void placeOrder(long customerId, BigDecimal total, PlsqlOut<Long> orderId);
+
+    void cancelOrder(long orderId);
+
+    String orderStatus(long orderId);
+}
+```
+
+<!-- snippet: getting-started/create-and-call -->
+```java
+Orders orders = PlsqlPackages.create(Orders.class, dataSource);
+
+BigDecimal freight = orders.calculateFreight("SP", "CE");   // 25.5
+```
+
+It runs on Java 21 with plain JDBC, Spring or Spring Boot, and is on
+[Maven Central](https://central.sonatype.com/namespace/io.github.rponte) as `io.github.rponte:penitent-core`. New to
+it? Start with [Getting started](getting-started.md): in about ten minutes, it calls a real PL/SQL package from plain
+Java and from Spring Boot. Every page uses the same orders package, so the examples build on each other.
 
 ## Start here
 

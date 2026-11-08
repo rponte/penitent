@@ -2,12 +2,17 @@ package io.github.rponte.penitent.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -112,6 +117,20 @@ class DocsPagesTest {
 				.toList();
 
 		assertThat(repeated).isEmpty();
+	}
+
+	@Test
+	@DisplayName("every page is in the site's navigation, which the site's build does not check")
+	void every_page_is_in_the_navigation() throws IOException {
+		String site = Files.readString(Path.of("..", "zensical.toml"), StandardCharsets.UTF_8);
+		try (Stream<Path> pages = Files.list(Pages.DOCS)) {
+			List<String> missing = pages.map(p -> p.getFileName().toString())
+					.filter(name -> name.endsWith(".md") && !site.contains("\"" + name + "\""))
+					.sorted()
+					.toList();
+
+			assertThat(missing).as("pages that zensical.toml does not list in nav").isEmpty();
+		}
 	}
 
 	private List<Block> named(String language) {

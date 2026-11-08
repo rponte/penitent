@@ -1,0 +1,84 @@
+# The documentation site, built from docs/ with Zensical: zensical build --strict
+# The pages stay plain Markdown, readable on GitHub; this file only adds the site's navigation and theme.
+
+[project]
+site_name = "Penitent"
+site_description = "Maps Oracle PL/SQL packages to Java interfaces, driven by the database dictionary."
+site_url = "https://rponte.github.io/penitent/"
+repo_url = "https://github.com/rponte/penitent"
+repo_name = "rponte/penitent"
+edit_uri = "edit/main/docs/"
+copyright = "Penitent is licensed under the Apache License 2.0"
+
+nav = [
+  { "Home" = "README.md" },
+  { "Start here" = [
+    { "Getting started" = "getting-started.md" },
+    { "How Penitent works" = "concepts.md" },
+    { "Coming from JDBC" = "coming-from-jdbc.md" },
+  ] },
+  { "Guides" = [
+    { "Calling routines" = "routines.md" },
+    { "Types" = "types.md" },
+    { "Anonymous blocks" = "anonymous-blocks.md" },
+    { "Converters" = "converters.md" },
+    { "Errors" = "errors.md" },
+    { "Settings" = "settings.md" },
+    { "Validation" = "validation.md" },
+    { "Spring and Spring Boot" = "spring.md" },
+    { "Logging" = "logging.md" },
+  ] },
+  { "Reference" = [
+    { "Troubleshooting" = "troubleshooting.md" },
+    { "Compatibility" = "compatibility.md" },
+    { "Roadmap" = "roadmap.md" },
+  ] },
+]
+
+[project.theme]
+language = "en"
+features = [
+  "content.action.edit",
+  "content.code.copy",
+  "content.tabs.link",
+  "navigation.footer",
+  "navigation.indexes",
+  "navigation.instant",
+  "navigation.path",
+  "navigation.sections",
+  "navigation.tabs",
+  "navigation.top",
+  "navigation.tracking",
+  "search.highlight",
+  "toc.follow",
+]
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme)"
+toggle.icon = "lucide/sun-moon"
+toggle.name = "Switch to light mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to system preference"
+
+# Only what the pages use: GitHub-flavored Markdown, so they read the same on GitHub and on the site.
+[project.markdown_extensions]
+admonition = {}
+attr_list = {}
+md_in_html = {}
+tables = {}
+toc.permalink = true
+pymdownx.highlight.anchor_linenums = true
+pymdownx.inlinehilite = {}
+pymdownx.superfences = {}
+pymdownx.betterem = {}
+pymdownx.tasklist.custom_checkbox = true
