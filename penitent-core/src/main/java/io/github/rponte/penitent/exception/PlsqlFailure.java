@@ -24,7 +24,9 @@ public record PlsqlFailure(String sql, SQLException cause, Phase phase) {
 		 * While reading the return value and the {@code OUT} parameters, after the call. A cursor
 		 * only runs its query here, so an error in that query still belongs to the routine.
 		 */
-		RESULT
+		RESULT,
+		/** While beginning, committing or rolling back a transaction of {@code PlsqlTransactions}. */
+		TRANSACTION
 	}
 
 	/**

@@ -63,8 +63,20 @@ public final class RoutineInvocationHandler implements InvocationHandler {
 	 * The same handler, with the same caches, settings and translator, bound to {@code connection}:
 	 * every call runs on it, and it is never closed, committed or rolled back.
 	 */
-	public RoutineInvocationHandler boundTo(Connection connection) {
-		return new RoutineInvocationHandler(this, new Connections.Bound(connection));
+	public RoutineInvocationHandler boundTo(Connection connection, Runnable guard) {
+		return new RoutineInvocationHandler(this, new Connections.Bound(connection, guard));
+	}
+
+	/**
+	 * A proxy of the {@code DataSource} a {@code PlsqlTransaction} of this thread is open on would take
+	 * another connection, and run outside the transaction: refused, so that it cannot go unnoticed.
+	 */
+	private void refuseOutsideTheTransaction() {
+		if (connections instanceof Connections.FromDataSource fromDataSource
+				&& TransactionScope.isOpenOn(fromDataSource.dataSource())) {
+			throw new IllegalStateException(type.getName() + " uses the DataSource of the PlsqlTransaction open on this"
+					+ " thread, and would run outside it: call it through tx.using(...)");
+		}
 	}
 
 	@Override
@@ -78,6 +90,7 @@ public final class RoutineInvocationHandler implements InvocationHandler {
 
 		Object[] arguments = args == null ? new Object[0] : args;
 		ReturnType.requireNoOptionalParameter(method);
+		refuseOutsideTheTransaction();
 		boolean lobs = TemporaryLobs.open();
 		try (Connections.Lease lease = connections.acquire()) {
 			Connection connection = lease.connection();
@@ -108,6 +121,7 @@ public final class RoutineInvocationHandler implements InvocationHandler {
 						.thenComparing(m -> java.util.Arrays.toString(m.getParameterTypes())))
 				.toList();
 		List<PlsqlMappingException> errors = new java.util.ArrayList<>();
+		refuseOutsideTheTransaction();
 		try (Connections.Lease lease = connections.acquire()) {
 			Connection connection = lease.connection();
 			for (Method method : methods) {

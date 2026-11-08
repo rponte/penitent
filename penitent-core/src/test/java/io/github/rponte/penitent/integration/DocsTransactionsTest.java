@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import io.github.rponte.penitent.PlsqlOut;
 import io.github.rponte.penitent.PlsqlPackage;
 import io.github.rponte.penitent.PlsqlPackages;
+import io.github.rponte.penitent.PlsqlTransactions;
 import io.github.rponte.penitent.exception.PlsqlRoutineRaisedException;
 
 /**
@@ -41,6 +42,55 @@ class DocsTransactionsTest extends OracleIntegrationTest {
 
 	/** What another session sees: only what was committed. */
 	private final Counting committed = PlsqlPackages.create(Counting.class, DATA_SOURCE);
+
+	@Test
+	@DisplayName("PlsqlTransactions: the block commits the calls and the JDBC work together")
+	void plsql_transactions() throws SQLException {
+		Orders orders = PlsqlPackages.create(Orders.class, dataSource);
+
+		// snippet: transactions/plsql-transactions
+		PlsqlTransactions transactions = PlsqlTransactions.of(dataSource);   // once, like the interfaces
+		// end-snippet
+
+		// snippet: transactions/run
+		transactions.run(tx -> {
+		    Orders inTransaction = tx.using(orders);
+
+		    PlsqlOut<Long> orderId = new PlsqlOut<>();
+		    inTransaction.placeOrder(605, new BigDecimal("100.00"), orderId);
+		    try (PreparedStatement discount = tx.connection().prepareStatement(
+		            "update orders set total = total * 0.9 where id = ?")) {
+		        discount.setLong(1, orderId.get());
+		        discount.executeUpdate();
+		    }
+		});   // committed: the block returned
+		// end-snippet
+
+		assertThat(committed.countOrders(605, "OPEN", new BigDecimal("90"))).isEqualTo(1);
+		assertThat(committed.countOrders(605, "OPEN", new BigDecimal("90.01"))).isZero();
+
+		// snippet: transactions/run-with-result
+		long orderId = transactions.runWithResult(tx -> {
+		    PlsqlOut<Long> id = new PlsqlOut<>();
+		    tx.using(orders).placeOrder(606, new BigDecimal("50.00"), id);
+		    return id.get();
+		});
+		// end-snippet
+
+		assertThat(orderId).isPositive();
+		assertThat(committed.countOrders(606, null, null)).isEqualTo(1);
+	}
+
+	@Test
+	@DisplayName("PlsqlTransactions: a proxy of the same DataSource called without tx.using is refused")
+	void plsql_transactions_refuses() {
+		Orders orders = PlsqlPackages.create(Orders.class, dataSource);
+
+		assertThatThrownBy(() -> PlsqlTransactions.of(dataSource).run(tx -> orders.cancelOrder(-1)))
+				.isInstanceOf(IllegalStateException.class)
+				.satisfies(e -> Docs.assertPagesShow(Docs.asDocumented(e.getMessage(), DocsTransactionsTest.class),
+						"transactions.md#outside-the-transaction"));
+	}
 
 	@Test
 	@DisplayName("with a pool in auto-commit, each call commits on its own")

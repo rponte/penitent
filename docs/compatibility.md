@@ -255,6 +255,12 @@ For what each feature does, see the [documentation](README.md).
 | A routine's own `COMMIT` or `ROLLBACK` ends the caller's transaction, with and without Spring; a `ROLLBACK` erases savepoints, and a failing Spring nested transaction then reports `ORA-01086` | Validated |
 | An autonomous transaction commits only its own work; a cursor opened before the routine's `COMMIT` is read whole | Validated |
 | With `penitent-spring`: routines and `JdbcTemplate` committed and rolled back together; a routine error caught inside the transaction undoes only that call | Validated |
+| `PlsqlTransactions`: commit when the block returns; rollback on a `RuntimeException`, a checked exception, an `Error` or `setRollbackOnly`; the exception comes out as thrown; `runWithResult` returns the value | Validated |
+| `PlsqlTransactions`: a failed commit (`ORA-02091`) is rolled back and translated, with the `TRANSACTION` phase; a connection that cannot be obtained is translated and the block does not run; rollback and close failures are suppressed into the block's failure | Validated |
+| `PlsqlTransactions`: the connection goes back to the pool in every case, with auto-commit restored by the block itself, and left off when it was off | Validated |
+| `PlsqlTransactions`: `tx.connection()` refuses `commit`, `rollback()`, `setAutoCommit`, `close` and `abort`, allows savepoints and `unwrap` | Validated |
+| `PlsqlTransactions`: refuses a proxy of the same `DataSource` without `tx.using`, a view or the connection after the block or from another thread, and a nested block; a proxy of another `DataSource` runs on its own | Validated |
+| `PlsqlTransactions`: a routine's own `COMMIT` commits the block's work so far | Validated |
 
 ## Interface behavior
 

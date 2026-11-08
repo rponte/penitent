@@ -58,19 +58,24 @@ Each proxy reads the dictionary on the first call of each method and keeps the r
 
 ### Transactions without Spring
 
-`PlsqlPackages.using` binds a view of an interface to the application's connection, sharing its cache, as
-[Transactions](transactions.md#a-transaction-you-manage) shows. Internally, a call gets its connection from a
-connection provider, which today is either the `DataSource` or the bound connection. Still open:
+`PlsqlTransactions` runs a block in one transaction, and `PlsqlPackages.using` binds a view of an interface to the
+application's connection, sharing its cache, as [Transactions](transactions.md#without-spring-plsqltransactions)
+shows. Internally, a call gets its connection from a connection provider, which today is either the `DataSource` or a
+bound connection. Still open:
 
 - **A public connection provider,** to hand out and give back connections in ways a `DataSource` makes awkward, such
   as preparing the session before each call (`CLIENT_IDENTIFIER`, an application context for VPD). It needs the
   contract the provider already follows: one connection per call, given back exactly once, and never a commit.
-- **A transaction helper** in the core, such as `PlsqlTransaction.run(dataSource, () -> ...)`, which needs rules for
-  nesting, threads and a connection already in use. Spring, a JTA container or `using` cover it today.
+- **`PlsqlTransactions` with Spring:** an implementation in `penitent-spring` backed by Spring's transaction manager,
+  so that code written against `PlsqlTransactions` keeps working when an application adopts Spring. It would refuse
+  to join an existing `@Transactional`, as the core refuses a nested block; one contract test suite would run against
+  both implementations; and the core would refuse a block while a Spring transaction is active on the thread, which
+  today would silently become two transactions.
 - **Noticing a routine that ends the caller's transaction,** by comparing the transaction before and after the call,
   for instance through `DBMS_TRANSACTION.LOCAL_TRANSACTION_ID`, to warn or to fail.
 
-`TransactionsTest` and `ConnectionBoundViewTest` describe today's behavior, which any of them has to keep.
+`TransactionsTest`, `ConnectionBoundViewTest` and `PlsqlTransactionsTest` describe today's behavior, which any of
+them has to keep.
 
 ### Writing `INDEX BY` and its keys
 
@@ -165,6 +170,9 @@ These are decisions, not gaps. Changing one would need a strong case.
 
 - **No framework in the core.** `penitent-core` depends only on the JDK and the driver. Spring, Spring Boot and any
   future integration live in their own modules.
+- **A minimal transaction, not a transaction manager.** `PlsqlTransactions` is one connection, one thread and explicit
+  participation through `tx.using`. Propagation, nested transactions, timeouts, automatic retries, synchronization
+  callbacks, annotations and JTA are left to Spring and Jakarta EE.
 - **No static configuration.** `PlsqlSettings` is an object passed to each `create`, so two contexts or two tests can
   use different settings, and a proxy never changes behavior after it is created.
 - **No silent fallback.** When the Java side and the dictionary disagree, the library fails with a message that says

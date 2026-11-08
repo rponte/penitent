@@ -10,6 +10,7 @@ This page shows the three setups you are likely to have, and what happens in eac
 | Setup | Two calls are… | Who commits |
 |---|---|---|
 | [Spring, inside `@Transactional`](#with-spring) | one transaction, with your `JdbcTemplate` work | Spring |
+| [`PlsqlTransactions`, without Spring](#without-spring-plsqltransactions) | one transaction, with your plain JDBC work | the block, as it ends |
 | [A pool in auto-commit](#a-pool-in-auto-commit) | two transactions | each call, as it ends |
 | [A transaction you manage, with `PlsqlPackages.using`](#a-transaction-you-manage) | one transaction, with your plain JDBC work | you |
 
@@ -34,6 +35,78 @@ public long checkout(long customerId, BigDecimal total) {
 
 The `penitent-spring` tests cover each of these, and the next sections explain what happens underneath.
 
+## Without Spring: `PlsqlTransactions`
+
+For an application that uses the core alone, `PlsqlTransactions` runs a block in one transaction: it commits when
+the block returns, and rolls back when it throws. Create it once, like the interfaces:
+
+<!-- snippet: transactions/plsql-transactions -->
+```java
+PlsqlTransactions transactions = PlsqlTransactions.of(dataSource);   // once, like the interfaces
+```
+
+Inside the block, an interface takes part through `tx.using`, and plain JDBC through `tx.connection()`:
+
+<!-- snippet: transactions/run -->
+```java
+transactions.run(tx -> {
+    Orders inTransaction = tx.using(orders);
+
+    PlsqlOut<Long> orderId = new PlsqlOut<>();
+    inTransaction.placeOrder(605, new BigDecimal("100.00"), orderId);
+    try (PreparedStatement discount = tx.connection().prepareStatement(
+            "update orders set total = total * 0.9 where id = ?")) {
+        discount.setLong(1, orderId.get());
+        discount.executeUpdate();
+    }
+});   // committed: the block returned
+```
+
+To return a value from the block, use `runWithResult`:
+
+<!-- snippet: transactions/run-with-result -->
+```java
+long orderId = transactions.runWithResult(tx -> {
+    PlsqlOut<Long> id = new PlsqlOut<>();
+    tx.using(orders).placeOrder(606, new BigDecimal("50.00"), id);
+    return id.get();
+});
+```
+
+**How a block ends:**
+
+- **It returns:** the transaction is committed. If `tx.setRollbackOnly()` was called, it is rolled back instead, and
+  the block still returns normally.
+- **It throws anything,** a `RuntimeException`, a checked exception or an `Error`: the transaction is rolled back,
+  and the exception comes out as it was thrown, without a wrapper. A failure to roll back is added to it as
+  suppressed, and never replaces it.
+- **The commit fails,** for instance on a deferred constraint (`ORA-02091`): the transaction is rolled back, and the
+  failure arrives through the exception translator, as a `PlsqlExecutionException` by default. Pass `PlsqlSettings`
+  to `PlsqlTransactions.of` to choose another translator.
+- **Always:** the connection goes back to the `DataSource` with its auto-commit as it was found.
+
+**It is strict about leaving the transaction.** These fail with a clear message, instead of quietly running
+somewhere else:
+
+| What | Why |
+|---|---|
+| An interface of the same `DataSource` called directly inside the block, without `tx.using` | it would take another connection, and run outside the transaction |
+| A view from `tx.using`, or `tx.connection()`, used after the block | the transaction is over |
+| The same, used from another thread, such as a `CompletableFuture` | a connection serves one thread at a time |
+| `commit`, `rollback()`, `setAutoCommit`, `close` or `abort` on `tx.connection()` | the block ends the transaction, not the code inside it. Savepoints work, and `unwrap` reaches the driver's connection, without these protections |
+| A block inside another, on the same thread | nested blocks are not supported: pass the `tx` you have |
+
+<!-- snippet: outside-the-transaction -->
+```text
+com.example.shop.Orders uses the DataSource of the PlsqlTransaction open on this thread, and would run outside it: call it through tx.using(...)
+```
+
+An interface of **another** `DataSource` is another resource, and runs on its own, outside the block's transaction.
+
+`PlsqlTransactions` is deliberately small: one connection, one thread, no nesting, no propagation, no timeout. For
+more, use Spring or a Jakarta EE container. A routine's own `COMMIT` or `ROLLBACK` still
+[ends the block's transaction](#when-the-routine-commits-or-rolls-back-by-itself), as it ends any other.
+
 ## A pool in auto-commit
 
 Without a transaction manager, the usual pool hands out connections in auto-commit. Each call is then a transaction
@@ -56,8 +129,9 @@ package variable or `DBMS_APPLICATION_INFO`, does not carry from one call to the
 
 ## A transaction you manage
 
-To put several calls, and your own JDBC work, in one transaction without Spring, bind the interface to your
-connection with `PlsqlPackages.using`, and commit or roll back yourself. Create the interface once, as usual:
+When you already have a connection, from your own transaction manager or code that cannot move into a block, bind the
+interface to it with `PlsqlPackages.using`, and commit or roll back yourself. `PlsqlTransactions` is built on the same
+view. Create the interface once, as usual:
 
 <!-- snippet: transactions/create -->
 ```java

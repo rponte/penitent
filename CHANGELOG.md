@@ -12,6 +12,11 @@ All notable changes to this project are listed here. The format follows
   that its calls take part in a transaction the application, or its framework, controls. It shares the interface's
   dictionary cache and settings, and never closes, commits or rolls back the connection. See
   [Transactions and connections](https://github.com/rponte/penitent/blob/main/docs/transactions.md).
+- `PlsqlTransactions`, a minimal and explicit transaction for the core alone: `run` and `runWithResult` commit when
+  the block returns and roll back when it throws, keeping the exception as thrown. Interfaces take part through
+  `tx.using`, plain JDBC through a `tx.connection()` that refuses to end the transaction, and every way of leaving the
+  transaction unnoticed is refused.
+- `PlsqlFailure.Phase.TRANSACTION`, for a failure to begin, commit or roll back a `PlsqlTransactions` block.
 
 ## [0.21.0]
 

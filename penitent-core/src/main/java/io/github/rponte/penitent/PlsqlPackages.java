@@ -14,6 +14,7 @@ import io.github.rponte.penitent.exception.PlsqlExecutionException;
 import io.github.rponte.penitent.exception.PlsqlMappingException;
 import io.github.rponte.penitent.exception.PlsqlRoutineRaisedException;
 import io.github.rponte.penitent.internal.proxy.RoutineInvocationHandler;
+import io.github.rponte.penitent.internal.proxy.Views;
 
 /**
  * Creates the implementation of an interface that maps PL/SQL routines, and checks it against the
@@ -127,11 +128,8 @@ public final class PlsqlPackages {
 	public static <T> T using(T proxy, Connection connection) {
 		Objects.requireNonNull(proxy, "proxy");
 		Objects.requireNonNull(connection, "connection");
-		RoutineInvocationHandler handler = handlerOf(proxy);
-		Class<?> type = handler.type();
-		@SuppressWarnings("unchecked")
-		T view = (T) Proxy.newProxyInstance(type.getClassLoader(), new Class<?>[] { type }, handler.boundTo(connection));
-		return view;
+		return Views.bind(proxy, connection, () -> {
+		});
 	}
 
 	/**
@@ -150,15 +148,7 @@ public final class PlsqlPackages {
 	 */
 	public static void validate(Object proxy) {
 		Objects.requireNonNull(proxy, "proxy");
-		handlerOf(proxy).validate();
-	}
-
-	private static RoutineInvocationHandler handlerOf(Object proxy) {
-		if (!Proxy.isProxyClass(proxy.getClass())
-				|| !(Proxy.getInvocationHandler(proxy) instanceof RoutineInvocationHandler handler)) {
-			throw new IllegalArgumentException(proxy.getClass().getName() + " is not a proxy created by PlsqlPackages");
-		}
-		return handler;
+		Views.handlerOf(proxy).validate();
 	}
 
 	/**

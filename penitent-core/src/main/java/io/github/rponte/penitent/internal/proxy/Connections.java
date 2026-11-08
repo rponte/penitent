@@ -37,11 +37,16 @@ sealed interface Connections {
 		}
 	}
 
-	/** What {@code PlsqlPackages.using} uses: always the application's connection, which stays open. */
-	record Bound(Connection connection) implements Connections {
+	/**
+	 * What {@code PlsqlPackages.using} and a {@code PlsqlTransaction} use: always the application's
+	 * connection, which stays open. {@code guard} runs before each call, and refuses it by throwing,
+	 * as a transaction does once its block ended.
+	 */
+	record Bound(Connection connection, Runnable guard) implements Connections {
 
 		@Override
 		public Lease acquire() {
+			guard.run();
 			return new Lease(connection, false);
 		}
 	}
