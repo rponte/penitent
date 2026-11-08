@@ -20,9 +20,6 @@ Still open: whether it becomes a module of this project or a project of its own.
 
 ### Publication
 
-- Continuous integration, with its own Oracle, on every change.
-- Artifacts published to Maven Central. Until then, the library is installed from source (see the
-  [README](../README.md#installation)).
 - The Javadoc and this documentation published online.
 
 ### Supported versions

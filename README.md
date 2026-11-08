@@ -1,6 +1,7 @@
 # Penitent
 
 [![CI](https://github.com/rponte/penitent/actions/workflows/ci.yml/badge.svg)](https://github.com/rponte/penitent/actions/workflows/ci.yml)
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.rponte/penitent-core)](https://central.sonatype.com/namespace/io.github.rponte)
 
 Penitent maps Oracle PL/SQL packages to Java interfaces. You write the interface; Penitent reads the routine
 signatures and type attributes from the database dictionary and builds the calls, so Oracle type names and parameter
@@ -31,21 +32,12 @@ Version `0.21.0`. The library is complete enough to use, and every feature liste
 [compatibility table](docs/compatibility.md) has a test against a real Oracle. Keep in mind:
 
 - It is only measured on **Java 21, `ojdbc17` and Oracle 23ai**. Older versions are on the [roadmap](docs/roadmap.md).
-- It is **not on Maven Central yet**: install it from source, as below.
 - It is in `0.x`, so the public API may still change between minor versions.
 
 ## Installation
 
-Build and install the library into your local Maven repository. The tests start their own Oracle, so they need Docker;
-`-DskipTests` installs without them.
-
-```
-git clone https://github.com/rponte/penitent.git
-cd penitent
-./mvnw install
-```
-
-Then add the module that fits your application. The driver is `provided`: your application chooses its version.
+The library is on Maven Central. Add the module that fits your application. The driver is `provided`: your
+application chooses its version.
 
 | Application | Module |
 |---|---|
@@ -154,7 +146,7 @@ notice.
 
 ```
 ./mvnw verify    # requires Docker: the tests start their own Oracle through Testcontainers
-./mvnw install   # installs into ~/.m2
+./mvnw install   # installs into ~/.m2, to try a change in an application before it is released
 ```
 
 Each module also builds a sources jar and a Javadoc jar. The Javadoc covers only the API: packages under
