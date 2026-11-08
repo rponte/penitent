@@ -16,6 +16,8 @@ import org.springframework.jdbc.BadSqlGrammarException;
 import org.springframework.jdbc.UncategorizedSQLException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionSystemException;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import io.github.rponte.penitent.PlsqlBind;
@@ -60,6 +62,10 @@ class SpringPlsqlPackagesTest {
 		Address echoAddress(Address value);
 
 		List<String> echoNames(List<String> value);
+
+		void insertAndCommit(int id);
+
+		void insertAndRollback(int id);
 	}
 
 	@PlsqlPackage("FIXTURE_SPRING")
@@ -198,6 +204,70 @@ class SpringPlsqlPackagesTest {
 			assertThat(fixture.countItems()).isEqualTo(before + 2);
 		} finally {
 			jdbc.update("delete from fixture_spring_item where id in (510, 511)");
+		}
+	}
+
+	@Test
+	@DisplayName("a COMMIT inside the routine commits the transaction so far: Spring's rollback comes too late")
+	void routine_commits() {
+		int before = fixture.countItems();
+		try {
+			transaction.executeWithoutResult(status -> {
+				jdbc.update("insert into fixture_spring_item values (530)");
+				fixture.insertAndCommit(531);
+				jdbc.update("insert into fixture_spring_item values (532)");
+				status.setRollbackOnly();
+			});
+
+			assertThat(fixture.countItems()).as("530 and 531 stay, 532 is rolled back").isEqualTo(before + 2);
+		} finally {
+			jdbc.update("delete from fixture_spring_item where id between 530 and 532");
+		}
+	}
+
+	@Test
+	@DisplayName("a ROLLBACK inside the routine undoes the transaction so far, and Spring commits the rest without an error")
+	void routine_rolls_back() {
+		int before = fixture.countItems();
+		try {
+			transaction.executeWithoutResult(status -> {
+				jdbc.update("insert into fixture_spring_item values (540)");
+				fixture.insertAndRollback(541);
+				jdbc.update("insert into fixture_spring_item values (542)");
+			});
+
+			assertThat(fixture.countItems()).as("only 542 is committed").isEqualTo(before + 1);
+		} finally {
+			jdbc.update("delete from fixture_spring_item where id between 540 and 542");
+		}
+	}
+
+	@Test
+	@DisplayName("a ROLLBACK inside the routine erases the savepoint of a nested transaction: when the nested work "
+			+ "fails, Spring reports the lost savepoint instead of the failure")
+	void routine_rolls_back_in_nested_transaction() {
+		TransactionTemplate nested = new TransactionTemplate(transaction.getTransactionManager());
+		nested.setPropagationBehavior(TransactionDefinition.PROPAGATION_NESTED);
+		int before = fixture.countItems();
+		try {
+			transaction.executeWithoutResult(outer -> {
+				jdbc.update("insert into fixture_spring_item values (550)");
+
+				assertThatThrownBy(() -> nested.executeWithoutResult(inner -> {
+					fixture.insertAndRollback(551);
+					throw new IllegalStateException("the nested work fails");
+				}))
+						.isInstanceOf(TransactionSystemException.class)
+						.hasMessage("Could not roll back to JDBC savepoint")
+						.rootCause().hasMessageContaining("ORA-01086");
+
+				jdbc.update("insert into fixture_spring_item values (552)");
+			});
+
+			assertThat(fixture.countItems()).as("550 was rolled back by the routine; only 552 is committed")
+					.isEqualTo(before + 1);
+		} finally {
+			jdbc.update("delete from fixture_spring_item where id between 550 and 552");
 		}
 	}
 

@@ -54,6 +54,8 @@ final class TestDatabase {
 					PROCEDURE lock_table;
 					FUNCTION echo_address(p_value ADDRESS_T) RETURN ADDRESS_T;
 					FUNCTION echo_names(p_value NAME_LIST_T) RETURN NAME_LIST_T;
+					PROCEDURE insert_and_commit(p_id NUMBER);
+					PROCEDURE insert_and_rollback(p_id NUMBER);
 				END;
 				""");
 		jdbc.execute("""
@@ -67,6 +69,10 @@ final class TestDatabase {
 					PROCEDURE lock_table IS BEGIN LOCK TABLE FIXTURE_SPRING_ITEM IN EXCLUSIVE MODE NOWAIT; END;
 					FUNCTION echo_address(p_value ADDRESS_T) RETURN ADDRESS_T IS BEGIN RETURN p_value; END;
 					FUNCTION echo_names(p_value NAME_LIST_T) RETURN NAME_LIST_T IS BEGIN RETURN p_value; END;
+					PROCEDURE insert_and_commit(p_id NUMBER) IS
+					BEGIN INSERT INTO FIXTURE_SPRING_ITEM VALUES (p_id); COMMIT; END;
+					PROCEDURE insert_and_rollback(p_id NUMBER) IS
+					BEGIN INSERT INTO FIXTURE_SPRING_ITEM VALUES (p_id); ROLLBACK; END;
 				END;
 				""");
 	}

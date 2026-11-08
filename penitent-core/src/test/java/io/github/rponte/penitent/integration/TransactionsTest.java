@@ -9,6 +9,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Savepoint;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -51,6 +52,14 @@ class TransactionsTest extends OracleIntegrationTest {
 		List<Event> events(String label);
 
 		int sessionId();
+
+		void recordAndCommit(String label);
+
+		void recordAndRollback(String label);
+
+		void recordAutonomously(String label);
+
+		List<Event> eventsAfterCommit(String label);
 	}
 
 	@PlsqlPackage("TX_PKG")
@@ -287,6 +296,166 @@ class TransactionsTest extends OracleIntegrationTest {
 
 				assertThat(events.sessionId()).isEqualTo(sessionOf(connection));
 				assertThat(events.sessionId()).isEqualTo(sessionOf(connection));
+			}
+		}
+	}
+
+	@Nested
+	@DisplayName("with a routine that commits or rolls back by itself, as much legacy PL/SQL does")
+	class RoutineControlsTheTransaction {
+
+		@Test
+		@DisplayName("in auto-commit: a COMMIT changes nothing, and a ROLLBACK undoes the call's work without an error")
+		void in_auto_commit(TestInfo test) throws SQLException {
+			String label = label(test);
+			Events events = pkg(Events.class);
+
+			events.recordAndCommit(label);
+			events.recordAndRollback(label);
+
+			assertThat(committed(label)).isEqualTo(1);
+		}
+
+		@Test
+		@DisplayName("a COMMIT inside the routine commits the whole transaction, the application's work before the call included")
+		void commit_inside(TestInfo test) throws SQLException {
+			String label = label(test);
+			try (Connection connection = DATA_SOURCE.getConnection()) {
+				connection.setAutoCommit(false);
+				Events events = PlsqlPackages.create(Events.class, alwaysIn(connection, new AtomicInteger()));
+				try {
+					insert(connection, label);
+					events.recordAndCommit(label);
+
+					assertThat(committed(label)).as("the JDBC insert was committed by the routine").isEqualTo(2);
+
+					connection.rollback();
+					assertThat(committed(label)).as("the application's rollback comes too late").isEqualTo(2);
+				} finally {
+					connection.rollback();
+					connection.setAutoCommit(true);
+				}
+			}
+		}
+
+		@Test
+		@DisplayName("a ROLLBACK inside the routine undoes the whole transaction, without an error, and the transaction goes on")
+		void rollback_inside(TestInfo test) throws SQLException {
+			String label = label(test);
+			try (Connection connection = DATA_SOURCE.getConnection()) {
+				connection.setAutoCommit(false);
+				Events events = PlsqlPackages.create(Events.class, alwaysIn(connection, new AtomicInteger()));
+				try {
+					insert(connection, label);
+					events.recordEvent(label);
+					events.recordAndRollback(label);
+
+					assertThat(count(connection, label)).as("everything before it is gone").isZero();
+
+					insert(connection, label);
+					connection.commit();
+					assertThat(committed(label)).as("only what came after it is committed").isEqualTo(1);
+				} finally {
+					connection.rollback();
+					connection.setAutoCommit(true);
+				}
+			}
+		}
+
+		@Test
+		@DisplayName("a ROLLBACK inside the routine also erases the application's savepoints")
+		void rollback_inside_erases_savepoints(TestInfo test) throws SQLException {
+			String label = label(test);
+			try (Connection connection = DATA_SOURCE.getConnection()) {
+				connection.setAutoCommit(false);
+				Events events = PlsqlPackages.create(Events.class, alwaysIn(connection, new AtomicInteger()));
+				try {
+					insert(connection, label);
+					Savepoint savepoint = connection.setSavepoint();
+					events.recordAndRollback(label);
+
+					assertThatThrownBy(() -> connection.rollback(savepoint))
+							.isInstanceOf(SQLException.class)
+							.hasMessageContaining("ORA-01086");
+				} finally {
+					connection.rollback();
+					connection.setAutoCommit(true);
+				}
+			}
+		}
+
+		@Test
+		@DisplayName("an autonomous transaction commits on its own: the application's rollback does not undo it")
+		void autonomous_transaction(TestInfo test) throws SQLException {
+			String label = label(test);
+			try (Connection connection = DATA_SOURCE.getConnection()) {
+				connection.setAutoCommit(false);
+				Events events = PlsqlPackages.create(Events.class, alwaysIn(connection, new AtomicInteger()));
+				try {
+					insert(connection, label);
+					events.recordAutonomously(label);
+
+					assertThat(committed(label)).as("only the autonomous insert").isEqualTo(1);
+
+					connection.rollback();
+					assertThat(committed(label)).as("the rollback undoes only the application's insert").isEqualTo(1);
+				} finally {
+					connection.rollback();
+					connection.setAutoCommit(true);
+				}
+			}
+		}
+
+		@Test
+		@DisplayName("a cursor opened before the routine's COMMIT is still read whole")
+		void cursor_across_commit(TestInfo test) throws SQLException {
+			String label = label(test);
+			try (Connection connection = DATA_SOURCE.getConnection()) {
+				connection.setAutoCommit(false);
+				Events events = PlsqlPackages.create(Events.class, alwaysIn(connection, new AtomicInteger()));
+				try {
+					insert(connection, label);
+					insert(connection, label);
+
+					assertThat(events.eventsAfterCommit(label)).hasSize(2);
+					assertThat(committed(label)).as("and the routine committed the inserts").isEqualTo(2);
+				} finally {
+					connection.rollback();
+					connection.setAutoCommit(true);
+				}
+			}
+		}
+
+		@Test
+		@DisplayName("committing or rolling back again, after the routine did, is not an error")
+		void commit_and_rollback_again(TestInfo test) throws SQLException {
+			String label = label(test);
+			try (Connection connection = DATA_SOURCE.getConnection()) {
+				connection.setAutoCommit(false);
+				Events events = PlsqlPackages.create(Events.class, alwaysIn(connection, new AtomicInteger()));
+				try {
+					events.recordAndCommit(label);
+					connection.commit();
+					connection.commit();
+
+					events.recordAndRollback(label);
+					connection.rollback();
+					connection.rollback();
+
+					assertThat(committed(label)).isEqualTo(1);
+				} finally {
+					connection.rollback();
+					connection.setAutoCommit(true);
+				}
+			}
+		}
+
+		@Test
+		@DisplayName("in auto-commit, the driver refuses a commit or a rollback by the application")
+		void commit_in_auto_commit() throws SQLException {
+			try (Connection connection = DATA_SOURCE.getConnection()) {
+				assertThatThrownBy(connection::commit).isInstanceOf(SQLException.class).hasMessageContaining("ORA-17273");
+				assertThatThrownBy(connection::rollback).isInstanceOf(SQLException.class).hasMessageContaining("ORA-17274");
 			}
 		}
 	}

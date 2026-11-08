@@ -146,6 +146,28 @@ connection.commit();   // keeps the order
 - **Catch it and go on,** and the commit keeps everything except the failed call. With Spring, this works the same
   inside a `@Transactional` method.
 
+## When the routine commits or rolls back by itself
+
+Much PL/SQL ends its own transaction with a `COMMIT` or a `ROLLBACK`. In Oracle, that ends the session's
+transaction, not a part of it: everything the transaction did before the call is committed or undone along with the
+routine's own work. Penitent does nothing about it, since it never touches the transaction, but your transaction
+manager does not know either:
+
+| The routine does | With a pool in auto-commit | In a transaction you or Spring manage |
+|---|---|---|
+| `COMMIT` | nothing changes | **everything before the call is committed**, and a later rollback comes too late |
+| `ROLLBACK` | the call's own work is undone, without an error | **everything before the call is undone**, without an error, and the transaction goes on with what comes after |
+| `ROLLBACK`, inside a Spring nested transaction (`PROPAGATION_NESTED`) | – | the savepoint is erased too: if the nested work then fails, Spring throws `TransactionSystemException: Could not roll back to JDBC savepoint`, caused by `ORA-01086`, instead of the original failure |
+| `COMMIT` in a `PRAGMA AUTONOMOUS_TRANSACTION`, as audit and log routines do | nothing changes | only the routine's own work is committed: your transaction is untouched, and a rollback does not undo the log |
+
+Committing or rolling back again afterwards is not an error, in a transaction you manage or in Spring's: there is
+just nothing left to commit, or to undo. In auto-commit, the driver refuses both, with `ORA-17273` and `ORA-17274`.
+
+A cursor the routine opens before its `COMMIT` is still read whole.
+
+If a routine you call ends the transaction, keep it out of a larger transaction, call it last, or ask whether it can
+become autonomous.
+
 ## See also
 
 - [Spring and Spring Boot](spring.md): transactions and exceptions with `penitent-spring`.
