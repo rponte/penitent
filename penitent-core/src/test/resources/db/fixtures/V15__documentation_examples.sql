@@ -1,6 +1,6 @@
 --
 -- The examples of the documentation, under the names the pages use. DocsGettingStartedTest and
--- DocsRoutinesTest run them, so a page that drifts from the library fails the build.
+-- DocsRoutinesTest run them, with a copy of what the pages show.
 --
 
 CREATE TABLE ORDERS

@@ -46,6 +46,9 @@ other.
 
 ## The examples are tested
 
-Each example on these pages, and each error message they quote, is run by a test in `penitent-core`, the
-`Docs*Test` classes, against the fixture `V15__documentation_examples.sql` and the ones after it. A page that drifts
-from the library fails the build.
+Each example on these pages, and each error message they quote, has a copy in a test of `penitent-core`, the
+`Docs*Test` classes, which runs it against the fixture `V15__documentation_examples.sql` and the ones after it. When
+the library changes what an example does or what a message says, its test fails, and the page is updated with it.
+
+The build does not read the pages themselves yet: a page edited without its test, or the other way around, is only
+caught in review.
