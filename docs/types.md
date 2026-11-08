@@ -37,16 +37,19 @@ For a type of your own, such as a `TaxId` value object, write a [converter](conv
 
 ### `Optional` and dates
 
+<!-- snippet: fixture -->
 ```sql
 FUNCTION born_on(p_id NUMBER) RETURN DATE;          -- NULL for a customer without a birth date
 FUNCTION created_at(p_id NUMBER) RETURN TIMESTAMP;
 ```
 
+<!-- snippet: types/date-methods -->
 ```java
 Optional<LocalDate> bornOn(long id);
 LocalDateTime createdAt(long id);
 ```
 
+<!-- snippet: types/date-calls -->
 ```java
 customers.bornOn(1);      // Optional[1990-04-12]
 customers.bornOn(2);      // Optional.empty
@@ -61,11 +64,13 @@ flags, and Penitent follows the type in the dictionary: a `NUMBER` uses `1`/`0`,
 If your schema uses other literals, such as `S`/`N`, declare them with `@PlsqlBoolean`, on the parameter, on a record
 component or, for the return value, on the method:
 
+<!-- snippet: fixture -->
 ```sql
 FUNCTION is_vip(p_id NUMBER) RETURN BOOLEAN;
 FUNCTION vip_flag(p_id NUMBER) RETURN VARCHAR2;     -- 'S' or 'N'
 ```
 
+<!-- snippet: types/boolean-methods -->
 ```java
 boolean isVip(long id);
 
@@ -75,6 +80,7 @@ boolean vipFlag(long id);
 
 Without `@PlsqlBoolean`, reading an `S` fails, instead of turning into `false`:
 
+<!-- snippet: boolean-literal -->
 ```text
 vipFlag -> SHOP.CUSTOMERS_PKG.VIP_FLAG: cannot convert 'S' to boolean: expected 'Y' or 'N'. Use @PlsqlBoolean to declare other literals.
 ```
@@ -92,14 +98,17 @@ Choose the Java type by what the Oracle type stores:
 | `TIMESTAMP WITH TIME ZONE` | an instant and its offset or region | `OffsetDateTime`, `ZonedDateTime`, `Instant` |
 | `TIMESTAMP WITH LOCAL TIME ZONE` | an instant | `OffsetDateTime`, `ZonedDateTime`, `Instant` |
 
+<!-- snippet: fixture -->
 ```sql
 FUNCTION delivery_deadline(p_ordered_at TIMESTAMP WITH TIME ZONE) RETURN TIMESTAMP WITH TIME ZONE;
 ```
 
+<!-- snippet: types/time-zone-method -->
 ```java
 OffsetDateTime deliveryDeadline(OffsetDateTime orderedAt);
 ```
 
+<!-- snippet: types/time-zone-call -->
 ```java
 customers.deliveryDeadline(OffsetDateTime.parse("2025-03-10T18:00-03:00"));   // 2025-03-12T18:00-03:00
 ```
@@ -107,6 +116,7 @@ customers.deliveryDeadline(OffsetDateTime.parse("2025-03-10T18:00-03:00"));   //
 Crossing the line in either direction would lose information without any error, so Penitent rejects it. A
 `LocalDateTime` for a time zone type would lose the time zone:
 
+<!-- snippet: local-on-tstz -->
 ```text
 deliveryDeadline -> SHOP.CUSTOMERS_PKG.DELIVERY_DEADLINE: P_ORDERED_AT is TIMESTAMP WITH TIME ZONE, and LocalDateTime has no time zone; declare OffsetDateTime, ZonedDateTime or Instant
 ```
@@ -131,16 +141,20 @@ An OBJECT type, a RECORD declared in a package and a table's `%ROWTYPE` all map 
 
 ### OBJECT
 
+<!-- snippet: fixture -->
 ```sql
 CREATE TYPE postal_address_t AS OBJECT (
     street   VARCHAR2(100),
     city     VARCHAR2(60),
-    zip_code VARCHAR2(9)
+    zip_code VARCHAR2(9),
+
+    MEMBER FUNCTION formatted RETURN VARCHAR2   -- see Anonymous blocks
 );
 
 FUNCTION normalize_address(p_address postal_address_t) RETURN postal_address_t;
 ```
 
+<!-- snippet: types/object -->
 ```java
 public record Address(String street, String city, String zipCode) {
 }
@@ -148,6 +162,7 @@ public record Address(String street, String city, String zipCode) {
 Address normalizeAddress(Address address);
 ```
 
+<!-- snippet: types/object-call -->
 ```java
 customers.normalizeAddress(new Address("rua das flores 10", "Fortaleza", "60000-000"));
 // Address[street=Rua Das Flores 10, city=FORTALEZA, zipCode=60000000]
@@ -158,10 +173,12 @@ the parameter has.
 
 ### `%ROWTYPE`
 
+<!-- snippet: fixture -->
 ```sql
 FUNCTION find_customer(p_id NUMBER) RETURN customers%ROWTYPE;
 ```
 
+<!-- snippet: types/rowtype -->
 ```java
 public record Customer(Long id, String name, String taxId, String tier,
                        @PlsqlBoolean(trueValue = "S", falseValue = "N") boolean vip,
@@ -171,6 +188,7 @@ public record Customer(Long id, String name, String taxId, String tier,
 Customer findCustomer(long id);
 ```
 
+<!-- snippet: types/rowtype-call -->
 ```java
 customers.findCustomer(1);
 // Customer[id=1, name=Ana Lima, taxId=12345678901, tier=G, vip=true, bornOn=1990-04-12, createdAt=2025-01-15T09:30]
@@ -181,6 +199,7 @@ customers.findCustomer(1);
 A RECORD declared in a package works the same way, and so do attributes that are themselves composites or
 collections, at any depth:
 
+<!-- snippet: fixture -->
 ```sql
 TYPE summary_rec IS RECORD (
     customer_id NUMBER,
@@ -192,6 +211,7 @@ TYPE summary_rec IS RECORD (
 FUNCTION summary(p_id NUMBER) RETURN summary_rec;
 ```
 
+<!-- snippet: types/record -->
 ```java
 public record CustomerSummary(Long customerId, String name, Address address, List<String> tags) {
 }
@@ -209,6 +229,7 @@ CustomerSummary summary(long id);
 - **Every Oracle attribute needs a property.** Extra Java properties are fine, but a missing one is an error, since
   its value would be lost:
 
+  <!-- snippet: missing-attribute -->
   ```text
   Address does not cover attribute(s) of POSTAL_ADDRESS_T: [ZIP_CODE VARCHAR2]. Available properties: [STREET, CITY]. Use @PlsqlAttr to declare the name.
   ```
@@ -224,6 +245,7 @@ CustomerSummary summary(long id);
 A nested table or `VARRAY`, declared in the schema or in a package spec, maps to a `List<T>`. The element can be a
 scalar, a composite or another collection:
 
+<!-- snippet: fixture -->
 ```sql
 CREATE TYPE tag_list_t AS TABLE OF VARCHAR2(30);
 CREATE TYPE postal_address_list_t AS TABLE OF postal_address_t;
@@ -233,6 +255,7 @@ FUNCTION count_tags(p_tags tag_list_t) RETURN NUMBER;
 FUNCTION cities(p_addresses postal_address_list_t) RETURN tag_list_t;
 ```
 
+<!-- snippet: types/collection-methods -->
 ```java
 List<String> tagsOf(long id);
 
@@ -243,6 +266,7 @@ int countTags(String[] tags);
 List<String> cities(List<Address> addresses);
 ```
 
+<!-- snippet: types/collection-calls -->
 ```java
 customers.tagsOf(1);                                    // [vip, newsletter]
 customers.countTags(new String[] { "a", "b", "c" });   // 3
@@ -262,11 +286,13 @@ customers.cities(List.of(
 A `SYS_REFCURSOR`, or a strongly typed `REF CURSOR`, returned by a routine is read whole into a `List<T>`. Each row
 becomes a `record` or a JavaBean, matched by column name as for a composite:
 
+<!-- snippet: fixture -->
 ```sql
 FUNCTION orders_of(p_customer_id NUMBER) RETURN SYS_REFCURSOR;
 -- OPEN l_cursor FOR SELECT id, total, status FROM orders WHERE customer_id = p_customer_id ORDER BY id;
 ```
 
+<!-- snippet: types/cursor -->
 ```java
 public enum OrderStatus { OPEN, CANCELLED }
 
@@ -276,6 +302,7 @@ public record OrderRow(Long id, BigDecimal total, OrderStatus status) {
 List<OrderRow> ordersOf(long customerId);
 ```
 
+<!-- snippet: types/cursor-call -->
 ```java
 customers.ordersOf(201);
 // [OrderRow[id=1, total=100, status=OPEN], OrderRow[id=2, total=40, status=CANCELLED]]

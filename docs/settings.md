@@ -4,6 +4,7 @@ Some choices apply to every interface of an application: binding by name, the co
 translator for your exceptions. Instead of repeating them in each `create`, put them in one `PlsqlSettings` and
 pass it to every interface:
 
+<!-- snippet: settings/settings -->
 ```java
 PlsqlSettings settings = PlsqlSettings.defaults()
         .withBind(PlsqlBind.BY_NAME)
@@ -36,6 +37,7 @@ builds it for you from `application.yaml`; see [Spring and Spring Boot](spring.m
 
 So an interface that declares its own `bind` keeps it, whatever the settings say:
 
+<!-- snippet: settings/positional -->
 ```java
 @PlsqlPackage(value = "ORDERS_PKG", bind = PlsqlBind.BY_POSITION)
 public interface PositionalOrders {
@@ -55,6 +57,7 @@ The annotations' default is `PlsqlBind.DEFAULT`, which means "use the settings".
 
 To give one interface a converter on top of the global ones:
 
+<!-- snippet: settings/adding -->
 ```java
 PlsqlSettings mine = settings.withConverters(settings.converters().with(PlsqlConverters.of(tierConverter)));
 ```

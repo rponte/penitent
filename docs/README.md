@@ -46,9 +46,13 @@ other.
 
 ## The examples are tested
 
-Each example on these pages, and each error message they quote, has a copy in a test of `penitent-core`, the
-`Docs*Test` classes, which runs it against the fixture `V15__documentation_examples.sql` and the ones after it. When
-the library changes what an example does or what a message says, its test fails, and the page is updated with it.
+Every block on these pages comes from somewhere the build checks, so a page cannot drift from the library without
+failing it:
 
-The build does not read the pages themselves yet: a page edited without its test, or the other way around, is only
-caught in review.
+- **Java code** is a region of a test in `penitent-core`, one of the `Docs*Test` classes, which compiles and runs it.
+  `DocsPagesTest` fails when the page and the region differ.
+- **Error messages and log output** are read from the page by the test that produces them, and compared with what
+  the library printed.
+- **SQL** is made of lines of the test fixtures, from `V15__documentation_examples.sql` on.
+- **Configuration and comparisons,** such as a Maven dependency, Spring configuration or a `SimpleJdbcCall`, are
+  marked as untested on the page, so the exception is visible in review.

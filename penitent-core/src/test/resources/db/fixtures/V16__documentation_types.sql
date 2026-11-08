@@ -1,10 +1,9 @@
 --
 -- The examples of docs/types.md, docs/anonymous-blocks.md and docs/converters.md, under the names the
--- pages use. The Docs*Test classes run them.
+-- pages use. The Docs*Test classes run them, and DocsPagesTest checks that the pages' SQL comes from here.
 --
 
-CREATE TYPE POSTAL_ADDRESS_T AS OBJECT
-(
+CREATE TYPE POSTAL_ADDRESS_T AS OBJECT (
 	STREET    VARCHAR2(100),
 	CITY      VARCHAR2(60),
 	ZIP_CODE  VARCHAR2(9),
@@ -43,7 +42,12 @@ INSERT INTO CUSTOMERS (ID, NAME, TAX_ID, TIER, VIP, BORN_ON) VALUES (2, 'Bruno S
 
 CREATE OR REPLACE PACKAGE CUSTOMERS_PKG AS
 
-	TYPE summary_rec IS RECORD (customer_id NUMBER, name VARCHAR2(100), address POSTAL_ADDRESS_T, tags TAG_LIST_T);
+	TYPE summary_rec IS RECORD (
+		customer_id NUMBER,
+		name        VARCHAR2(100),
+		address     POSTAL_ADDRESS_T,
+		tags        TAG_LIST_T
+	);
 
 	FUNCTION normalize_address(p_address POSTAL_ADDRESS_T) RETURN POSTAL_ADDRESS_T;
 	FUNCTION find_customer(p_id NUMBER) RETURN CUSTOMERS%ROWTYPE;

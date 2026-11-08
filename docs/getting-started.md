@@ -12,6 +12,7 @@ connects to it.
 This guide uses a small orders package. Every page of the documentation uses the same one, so the examples build on
 each other. Create it in your schema; the guide assumes a schema called `SHOP`:
 
+<!-- snippet: fixture -->
 ```sql
 CREATE TABLE orders (
     id          NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -62,6 +63,7 @@ END orders_pkg;
 
 ## 2. The dependency
 
+<!-- snippet: untested -->
 ```xml
 <dependency>
     <groupId>io.github.rponte</groupId>
@@ -83,6 +85,7 @@ Describe the package as a Java interface. Each method calls one routine, the PL/
 procedure (see [How Penitent works](concepts.md#routine)). The method's name in camelCase is the routine's name in
 SNAKE_CASE:
 
+<!-- snippet: getting-started/interface -->
 ```java
 @PlsqlPackage("ORDERS_PKG")
 public interface Orders {
@@ -102,6 +105,7 @@ database dictionary on the first call, and checks that your method agrees with t
 
 Create the interface from your `DataSource`, and call it:
 
+<!-- snippet: getting-started/create-and-call -->
 ```java
 Orders orders = PlsqlPackages.create(Orders.class, dataSource);
 
@@ -116,6 +120,7 @@ share it: it is thread-safe, and it keeps what it read from the dictionary.
 `place_order` returns the new order's id through an `OUT` parameter. On the Java side, that is a `PlsqlOut<T>`, which
 you read after the call:
 
+<!-- snippet: getting-started/out-parameter -->
 ```java
 PlsqlOut<Long> orderId = new PlsqlOut<>();
 orders.placeOrder(42, new BigDecimal("100.00"), orderId);
@@ -128,6 +133,7 @@ orders.orderStatus(orderId.get());   // "OPEN"
 Cancel the same order twice, and `cancel_order` raises `ORA-20001`. The error arrives as a
 `PlsqlRoutineRaisedException`, with the code and the text the routine gave:
 
+<!-- snippet: getting-started/routine-error -->
 ```java
 orders.cancelOrder(orderId.get());
 
@@ -148,6 +154,7 @@ Penitent is strict: when a method does not agree with the database, it fails wit
 up and what exists. It never guesses. Here is an interface with two mistakes, a procedure declared as a function and
 an `OUT` parameter declared as a plain `Long`:
 
+<!-- snippet: getting-started/broken-interface -->
 ```java
 @PlsqlPackage("ORDERS_PKG")
 public interface Orders {
@@ -161,10 +168,12 @@ public interface Orders {
 Each method is checked on its first call. To check them all at once, without calling any routine, use
 `PlsqlPackages.validate`:
 
+<!-- snippet: getting-started/validate -->
 ```java
 PlsqlPackages.validate(orders);
 ```
 
+<!-- snippet: validate-exception -->
 ```text
 io.github.rponte.penitent.exception.PlsqlMappingException:
 2 methods of com.example.shop.Orders do not match the database:
@@ -179,6 +188,7 @@ any user hits it. See [Validation](validation.md).
 
 Use the starter instead of `penitent-core`:
 
+<!-- snippet: untested -->
 ```xml
 <dependency>
     <groupId>io.github.rponte</groupId>
@@ -193,6 +203,7 @@ Use the starter instead of `penitent-core`:
 
 There is no `create` to call. Every interface in your application's packages becomes a bean, and you inject it:
 
+<!-- snippet: untested -->
 ```java
 @Service
 class CheckoutService {
@@ -216,6 +227,7 @@ The call takes part in the current transaction, and infrastructure failures arri
 as with a `JdbcTemplate`. An error raised by the routine is still a `PlsqlRoutineRaisedException`, as in step 5. To
 validate every interface at startup:
 
+<!-- snippet: untested -->
 ```yaml
 penitent:
   validation:

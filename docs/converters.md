@@ -7,10 +7,12 @@ code. A converter teaches Penitent to carry them, so your interfaces speak your 
 
 The customers table stores a tax id as a `VARCHAR2`, and the domain has a value object for it:
 
+<!-- snippet: fixture -->
 ```sql
 FUNCTION find_by_tax_id(p_tax_id VARCHAR2) RETURN NUMBER;
 ```
 
+<!-- snippet: converters/value-object -->
 ```java
 public record TaxId(String value) {
 }
@@ -24,6 +26,7 @@ public interface Customers {
 
 Register a converter between `TaxId` and `String`, a type Penitent already knows how to send:
 
+<!-- snippet: converters/registry -->
 ```java
 PlsqlConverters converters = PlsqlConverters.of(
         PlsqlConverter.ofNullable(TaxId.class, String.class, TaxId::value, TaxId::new));
@@ -40,6 +43,7 @@ to each element.
 
 So the same registry also reads the `TAX_ID` attribute of a `%ROWTYPE` into a `TaxId`:
 
+<!-- snippet: converters/rowtype -->
 ```java
 public record Customer(Long id, String name, TaxId taxId, Tier tier,
                        @PlsqlBoolean(trueValue = "S", falseValue = "N") boolean vip,
@@ -54,6 +58,7 @@ Customer findCustomer(long id);   // customers.findCustomer(1).taxId() is TaxId[
 By default, an enum goes to the database by its `name()`, as the `OrderStatus` of [Types](types.md#cursors) does. When
 the database stores a code instead, such as `'G'` for `Tier.GOLD`, use `PlsqlConverter.enumByCode`:
 
+<!-- snippet: converters/tier -->
 ```java
 public enum Tier {
     GOLD("G"), SILVER("S");
@@ -70,12 +75,14 @@ public enum Tier {
 }
 ```
 
+<!-- snippet: converters/registry-with-tier -->
 ```java
 PlsqlConverters converters = PlsqlConverters.of(
         PlsqlConverter.ofNullable(TaxId.class, String.class, TaxId::value, TaxId::new),
         PlsqlConverter.enumByCode(Tier.class, String.class, Tier::code));
 ```
 
+<!-- snippet: converters/tier-methods -->
 ```java
 Tier tierOf(long id);         // customers.tierOf(1) is GOLD
 int countByTier(Tier tier);   // customers.countByTier(Tier.SILVER) sends 'S'
@@ -92,6 +99,7 @@ int countByTier(Tier tier);   // customers.countByTier(Tier.SILVER) sends 'S'
 To convert a single parameter, attribute or return value, without a registry, annotate it with `@PlsqlConvert` and a
 converter class that has a no-argument constructor:
 
+<!-- snippet: converters/annotation -->
 ```java
 public class TaxIdConverter implements PlsqlConverter<TaxId, String> {
 
@@ -111,6 +119,7 @@ Long findByTaxId(@PlsqlConvert(TaxIdConverter.class) TaxId taxId);
 
 For an enum by code, extend `PlsqlEnumCodeConverter`:
 
+<!-- snippet: converters/tier-converter -->
 ```java
 public class TierConverter extends PlsqlEnumCodeConverter<Tier, String> {
     public TierConverter() {
@@ -129,6 +138,7 @@ To register converters for every interface at once, put them in [Settings](setti
   `PlsqlConverter.of` and in your own class, your code receives the `null`, and forgetting that fails with a message
   that names the converter, the value and the parameter:
 
+  <!-- snippet: converter-null -->
   ```text
   findByTaxId -> SHOP.CUSTOMERS_PKG.FIND_BY_TAX_ID: parameter P_TAX_ID: the converter of TaxId failed to write NULL: java.lang.NullPointerException
   ```

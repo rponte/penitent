@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.math.BigDecimal;
 
+import javax.sql.DataSource;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -15,13 +17,15 @@ import io.github.rponte.penitent.exception.PlsqlMappingException;
 import io.github.rponte.penitent.exception.PlsqlRoutineRaisedException;
 
 /**
- * The examples of docs/getting-started.md, as the page shows them. A change here changes the page,
- * and the other way around.
+ * The examples of docs/getting-started.md. The regions are what the page shows, and
+ * {@link DocsPagesTest} checks that the page still shows them.
  */
 class DocsGettingStartedTest extends OracleIntegrationTest {
 
+	// snippet: getting-started/interface
 	@PlsqlPackage("ORDERS_PKG")
-	interface Orders {
+	public interface Orders {
+
 		BigDecimal calculateFreight(String origin, String destination);
 
 		void placeOrder(long customerId, BigDecimal total, PlsqlOut<Long> orderId);
@@ -30,41 +34,59 @@ class DocsGettingStartedTest extends OracleIntegrationTest {
 
 		String orderStatus(long orderId);
 	}
+	// end-snippet
 
 	static class Broken {
 
+		// snippet: getting-started/broken-interface
 		@PlsqlPackage("ORDERS_PKG")
-		interface Orders {
+		public interface Orders {
+
 			String cancelOrder(long orderId);
 
 			void placeOrder(long customerId, BigDecimal total, Long orderId);
 		}
+		// end-snippet
 	}
 
-	private final Orders orders = PlsqlPackages.create(Orders.class, DATA_SOURCE);
+	private final DataSource dataSource = DATA_SOURCE;
 
 	@Test
 	@DisplayName("step 3: a function returns its value")
 	void calls_a_function() {
-		assertThat(orders.calculateFreight("SP", "CE")).isEqualByComparingTo("25.5");
+		// snippet: getting-started/create-and-call
+		Orders orders = PlsqlPackages.create(Orders.class, dataSource);
+
+		BigDecimal freight = orders.calculateFreight("SP", "CE");   // 25.5
+		// end-snippet
+
+		assertThat(freight).isEqualByComparingTo("25.5");
 	}
 
 	@Test
-	@DisplayName("step 4: a procedure fills its OUT parameter")
-	void calls_a_procedure() {
+	@DisplayName("steps 4 and 5: a procedure fills its OUT parameter, and a routine error keeps its code and text")
+	void out_parameter_and_routine_error() {
+		Orders orders = PlsqlPackages.create(Orders.class, dataSource);
+
+		// snippet: getting-started/out-parameter
 		PlsqlOut<Long> orderId = new PlsqlOut<>();
 		orders.placeOrder(42, new BigDecimal("100.00"), orderId);
 
-		assertThat(orderId.get()).isNotNull();
+		orders.orderStatus(orderId.get());   // "OPEN"
+		// end-snippet
+
 		assertThat(orders.orderStatus(orderId.get())).isEqualTo("OPEN");
-	}
 
-	@Test
-	@DisplayName("step 5: an error raised by the routine keeps its code and text")
-	void routine_error() {
-		PlsqlOut<Long> orderId = new PlsqlOut<>();
-		orders.placeOrder(42, new BigDecimal("100.00"), orderId);
+		// snippet: getting-started/routine-error
 		orders.cancelOrder(orderId.get());
+
+		try {
+			orders.cancelOrder(orderId.get());
+		} catch (PlsqlRoutineRaisedException e) {
+			e.getCode();     // 20001, without the sign
+			e.getReason();   // "order 1 is not open"
+		}
+		// end-snippet
 
 		assertThatThrownBy(() -> orders.cancelOrder(orderId.get()))
 				.isInstanceOfSatisfying(PlsqlRoutineRaisedException.class, e -> {
@@ -76,15 +98,19 @@ class DocsGettingStartedTest extends OracleIntegrationTest {
 	@Test
 	@DisplayName("step 6: validate lists every method that does not match")
 	void validation() {
-		PlsqlPackages.validate(orders);
+		PlsqlPackages.validate(PlsqlPackages.create(Orders.class, dataSource));
 
-		Broken.Orders broken = PlsqlPackages.create(Broken.Orders.class, DATA_SOURCE);
-		assertThatThrownBy(() -> PlsqlPackages.validate(broken))
+		Broken.Orders orders = PlsqlPackages.create(Broken.Orders.class, dataSource);
+		assertThatThrownBy(() -> {
+			// snippet: getting-started/validate
+			PlsqlPackages.validate(orders);
+			// end-snippet
+		})
 				.isInstanceOf(PlsqlMappingException.class)
-				.extracting(e -> Docs.asDocumented(e.getMessage(), Broken.class))
-				.isEqualTo("""
-						2 methods of com.example.shop.Orders do not match the database:
-						  - cancelOrder declares a return value, but SHOP.ORDERS_PKG.CANCEL_ORDER is a procedure and returns nothing; use void
-						  - placeOrder -> SHOP.ORDERS_PKG.PLACE_ORDER: P_ORDER_ID is OUT; declare PlsqlOut<T> in this position, not Long""");
+				.satisfies(e -> {
+					String message = Docs.asDocumented(e.getMessage(), Broken.class);
+					Docs.assertPagesShow(e.getClass().getName() + ":\n" + message, "getting-started.md#validate-exception");
+					Docs.assertPagesShow(message, "validation.md#validate-message");
+				});
 	}
 }

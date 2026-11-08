@@ -18,6 +18,7 @@ two places:
 In Java, the closest thing is a method, and that is the mapping: **each method of an interface calls one routine**.
 In this documentation, "routine" always means the PL/SQL side, and "method" the Java side.
 
+<!-- snippet: untested -->
 ```text
 Java                                     PL/SQL
 ────                                     ──────

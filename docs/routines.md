@@ -12,6 +12,7 @@ builds the package used here.
 
 The orders package from Getting started, with a few more routines:
 
+<!-- snippet: fixture -->
 ```sql
 CREATE OR REPLACE PACKAGE orders_pkg AS
     FUNCTION  calculate_freight(p_origin VARCHAR2, p_destination VARCHAR2) RETURN NUMBER;
@@ -36,6 +37,7 @@ A method that returns a value calls a function, and a `void` method calls a proc
 is the routine name in SNAKE_CASE, so `calculateFreight` calls `CALCULATE_FREIGHT`. When your Java name is different,
 `@PlsqlRoutine` gives the routine's name:
 
+<!-- snippet: routines/interface -->
 ```java
 @PlsqlPackage("ORDERS_PKG")
 public interface Orders {
@@ -49,6 +51,7 @@ public interface Orders {
 }
 ```
 
+<!-- snippet: routines/calls -->
 ```java
 Orders orders = PlsqlPackages.create(Orders.class, dataSource);
 
@@ -67,11 +70,13 @@ types are not declared anywhere: Penitent reads them from the dictionary and che
 A parameter with `DEFAULT` can be left out, as long as every parameter after it is left out too. Declare one Java
 method for each way you call the routine; they can share the name:
 
+<!-- snippet: routines/default-methods -->
 ```java
 long countOrders(long customerId);                  // every order of the customer
 long countOrders(long customerId, String status);   // only those with this status
 ```
 
+<!-- snippet: routines/default-calls -->
 ```java
 orders.countOrders(102);           // 2
 orders.countOrders(102, "OPEN");   // 1
@@ -88,11 +93,13 @@ To leave out a parameter in the middle of the list, such as `p_status` while pas
 
 When the package has more than one routine with the same name, the Java signature picks the version:
 
+<!-- snippet: routines/overload-methods -->
 ```java
 String describe(long orderId);    // describe(p_order_id NUMBER)
 String describe(String status);   // describe(p_status VARCHAR2)
 ```
 
+<!-- snippet: routines/overload-calls -->
 ```java
 orders.describe(7);        // "order 7"
 orders.describe("OPEN");   // "orders with status OPEN"
@@ -107,10 +114,12 @@ If more than one version fits and none of them is more specific in every paramet
 An `OUT` parameter is declared as `PlsqlOut<T>`, in the same position it has in the routine. Pass an empty one, and
 read it after the call:
 
+<!-- snippet: routines/out-method -->
 ```java
 void placeOrder(long customerId, BigDecimal total, PlsqlOut<Long> orderId);
 ```
 
+<!-- snippet: routines/out-call -->
 ```java
 PlsqlOut<Long> orderId = new PlsqlOut<>();
 orders.placeOrder(103, new BigDecimal("100.00"), orderId);
@@ -120,11 +129,13 @@ orderId.get();   // the new order's id
 An `IN OUT` parameter is a `PlsqlOut<T>` too, created with `PlsqlOut.of(value)`: the routine receives the value and
 replaces it. Here `apply_discount` also has a `DEFAULT`, so there are two methods again:
 
+<!-- snippet: routines/in-out-methods -->
 ```java
 void applyDiscount(PlsqlOut<BigDecimal> total);                 // p_percent takes its DEFAULT, 10
 void applyDiscount(PlsqlOut<BigDecimal> total, int percent);
 ```
 
+<!-- snippet: routines/in-out-calls -->
 ```java
 PlsqlOut<BigDecimal> total = PlsqlOut.of(new BigDecimal("200"));
 
@@ -150,6 +161,7 @@ someone swaps two parameters of the same type in the package, your calls keep wo
 With `bind = PlsqlBind.BY_NAME`, each Java parameter goes to the Oracle parameter with the same name, and the call is
 sent as `COUNT_ORDERS(P_CUSTOMER_ID => ?, P_MIN_TOTAL => ?)`:
 
+<!-- snippet: routines/by-name-interface -->
 ```java
 @PlsqlPackage(value = "ORDERS_PKG", bind = PlsqlBind.BY_NAME)
 public interface OrderSearch {
@@ -159,6 +171,7 @@ public interface OrderSearch {
 }
 ```
 
+<!-- snippet: routines/by-name-call -->
 ```java
 search.countOrders(104, new BigDecimal("100"));   // p_status is left out and takes its DEFAULT
 ```
@@ -177,6 +190,7 @@ search.countOrders(104, new BigDecimal("100"));   // p_status is left out and ta
 A function or procedure can live directly in a schema, outside any package. A Java method cannot live outside a
 type, so the interface stands for the schema, with `@PlsqlSchema`:
 
+<!-- snippet: fixture -->
 ```sql
 CREATE FUNCTION round_to_cents(p_value NUMBER) RETURN NUMBER IS
 BEGIN
@@ -184,6 +198,7 @@ BEGIN
 END;
 ```
 
+<!-- snippet: routines/schema-interface -->
 ```java
 @PlsqlSchema                        // the session's schema; or @PlsqlSchema("FINANCE")
 public interface Money {
@@ -192,6 +207,7 @@ public interface Money {
 }
 ```
 
+<!-- snippet: routines/schema-call -->
 ```java
 money.roundToCents(new BigDecimal("10.456"));   // 10.46
 ```
@@ -216,14 +232,17 @@ interface declares `@PlsqlPackage` or `@PlsqlSchema`, never both, and one made o
 Every method is checked against the dictionary before its first call runs. A mismatch is a `PlsqlMappingException`
 that says what was looked up and what the database has, so you can fix it without opening the package:
 
+<!-- snippet: routine-not-found -->
 ```text
 routine SHOP.ORDERS_PKG.CALCULATE_FRIEGHT does not exist. Available: APPLY_DISCOUNT, CALCULATE_FREIGHT, CANCEL_ORDER, COUNT_ORDERS, DESCRIBE, DESCRIBE, ORDER_STATUS, PLACE_ORDER
 ```
 
+<!-- snippet: wrong-arity -->
 ```text
 calculateFreight declares 1 parameter(s), but SHOP.ORDERS_PKG.CALCULATE_FREIGHT expects 2: [P_ORIGIN VARCHAR2, P_DESTINATION VARCHAR2]
 ```
 
+<!-- snippet: unknown-name -->
 ```text
 countOrders: parameter customerId looks for P_CUSTOMER, which SHOP.ORDERS_PKG.COUNT_ORDERS does not have. Parameters: [P_CUSTOMER_ID NUMBER, P_STATUS VARCHAR2, P_MIN_TOTAL NUMBER]. Use @PlsqlParam with the Oracle name.
 ```

@@ -15,6 +15,7 @@ With Spring Boot, use the starter and skip to [Spring Boot starter](#spring-boot
 
 `SpringPlsqlPackages.create` works like `PlsqlPackages.create`, with Spring's behavior:
 
+<!-- snippet: untested -->
 ```java
 Orders orders = SpringPlsqlPackages.create(Orders.class, dataSource);
 ```
@@ -35,6 +36,7 @@ Orders orders = SpringPlsqlPackages.create(Orders.class, dataSource);
 Instead of calling `create` in each service, `@EnablePlsqlPackages` registers a bean for each interface found in
 the given packages and their subpackages, and your services inject them:
 
+<!-- snippet: untested -->
 ```java
 @Configuration
 @EnablePlsqlPackages("com.example.shop")
@@ -77,6 +79,7 @@ above. It is a singleton, with a single dictionary cache.
 - **Settings:** a `PlsqlSettings` bean, if the context has one, applies to every registered interface. Without a
   translator in it, failures still arrive as Spring exceptions.
 
+  <!-- snippet: untested -->
   ```java
   @Bean
   PlsqlSettings plsqlSettings() {
@@ -92,6 +95,7 @@ above. It is a singleton, with a single dictionary cache.
 With Spring Boot, the dependency is all you need. It registers the interfaces of the application's packages, as
 `@EnablePlsqlPackages` would, with no annotation:
 
+<!-- snippet: untested -->
 ```xml
 <dependency>
     <groupId>io.github.rponte</groupId>
@@ -100,6 +104,7 @@ With Spring Boot, the dependency is all you need. It registers the interfaces of
 </dependency>
 ```
 
+<!-- snippet: untested -->
 ```yaml
 penitent:
   bind: BY_NAME            # BY_POSITION (default) or BY_NAME, for the interfaces that do not declare one
@@ -123,6 +128,7 @@ penitent:
 Declare a `PlsqlSettingsCustomizer`, the Spring Boot way. The starter builds the `PlsqlSettings` from the properties
 and applies every customizer, in `@Order`:
 
+<!-- snippet: untested -->
 ```java
 @Bean
 PlsqlSettingsCustomizer converters() {

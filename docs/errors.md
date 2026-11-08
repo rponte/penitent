@@ -20,10 +20,12 @@ With [`penitent-spring`](spring.md), every database failure except a routine err
 
 `cancel_order`, from [Getting started](getting-started.md), raises an error for an order that is not open:
 
+<!-- snippet: fixture -->
 ```sql
 RAISE_APPLICATION_ERROR(-20001, 'order ' || p_order_id || ' is not open');
 ```
 
+<!-- snippet: errors/catch -->
 ```java
 try {
     orders.cancelOrder(orderId);
@@ -41,9 +43,14 @@ try {
 
 Errors that Oracle raises inside the routine count too, since they come from the routine's logic:
 
+<!-- snippet: errors/no-data-found -->
 ```java
-orders.orderStatus(-1);           // SELECT ... INTO finds no row: getCode() is 1403, NO_DATA_FOUND
-customers.register(1, "Ana");     // the INSERT breaks the primary key: getCode() is 1
+orders.orderStatus(-1);          // SELECT ... INTO finds no row: getCode() is 1403, NO_DATA_FOUND
+```
+
+<!-- snippet: errors/primary-key -->
+```java
+customers.register(1, "Ana");    // the INSERT breaks the primary key: getCode() is 1
 ```
 
 That includes an error in the query of a cursor the routine returns, which only shows up when the cursor is read.
@@ -67,6 +74,7 @@ To turn an error into an exception of your domain, give Penitent a `PlsqlExcepti
 `PlsqlFailure`, with the statement, the `SQLException` and the point of the call where it failed, and returns the
 exception to throw. Delegate everything else to the default:
 
+<!-- snippet: errors/translator -->
 ```java
 PlsqlExceptionTranslator translator = failure -> failure.cause().getErrorCode() == 20001
         ? new OrderNotOpenException(failure.cause())

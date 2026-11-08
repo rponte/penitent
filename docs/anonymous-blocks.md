@@ -8,6 +8,7 @@ needs a local variable first, or a cursor opened over a query all need a few lin
 
 The `postal_address_t` type from [Types](types.md#composite-types) has a member method:
 
+<!-- snippet: fixture -->
 ```sql
 CREATE TYPE postal_address_t AS OBJECT (
     street   VARCHAR2(100),
@@ -20,6 +21,7 @@ CREATE TYPE postal_address_t AS OBJECT (
 
 A member method cannot be called as `package.routine`, so the block calls it:
 
+<!-- snippet: blocks/first -->
 ```java
 public interface AddressBlocks {
 
@@ -28,6 +30,7 @@ public interface AddressBlocks {
 }
 ```
 
+<!-- snippet: blocks/first-call -->
 ```java
 AddressBlocks blocks = PlsqlPackages.create(AddressBlocks.class, dataSource);
 
@@ -45,6 +48,7 @@ blocks.format(new Address("Rua das Flores 10", "Fortaleza", "60000000"));   // "
 For a routine, the dictionary says which Oracle type each parameter has. A block has no signature in the dictionary,
 so for composites and collections, the annotations say it instead:
 
+<!-- snippet: blocks/types -->
 ```java
 public interface AddressBlocks {
 
@@ -74,6 +78,7 @@ public interface AddressBlocks {
 Forget the type, and the method fails before the call, with a message that says what to add, instead of the
 driver's `ORA-17004`:
 
+<!-- snippet: block-without-type -->
 ```text
 countTags: parameter tags is a List; in a block, declare its Oracle type with @PlsqlType, as in @PlsqlType("NAME_LIST_T")
 ```

@@ -40,14 +40,31 @@ class DocsTroubleshootingTest extends OracleIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("a method that does not match the routine, one call at a time")
+	void method_mismatches() {
+		DocsGettingStartedTest.Broken.Orders orders = PlsqlPackages.create(DocsGettingStartedTest.Broken.Orders.class,
+				DATA_SOURCE);
+
+		assertThatThrownBy(() -> orders.cancelOrder(1))
+				.isInstanceOf(PlsqlMappingException.class)
+				.satisfies(e -> Docs.assertPagesShow(Docs.asDocumented(e.getMessage(), getClass()),
+						"troubleshooting.md#procedure-as-function"));
+
+		assertThatThrownBy(() -> orders.placeOrder(1, BigDecimal.ONE, 1L))
+				.isInstanceOf(PlsqlMappingException.class)
+				.satisfies(e -> Docs.assertPagesShow(Docs.asDocumented(e.getMessage(), getClass()),
+						"troubleshooting.md#out-without-plsqlout"));
+	}
+
+	@Test
 	@DisplayName("a package that does not exist, or that the session cannot see")
 	void missing_package() {
 		MisspelledPackage orders = PlsqlPackages.create(MisspelledPackage.class, DATA_SOURCE);
 
 		assertThatThrownBy(() -> orders.orderStatus(1))
 				.isInstanceOf(PlsqlMappingException.class)
-				.extracting(e -> Docs.asDocumented(e.getMessage(), getClass()))
-				.isEqualTo("package SHOP.ORDER_PKG does not exist or is not visible to this user");
+				.satisfies(e -> Docs.assertPagesShow(Docs.asDocumented(e.getMessage(), getClass()),
+						"troubleshooting.md#package-not-found"));
 	}
 
 	@Test
@@ -57,8 +74,8 @@ class DocsTroubleshootingTest extends OracleIntegrationTest {
 
 		assertThatThrownBy(() -> money.roundToCents(null))
 				.isInstanceOf(PlsqlMappingException.class)
-				.extracting(e -> Docs.asDocumented(e.getMessage(), getClass()))
-				.isEqualTo("roundToCents -> SHOP.ROUND_TO_CENTS: NULL does not fit in long; declare Long");
+				.satisfies(e -> Docs.assertPagesShow(Docs.asDocumented(e.getMessage(), getClass()),
+						"troubleshooting.md#null-primitive"));
 	}
 
 	@Test
@@ -77,8 +94,7 @@ class DocsTroubleshootingTest extends OracleIntegrationTest {
 		assertThatThrownBy(() -> blocks.getMethod("upper", String.class).invoke(proxy, "x"))
 				.cause()
 				.isInstanceOf(PlsqlMappingException.class)
-				.hasMessage("upper: parameter names are not in the bytecode (compile with -parameters) or use "
-						+ "@PlsqlParam on each one");
+				.satisfies(e -> Docs.assertPagesShow(e.getMessage(), "troubleshooting.md#parameters-flag"));
 	}
 
 	private static Class<?> compileWithoutParametersFlag(Path dir, String name, String source)

@@ -9,6 +9,7 @@ two loggers, so you can see the SQL without exposing the data:
 | `io.github.rponte.penitent.call` | `DEBUG` | The routine and the Java method, the SQL as sent to the driver or the block text, the elapsed time, the failure and the dictionary lookup |
 | `io.github.rponte.penitent.bind` | `TRACE` | The values sent, the return value and the `OUT` values |
 
+<!-- snippet: untested -->
 ```yaml
 # application.yaml of a Spring Boot application
 logging:
@@ -24,6 +25,7 @@ Logback.
 
 The first call of `normalizeAddress`, from [Types](types.md#object):
 
+<!-- snippet: composite -->
 ```text
 DEBUG Read dictionary     : SHOP.CUSTOMERS_PKG.NORMALIZE_ADDRESS in 38 ms
 DEBUG Calling routine     : SHOP.CUSTOMERS_PKG.NORMALIZE_ADDRESS <- Customers.normalizeAddress
@@ -43,6 +45,7 @@ DEBUG <- completed        : 4 ms
 From 3 parameters on, the values are logged one per line, with the names aligned. So is the SQL of a call bound
 [by name](routines.md#binding-by-name). A collection with more than one element is logged one element per line:
 
+<!-- snippet: by-name-and-list -->
 ```text
 DEBUG Read dictionary     : SHOP.ORDERS_PKG.COUNT_ORDERS in 35 ms
 DEBUG Calling routine     : SHOP.ORDERS_PKG.COUNT_ORDERS <- OrderSearch.countOrders
@@ -76,6 +79,7 @@ always receives the SQL on one line: the line breaks are only in the log.
 `OUT` values are logged on their own line, before the return value, and an `IN OUT` shows up in both directions. A
 failure is logged on one line, without a stack trace, because the exception already reaches the caller:
 
+<!-- snippet: out-and-failure -->
 ```text
 DEBUG Read dictionary     : SHOP.ORDERS_PKG.APPLY_DISCOUNT in 31 ms
 DEBUG Calling routine     : SHOP.ORDERS_PKG.APPLY_DISCOUNT <- Orders.applyDiscount

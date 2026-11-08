@@ -10,6 +10,7 @@ id through an `OUT` parameter.
 
 **JDBC:**
 
+<!-- snippet: jdbc/callable-statement -->
 ```java
 try (Connection connection = dataSource.getConnection();
      CallableStatement call = connection.prepareCall("{call ORDERS_PKG.PLACE_ORDER(?, ?, ?)}")) {
@@ -23,6 +24,7 @@ try (Connection connection = dataSource.getConnection();
 
 **`SimpleJdbcCall`:**
 
+<!-- snippet: untested -->
 ```java
 SimpleJdbcCall placeOrder = new SimpleJdbcCall(jdbcTemplate)
         .withCatalogName("ORDERS_PKG")
@@ -36,14 +38,19 @@ long orderId = ((Number) out.get("P_ORDER_ID")).longValue();
 
 **Penitent:**
 
+<!-- snippet: jdbc/penitent-interface -->
 ```java
 @PlsqlPackage("ORDERS_PKG")
 public interface Orders {
     void placeOrder(long customerId, BigDecimal total, PlsqlOut<Long> orderId);
 }
+```
 
+<!-- snippet: jdbc/penitent-call -->
+```java
 PlsqlOut<Long> orderId = new PlsqlOut<>();
 orders.placeOrder(42, new BigDecimal("100.00"), orderId);
+long id = orderId.get();
 ```
 
 ## What changes

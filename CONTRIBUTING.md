@@ -30,10 +30,16 @@ not depend on where it runs. The hostile cases are covered on purpose, by tests,
   Flyway migrations: add a new file for a new feature.
 - **The compatibility table changes in the same commit as the behavior.** Each row of
   [`docs/compatibility.md`](docs/compatibility.md) is backed by a test; add or update the row with the change.
-- **The documentation's examples have tests.** Each example in `docs/`, and each message a page quotes, has a copy
-  in a `Docs*Test` class, which runs it against the fixtures from `V15__documentation_examples.sql` on. The build only
-  runs the copy and does not read the page, so change the page and its test in the same commit, and give a new
-  example a test before it goes on a page.
+- **The documentation's examples are checked by the build.** Each block in `docs/` is preceded by a hidden
+  `<!-- snippet: name -->` that says where it comes from:
+  - a `java` block is the region `// snippet: name` … `// end-snippet` of a `Docs*Test` class, and must match it;
+  - a `text` block, such as an error message or a log, is read by a test with `Docs.assertPagesShow("page.md#name")`,
+    which compares it with what the library printed;
+  - an `sql` block is named `fixture`, and its lines must exist in the fixtures from `V15__documentation_examples.sql` on;
+  - anything else is named `untested`.
+
+  `DocsPagesTest` fails on a block without a name, a page that differs from its region, and a region no page shows.
+  To change an example, change the region and the page together; to add one, write the region first.
 - **Locale and time zone:** the driver derives the session's language, territory and time zone from the JVM. A new path
   where a value may cross the driver as text, or where a date or time crosses it, gets a case in `LocaleTest` or in
   `JvmTimeZoneTest`, which run the hostile settings explicitly. The build also runs

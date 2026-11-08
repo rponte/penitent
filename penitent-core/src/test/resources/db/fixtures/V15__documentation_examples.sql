@@ -1,10 +1,9 @@
 --
 -- The examples of the documentation, under the names the pages use. DocsGettingStartedTest and
--- DocsRoutinesTest run them, with a copy of what the pages show.
+-- DocsRoutinesTest run them, and DocsPagesTest checks that the pages' SQL comes from here.
 --
 
-CREATE TABLE ORDERS
-(
+CREATE TABLE ORDERS (
 	ID           NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 	CUSTOMER_ID  NUMBER NOT NULL,
 	TOTAL        NUMBER(10, 2) NOT NULL,
