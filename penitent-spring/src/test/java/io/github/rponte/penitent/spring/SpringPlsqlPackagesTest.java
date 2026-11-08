@@ -153,6 +153,55 @@ class SpringPlsqlPackagesTest {
 	}
 
 	@Test
+	@DisplayName("routines and JdbcTemplate in one transaction are committed together")
+	void commit_together() {
+		int before = fixture.countItems();
+		try {
+			transaction.executeWithoutResult(status -> {
+				jdbc.update("insert into fixture_spring_item values (500)");
+				fixture.insertItem(501);
+				fixture.insertItem(502);
+			});
+
+			assertThat(fixture.countItems()).isEqualTo(before + 3);
+		} finally {
+			jdbc.update("delete from fixture_spring_item where id between 500 and 502");
+		}
+	}
+
+	@Test
+	@DisplayName("an exception that leaves the transaction rolls back the routines and the JdbcTemplate together")
+	void roll_back_together() {
+		int before = fixture.countItems();
+
+		assertThatThrownBy(() -> transaction.executeWithoutResult(status -> {
+			jdbc.update("insert into fixture_spring_item values (520)");
+			fixture.insertItem(521);
+			fixture.raiseError();
+		})).isInstanceOf(PlsqlRoutineRaisedException.class);
+
+		assertThat(fixture.countItems()).isEqualTo(before);
+	}
+
+	@Test
+	@DisplayName("a routine error caught inside the transaction undoes only that call, and the commit keeps the rest")
+	void caught_error_inside_the_transaction() {
+		int before = fixture.countItems();
+		try {
+			transaction.executeWithoutResult(status -> {
+				fixture.insertItem(510);
+				assertThatThrownBy(() -> fixture.insertItem(510))
+						.isInstanceOfSatisfying(PlsqlRoutineRaisedException.class, e -> assertThat(e.getCode()).isEqualTo(1));
+				jdbc.update("insert into fixture_spring_item values (511)");
+			});
+
+			assertThat(fixture.countItems()).isEqualTo(before + 2);
+		} finally {
+			jdbc.update("delete from fixture_spring_item where id in (510, 511)");
+		}
+	}
+
+	@Test
 	@DisplayName("an uncategorized database failure is still an UncategorizedSQLException")
 	void uncategorized_failure() {
 		// the driver refuses the type before calling the database (ORA-17004), and Spring has no category for that
