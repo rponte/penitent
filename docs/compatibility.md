@@ -84,6 +84,7 @@ For what each feature does, see the [documentation](README.md).
 | `NUMBER`, `VARCHAR2`, `DATE`, enum | Types from the scalar table | Validated |
 | `VARCHAR2` | `Boolean` by `Y`/`N`, or by the literals of `@PlsqlBoolean`, such as `S`/`N` | Validated |
 | `NUMBER` | `Boolean` as `1`/`0`, or by the literals of `@PlsqlBoolean` | Validated |
+| `CHAR(1)` in a `%ROWTYPE` | `boolean` by the literals of `@PlsqlBoolean` on the record component | Validated |
 | `TIMESTAMP` | `LocalDateTime` | Validated |
 | `TIMESTAMP WITH TIME ZONE` | `OffsetDateTime`, `ZonedDateTime` (keeps the region), `Instant` | Validated |
 | `TIMESTAMP WITH LOCAL TIME ZONE` | `OffsetDateTime`, `Instant` | Validated |

@@ -4,7 +4,9 @@ Each method of an interface calls one PL/SQL function or procedure. This page co
 and how the arguments get there: `DEFAULT` values, overloads, `OUT` and `IN OUT` parameters, binding by name, and
 routines that live outside a package.
 
-New to Penitent? Start with [Getting started](getting-started.md), which builds the package used here.
+Here, "routine" always means the PL/SQL side, and "method" the Java side: see
+[How Penitent works](concepts.md#routine). New to Penitent? Start with [Getting started](getting-started.md), which
+builds the package used here.
 
 ## The package on this page
 

@@ -8,14 +8,14 @@ signatures and type attributes from the database dictionary and builds the calls
 order are never written by hand.
 
 ```java
-@PlsqlPackage("FREIGHT_CALCULATOR")
-public interface FreightCalculator {
+@PlsqlPackage("ORDERS_PKG")
+public interface Orders {
     // FUNCTION calculate_freight(p_origin VARCHAR2, p_destination VARCHAR2) RETURN NUMBER
-    BigDecimal calculateFreight(String originState, String destinationState);
+    BigDecimal calculateFreight(String origin, String destination);
 }
 
-FreightCalculator freight = PlsqlPackages.create(FreightCalculator.class, dataSource);
-BigDecimal value = freight.calculateFreight("SP", "CE");
+Orders orders = PlsqlPackages.create(Orders.class, dataSource);
+BigDecimal freight = orders.calculateFreight("SP", "CE");   // 25.5
 ```
 
 - **The database is the source of truth.** The dictionary says which routine, parameters and types exist, and the
@@ -66,7 +66,7 @@ For a step-by-step walkthrough, with the PL/SQL package and every call, see
 ### Plain Java
 
 ```java
-FreightCalculator freight = PlsqlPackages.create(FreightCalculator.class, dataSource);
+Orders orders = PlsqlPackages.create(Orders.class, dataSource);
 ```
 
 Each call takes a connection from the `DataSource`, uses it and gives it back. A database failure arrives as a
@@ -76,7 +76,7 @@ Each call takes a connection from the `DataSource`, uses it and gives it back. A
 ### Spring
 
 ```java
-FreightCalculator freight = SpringPlsqlPackages.create(FreightCalculator.class, dataSource);
+Orders orders = SpringPlsqlPackages.create(Orders.class, dataSource);
 ```
 
 The call takes part in the current transaction, and database failures arrive as `DataAccessException`, as with a
@@ -89,12 +89,12 @@ service injects it.
 
 ```java
 @Service
-class FreightService {
+class CheckoutService {
 
-    private final FreightCalculator freight;
+    private final Orders orders;
 
-    FreightService(FreightCalculator freight) {
-        this.freight = freight;
+    CheckoutService(Orders orders) {
+        this.orders = orders;
     }
 }
 ```
@@ -121,7 +121,10 @@ penitent:
 - [Spring and Spring Boot](docs/spring.md) integration.
 - [Logging](docs/logging.md) of each call, with the SQL and, separately, the values.
 
-The [documentation index](docs/README.md) lists every page.
+New to it? [How Penitent works](docs/concepts.md) explains the terms and what happens in a call,
+[Coming from JDBC](docs/coming-from-jdbc.md) compares it with `SimpleJdbcCall`, and
+[Troubleshooting](docs/troubleshooting.md) goes through the common error messages. The
+[documentation index](docs/README.md) lists every page, by goal.
 
 ## Packages
 

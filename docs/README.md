@@ -1,21 +1,40 @@
 # Documentation
 
 New to Penitent? Start with [Getting started](getting-started.md): in about ten minutes, it calls a real PL/SQL
-package from plain Java and from Spring Boot. The pages below cover each feature in depth.
+package from plain Java and from Spring Boot. Every page uses the same orders package, so the examples build on each
+other.
 
-## Guides
+## Start here
 
 | Page | What it covers |
 |---|---|
-| [Calling routines](routines.md) | Packages and standalone routines, names, parameters by position and by name, `DEFAULT`, overloads, `OUT` and `IN OUT` |
-| [Types](types.md) | Scalars, booleans and time zones, OBJECT, RECORD and `%ROWTYPE`, collections and cursors |
-| [Anonymous blocks](anonymous-blocks.md) | `@PlsqlBlock`, for whatever is not a `package.routine` call |
-| [Converters](converters.md) | Your own Java types, and enums stored by code |
-| [Settings](settings.md) | `PlsqlSettings`: what applies to every interface |
-| [Errors](errors.md) | Which exception arrives, and how to translate it |
-| [Validation](validation.md) | Checking every interface against the database up front |
-| [Spring and Spring Boot](spring.md) | Transactions, Spring exceptions, interfaces as beans and the starter |
-| [Logging](logging.md) | What each call logs, and at which level |
+| [Getting started](getting-started.md) | From a PL/SQL package to a Java call, in plain Java and in Spring Boot |
+| [How Penitent works](concepts.md) | The terms (routine, container, dictionary) and what happens in a call |
+| [Coming from JDBC or `SimpleJdbcCall`](coming-from-jdbc.md) | The same call in each style, and what changes |
+
+## I want to…
+
+| Goal | Where |
+|---|---|
+| call a function or a procedure | [Calling routines](routines.md#functions-and-procedures) |
+| leave out a `DEFAULT` parameter | [Calling routines](routines.md#default-values) |
+| read an `OUT` or `IN OUT` parameter | [Calling routines](routines.md#out-and-in-out-parameters) |
+| bind parameters by name | [Calling routines](routines.md#binding-by-name) |
+| call a routine outside a package | [Calling routines](routines.md#routines-outside-a-package) |
+| map an OBJECT, a RECORD or a `%ROWTYPE` | [Types](types.md#composite-types) |
+| send or receive a collection | [Types](types.md#collections) |
+| read a cursor into a list | [Types](types.md#cursors) |
+| use booleans stored as `S`/`N` | [Types](types.md#booleans) |
+| handle dates and time zones | [Types](types.md#time-zones) |
+| call an OBJECT member method, or run a block | [Anonymous blocks](anonymous-blocks.md) |
+| use my own types, or enums stored by code | [Converters](converters.md) |
+| handle an error raised by the routine | [Errors](errors.md#errors-raised-by-the-routine) |
+| turn errors into my own exceptions | [Errors](errors.md#your-own-exceptions) |
+| configure every interface at once | [Settings](settings.md) |
+| check every interface against the database | [Validation](validation.md) |
+| use Spring transactions, or inject interfaces as beans | [Spring and Spring Boot](spring.md) |
+| see the SQL and the values of each call | [Logging](logging.md) |
+| understand an error message | [Troubleshooting](troubleshooting.md) |
 
 ## Reference
 
@@ -23,4 +42,10 @@ package from plain Java and from Spring Boot. The pages below cover each feature
 |---|---|
 | [Compatibility](compatibility.md) | Every Oracle and Java type pair and behavior, and whether a test covers it |
 | [Roadmap](roadmap.md) | What comes next, what waits for a use case, and what is left out by design |
-| Javadoc | Built with each module, in its `-javadoc.jar`, with `./mvnw install` |
+| Javadoc | The `-javadoc.jar` of each module, on Maven Central |
+
+## The examples are tested
+
+Each example on these pages, and each error message they quote, is run by a test in `penitent-core`, the
+`Docs*Test` classes, against the fixture `V15__documentation_examples.sql` and the ones after it. A page that drifts
+from the library fails the build.

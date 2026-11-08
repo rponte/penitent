@@ -30,6 +30,9 @@ not depend on where it runs. The hostile cases are covered on purpose, by tests,
   Flyway migrations: add a new file for a new feature.
 - **The compatibility table changes in the same commit as the behavior.** Each row of
   [`docs/compatibility.md`](docs/compatibility.md) is backed by a test; add or update the row with the change.
+- **The documentation's examples are tests.** Each example in `docs/`, and each message a page quotes, is run by a
+  `Docs*Test` class against the fixtures from `V15__documentation_examples.sql` on. Change the page and its test
+  together, and give a new example a test before it goes on a page.
 - **Locale and time zone:** the driver derives the session's language, territory and time zone from the JVM. A new path
   where a value may cross the driver as text, or where a date or time crosses it, gets a case in `LocaleTest` or in
   `JvmTimeZoneTest`, which run the hostile settings explicitly. The build also runs

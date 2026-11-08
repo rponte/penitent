@@ -1,28 +1,65 @@
 # Settings
 
-`PlsqlSettings` gathers what applies to every interface created with it: the converters, the default
-`bind` and the exception translator. It is immutable, and "global" means one object passed to every `create`, not static
-state: a proxy never changes behavior after it is created.
+Some choices apply to every interface of an application: binding by name, the converters of your domain types, a
+translator for your exceptions. Instead of repeating them in each `create`, put them in one `PlsqlSettings` and
+pass it to every interface:
 
 ```java
 PlsqlSettings settings = PlsqlSettings.defaults()
         .withBind(PlsqlBind.BY_NAME)
-        .withConverters(PlsqlConverters.of(new TaxIdConverter()));
+        .withConverters(PlsqlConverters.of(
+                PlsqlConverter.ofNullable(TaxId.class, String.class, TaxId::value, TaxId::new)));
 
-Orders orders = PlsqlPackages.create(Orders.class, dataSource, settings);
+OrderSearch search = PlsqlPackages.create(OrderSearch.class, dataSource, settings);
+CustomerLookup lookup = PlsqlPackages.create(CustomerLookup.class, dataSource, settings);
 ```
 
-What is declared closer to the call wins:
+`PlsqlSettings` is immutable: each `with...` returns a new object. "Global" means one object you pass to every
+`create`, not static state, so an interface never changes behavior after it is created. With Spring Boot, the starter
+builds it for you from `application.yaml`; see [Spring and Spring Boot](spring.md#spring-boot-starter).
 
-| Item | From strongest to weakest |
+## What can be set
+
+| Setting | Method | Default |
+|---|---|---|
+| How parameters are bound | `withBind(PlsqlBind.BY_NAME)` | `BY_POSITION` |
+| Converters of your types | `withConverters(PlsqlConverters.of(...))` | none |
+| Exception translator | `withExceptionTranslator(translator)` | `DefaultPlsqlExceptionTranslator`, or the Spring translator with `penitent-spring` |
+
+## What is closer to the call wins
+
+| Setting | From strongest to weakest |
 |---|---|
-| `bind` | `@PlsqlPackage(bind)` or `@PlsqlSchema(bind)` → `PlsqlSettings.bind()` → `BY_POSITION` |
-| Converters | `@PlsqlConvert` → `PlsqlSettings.converters()` → built-in conversions |
-| Exceptions | `PlsqlSettings.exceptionTranslator()` → the creator's default: `DefaultPlsqlExceptionTranslator`, or the Spring translator with `penitent-spring` |
+| Binding | `@PlsqlPackage(bind)` or `@PlsqlSchema(bind)` → `PlsqlSettings` → `BY_POSITION` |
+| Converters | `@PlsqlConvert` → `PlsqlSettings` → built-in conversions |
+| Exceptions | `PlsqlSettings` → the default of the `create` you call |
 
-- **`PlsqlBind.DEFAULT`** is now the annotations' default and means "use the settings". An interface that declares
-  `BY_POSITION` or `BY_NAME` keeps it whatever the settings say. Without settings, the default is still `BY_POSITION`.
-- **Adding converters** to the global ones: `settings.withConverters(settings.converters().with(mine))`. For the same
-  Java type, the one passed to `with` wins.
-- The `create` overloads that take converters or a translator still work, and are shortcuts for
-  `PlsqlSettings.defaults().with...`.
+So an interface that declares its own `bind` keeps it, whatever the settings say:
+
+```java
+@PlsqlPackage(value = "ORDERS_PKG", bind = PlsqlBind.BY_POSITION)
+public interface PositionalOrders {
+
+    long countOrders(long customerId, String status);   // still by position
+}
+```
+
+The annotations' default is `PlsqlBind.DEFAULT`, which means "use the settings".
+
+> **A global `BY_NAME` applies to every interface that does not declare `bind`.** Their parameters must then match
+> the routine's by name, with `@PlsqlParam` or with Java names that follow the convention. An interface written for
+> binding by position fails on its first call, with a message that lists the routine's parameters, so turn it on
+> with [`validate`](validation.md) in a test.
+
+## Adding to the global converters
+
+To give one interface a converter on top of the global ones:
+
+```java
+PlsqlSettings mine = settings.withConverters(settings.converters().with(PlsqlConverters.of(tierConverter)));
+```
+
+For the same Java type, the converter passed to `with` wins.
+
+The `create` overloads that take converters or a translator directly are shortcuts for
+`PlsqlSettings.defaults().with...`.

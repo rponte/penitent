@@ -1,0 +1,190 @@
+--
+-- The examples of docs/types.md, docs/anonymous-blocks.md and docs/converters.md, under the names the
+-- pages use. The Docs*Test classes run them.
+--
+
+CREATE TYPE POSTAL_ADDRESS_T AS OBJECT
+(
+	STREET    VARCHAR2(100),
+	CITY      VARCHAR2(60),
+	ZIP_CODE  VARCHAR2(9),
+
+	MEMBER FUNCTION formatted RETURN VARCHAR2
+);
+/
+
+CREATE TYPE BODY POSTAL_ADDRESS_T AS
+	MEMBER FUNCTION formatted RETURN VARCHAR2 IS
+	BEGIN
+		RETURN street || ', ' || city || ' ' || zip_code;
+	END;
+END;
+/
+
+CREATE TYPE TAG_LIST_T AS TABLE OF VARCHAR2(30);
+/
+
+CREATE TYPE POSTAL_ADDRESS_LIST_T AS TABLE OF POSTAL_ADDRESS_T;
+/
+
+CREATE TABLE CUSTOMERS
+(
+	ID          NUMBER PRIMARY KEY,
+	NAME        VARCHAR2(100) NOT NULL,
+	TAX_ID      VARCHAR2(14),
+	TIER        CHAR(1) DEFAULT 'S' NOT NULL,
+	VIP         CHAR(1) DEFAULT 'N' NOT NULL,
+	BORN_ON     DATE,
+	CREATED_AT  TIMESTAMP DEFAULT TIMESTAMP '2025-01-15 09:30:00' NOT NULL
+);
+
+INSERT INTO CUSTOMERS (ID, NAME, TAX_ID, TIER, VIP, BORN_ON) VALUES (1, 'Ana Lima', '12345678901', 'G', 'S', DATE '1990-04-12');
+INSERT INTO CUSTOMERS (ID, NAME, TAX_ID, TIER, VIP, BORN_ON) VALUES (2, 'Bruno Souza', NULL, 'S', 'N', NULL);
+
+CREATE OR REPLACE PACKAGE CUSTOMERS_PKG AS
+
+	TYPE summary_rec IS RECORD (customer_id NUMBER, name VARCHAR2(100), address POSTAL_ADDRESS_T, tags TAG_LIST_T);
+
+	FUNCTION normalize_address(p_address POSTAL_ADDRESS_T) RETURN POSTAL_ADDRESS_T;
+	FUNCTION find_customer(p_id NUMBER) RETURN CUSTOMERS%ROWTYPE;
+	FUNCTION summary(p_id NUMBER) RETURN summary_rec;
+
+	FUNCTION tags_of(p_id NUMBER) RETURN TAG_LIST_T;
+	FUNCTION count_tags(p_tags TAG_LIST_T) RETURN NUMBER;
+	FUNCTION cities(p_addresses POSTAL_ADDRESS_LIST_T) RETURN TAG_LIST_T;
+
+	FUNCTION orders_of(p_customer_id NUMBER) RETURN SYS_REFCURSOR;
+	FUNCTION names RETURN SYS_REFCURSOR;
+
+	FUNCTION is_vip(p_id NUMBER) RETURN BOOLEAN;
+	FUNCTION vip_flag(p_id NUMBER) RETURN VARCHAR2;
+	FUNCTION born_on(p_id NUMBER) RETURN DATE;
+	FUNCTION created_at(p_id NUMBER) RETURN TIMESTAMP;
+	FUNCTION delivery_deadline(p_ordered_at TIMESTAMP WITH TIME ZONE) RETURN TIMESTAMP WITH TIME ZONE;
+
+	FUNCTION find_by_tax_id(p_tax_id VARCHAR2) RETURN NUMBER;
+	FUNCTION tier_of(p_id NUMBER) RETURN VARCHAR2;
+	FUNCTION count_by_tier(p_tier VARCHAR2) RETURN NUMBER;
+
+	PROCEDURE register(p_id NUMBER, p_name VARCHAR2);
+
+END CUSTOMERS_PKG;
+/
+
+CREATE OR REPLACE PACKAGE BODY CUSTOMERS_PKG AS
+
+	FUNCTION normalize_address(p_address POSTAL_ADDRESS_T) RETURN POSTAL_ADDRESS_T IS
+	BEGIN
+		RETURN POSTAL_ADDRESS_T(INITCAP(p_address.street), UPPER(p_address.city), REPLACE(p_address.zip_code, '-'));
+	END;
+
+	FUNCTION find_customer(p_id NUMBER) RETURN CUSTOMERS%ROWTYPE IS
+		l_customer CUSTOMERS%ROWTYPE;
+	BEGIN
+		SELECT * INTO l_customer FROM CUSTOMERS WHERE ID = p_id;
+		RETURN l_customer;
+	END;
+
+	FUNCTION summary(p_id NUMBER) RETURN summary_rec IS
+		l_summary summary_rec;
+	BEGIN
+		SELECT ID, NAME INTO l_summary.customer_id, l_summary.name FROM CUSTOMERS WHERE ID = p_id;
+		l_summary.address := POSTAL_ADDRESS_T('Rua das Flores 10', 'Fortaleza', '60000000');
+		l_summary.tags := tags_of(p_id);
+		RETURN l_summary;
+	END;
+
+	FUNCTION tags_of(p_id NUMBER) RETURN TAG_LIST_T IS
+	BEGIN
+		RETURN CASE WHEN p_id = 1 THEN TAG_LIST_T('vip', 'newsletter') ELSE TAG_LIST_T() END;
+	END;
+
+	FUNCTION count_tags(p_tags TAG_LIST_T) RETURN NUMBER IS
+	BEGIN
+		RETURN p_tags.COUNT;
+	END;
+
+	FUNCTION cities(p_addresses POSTAL_ADDRESS_LIST_T) RETURN TAG_LIST_T IS
+		l_cities TAG_LIST_T := TAG_LIST_T();
+	BEGIN
+		FOR i IN 1 .. p_addresses.COUNT LOOP
+			l_cities.EXTEND;
+			l_cities(i) := p_addresses(i).city;
+		END LOOP;
+		RETURN l_cities;
+	END;
+
+	FUNCTION orders_of(p_customer_id NUMBER) RETURN SYS_REFCURSOR IS
+		l_cursor SYS_REFCURSOR;
+	BEGIN
+		OPEN l_cursor FOR
+			SELECT ID, TOTAL, STATUS FROM ORDERS WHERE CUSTOMER_ID = p_customer_id ORDER BY ID;
+		RETURN l_cursor;
+	END;
+
+	FUNCTION names RETURN SYS_REFCURSOR IS
+		l_cursor SYS_REFCURSOR;
+	BEGIN
+		OPEN l_cursor FOR SELECT NAME FROM CUSTOMERS WHERE ID IN (1, 2) ORDER BY ID;
+		RETURN l_cursor;
+	END;
+
+	FUNCTION is_vip(p_id NUMBER) RETURN BOOLEAN IS
+	BEGIN
+		RETURN vip_flag(p_id) = 'S';
+	END;
+
+	FUNCTION vip_flag(p_id NUMBER) RETURN VARCHAR2 IS
+		l_vip CUSTOMERS.VIP%TYPE;
+	BEGIN
+		SELECT VIP INTO l_vip FROM CUSTOMERS WHERE ID = p_id;
+		RETURN l_vip;
+	END;
+
+	FUNCTION born_on(p_id NUMBER) RETURN DATE IS
+		l_born_on DATE;
+	BEGIN
+		SELECT BORN_ON INTO l_born_on FROM CUSTOMERS WHERE ID = p_id;
+		RETURN l_born_on;
+	END;
+
+	FUNCTION created_at(p_id NUMBER) RETURN TIMESTAMP IS
+		l_created_at TIMESTAMP;
+	BEGIN
+		SELECT CREATED_AT INTO l_created_at FROM CUSTOMERS WHERE ID = p_id;
+		RETURN l_created_at;
+	END;
+
+	FUNCTION delivery_deadline(p_ordered_at TIMESTAMP WITH TIME ZONE) RETURN TIMESTAMP WITH TIME ZONE IS
+	BEGIN
+		RETURN p_ordered_at + INTERVAL '2' DAY;
+	END;
+
+	FUNCTION find_by_tax_id(p_tax_id VARCHAR2) RETURN NUMBER IS
+		l_id NUMBER;
+	BEGIN
+		SELECT ID INTO l_id FROM CUSTOMERS WHERE TAX_ID = p_tax_id;
+		RETURN l_id;
+	END;
+
+	FUNCTION tier_of(p_id NUMBER) RETURN VARCHAR2 IS
+		l_tier CUSTOMERS.TIER%TYPE;
+	BEGIN
+		SELECT TIER INTO l_tier FROM CUSTOMERS WHERE ID = p_id;
+		RETURN l_tier;
+	END;
+
+	FUNCTION count_by_tier(p_tier VARCHAR2) RETURN NUMBER IS
+		l_count NUMBER;
+	BEGIN
+		SELECT COUNT(*) INTO l_count FROM CUSTOMERS WHERE TIER = p_tier AND ID IN (1, 2);
+		RETURN l_count;
+	END;
+
+	PROCEDURE register(p_id NUMBER, p_name VARCHAR2) IS
+	BEGIN
+		INSERT INTO CUSTOMERS (ID, NAME) VALUES (p_id, p_name);
+	END;
+
+END CUSTOMERS_PKG;
+/

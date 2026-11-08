@@ -79,8 +79,9 @@ Using Spring Boot? Skip to [step 7](#7-with-spring-boot): the starter replaces t
 
 ## 3. The interface
 
-Describe the package as a Java interface. Each method is a routine, and its name in camelCase is the routine's name
-in SNAKE_CASE:
+Describe the package as a Java interface. Each method calls one routine, the PL/SQL word for a function or a
+procedure (see [How Penitent works](concepts.md#routine)). The method's name in camelCase is the routine's name in
+SNAKE_CASE:
 
 ```java
 @PlsqlPackage("ORDERS_PKG")
