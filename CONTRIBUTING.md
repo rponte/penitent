@@ -18,6 +18,23 @@ under a minute. The CI runs the same command.
 The build always runs in the `en-US` locale and the `UTC` time zone, whatever your machine uses, so its result does
 not depend on where it runs. The hostile cases are covered on purpose, by tests, as described below.
 
+### The documentation site
+
+The pages in `docs/` are plain Markdown, and [Zensical](https://zensical.org) builds them into the site, with the
+navigation in `zensical.toml`. To see the site while you edit, you need Python 3:
+
+```
+scripts/docs.sh          # http://localhost:8000/penitent/, rebuilt on each change
+scripts/docs.sh build    # into site/, failing on a broken link or anchor, as the CI does
+```
+
+The first run creates a virtual environment in `.venv/`, ignored by git, with the version pinned in
+`requirements-docs.txt`. Nothing is installed outside the repository. Run a single server at a time: a second
+`serve` fails on the port, but clears `site/` first, and the first one then serves an empty folder.
+
+The examples on the pages are checked by `./mvnw verify`, not by the site's build: see the rule on the
+documentation's examples below.
+
 ## Rules
 
 - **Everything in English:** code, identifiers, messages, logs, Javadoc, comments, tests and documentation.

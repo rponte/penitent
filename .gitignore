@@ -8,3 +8,4 @@ target/
 .vscode/
 site/
 .cache/
+.venv/
