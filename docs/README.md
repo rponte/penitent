@@ -1,7 +1,7 @@
 # Documentation
 
-Start with the [README](../README.md), which shows how to install the library and write a first interface. These
-pages cover each feature in depth.
+New to Penitent? Start with [Getting started](getting-started.md): in about ten minutes, it calls a real PL/SQL
+package from plain Java and from Spring Boot. The pages below cover each feature in depth.
 
 ## Guides
 

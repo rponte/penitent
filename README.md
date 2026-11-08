@@ -60,6 +60,9 @@ application chooses its version.
 
 ## Quick start
 
+For a step-by-step walkthrough, with the PL/SQL package and every call, see
+[Getting started](docs/getting-started.md).
+
 ### Plain Java
 
 ```java
