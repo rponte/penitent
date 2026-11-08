@@ -1,8 +1,9 @@
 # Transactions and connections
 
 Penitent does one thing with connections: for each call, it takes a connection from the `DataSource`, runs the call
-on it and closes it. It never commits, never rolls back and never changes auto-commit. So whether two calls are one
-transaction, or two, depends only on the `DataSource` you give it.
+on it and closes it, or, for a view made with `PlsqlPackages.using`, runs it on the connection you gave it. It never
+commits, never rolls back and never changes auto-commit. So whether two calls are one transaction, or two, depends
+only on the connection they run on, and the transaction belongs to whoever owns it.
 
 This page shows the three setups you are likely to have, and what happens in each one.
 
@@ -10,7 +11,7 @@ This page shows the three setups you are likely to have, and what happens in eac
 |---|---|---|
 | [Spring, inside `@Transactional`](#with-spring) | one transaction, with your `JdbcTemplate` work | Spring |
 | [A pool in auto-commit](#a-pool-in-auto-commit) | two transactions | each call, as it ends |
-| [A connection you manage](#a-transaction-you-manage) | one transaction, with your plain JDBC work | you |
+| [A transaction you manage, with `PlsqlPackages.using`](#a-transaction-you-manage) | one transaction, with your plain JDBC work | you |
 
 ## With Spring
 
@@ -55,18 +56,25 @@ package variable or `DBMS_APPLICATION_INFO`, does not carry from one call to the
 
 ## A transaction you manage
 
-To put several calls, and your own JDBC work, in one transaction without Spring, give Penitent a `DataSource` that
-always hands out your connection, and commit or roll back yourself:
+To put several calls, and your own JDBC work, in one transaction without Spring, bind the interface to your
+connection with `PlsqlPackages.using`, and commit or roll back yourself. Create the interface once, as usual:
+
+<!-- snippet: transactions/create -->
+```java
+Orders orders = PlsqlPackages.create(Orders.class, dataSource);   // once, as usual
+```
+
+Then, for each transaction, take a view of it bound to the transaction's connection:
 
 <!-- snippet: transactions/transaction -->
 ```java
 try (Connection connection = dataSource.getConnection()) {
     connection.setAutoCommit(false);
     try {
-        Orders orders = PlsqlPackages.create(Orders.class, SingleConnection.of(connection));
+        Orders inTransaction = PlsqlPackages.using(orders, connection);
 
         PlsqlOut<Long> orderId = new PlsqlOut<>();
-        orders.placeOrder(602, new BigDecimal("100.00"), orderId);
+        inTransaction.placeOrder(602, new BigDecimal("100.00"), orderId);
         try (PreparedStatement discount = connection.prepareStatement(
                 "update orders set total = total * 0.9 where id = ?")) {
             discount.setLong(1, orderId.get());
@@ -83,47 +91,25 @@ try (Connection connection = dataSource.getConnection()) {
 }
 ```
 
-Penitent has no such `DataSource` yet, so here is one. It hands out the same connection on every call, and ignores
-the `close` that Penitent sends at the end of each call:
+The view implements the same interface, and:
 
-<!-- snippet: transactions/single-connection -->
-```java
-/** Hands out the same connection on every call, and leaves closing it to the application. */
-public final class SingleConnection {
+- **runs every call on your connection,** reading the dictionary on it too when it needs to, and **never closes,
+  commits or rolls it back, nor changes its auto-commit.** The connection and its transaction stay yours;
+- **shares what the interface read from the dictionary,** and its settings and exception translator: creating a view
+  reads nothing, and so does calling a method the interface already called;
+- **is cheap, and meant to live as long as the transaction.** One view per transaction, even in a loop, reads the
+  dictionary no more than the interface alone would, and a view nobody references is collected;
+- **follows the rules of the connection:** do not use one view from two threads at once. The interface it came from
+  is still safe to share.
 
-    public static DataSource of(Connection connection) {
-        Connection kept = (Connection) Proxy.newProxyInstance(Connection.class.getClassLoader(),
-                new Class<?>[] { Connection.class }, (proxy, method, args) -> {
-                    if (method.getName().equals("close")) {
-                        return null;   // the application closes it, after the commit or the rollback
-                    }
-                    try {
-                        return method.invoke(connection, args);
-                    } catch (InvocationTargetException e) {
-                        throw e.getCause();
-                    }
-                });
-        return (DataSource) Proxy.newProxyInstance(DataSource.class.getClassLoader(),
-                new Class<?>[] { DataSource.class }, (proxy, method, args) -> {
-                    if (method.getName().equals("getConnection")) {
-                        return kept;
-                    }
-                    throw new UnsupportedOperationException(method.getName());
-                });
-    }
-}
-```
+Inside the transaction, calls and plain JDBC see each other's work, and no other session sees any of it until the
+commit; `OUT` parameters and cursors read what the transaction has not committed yet; and every call runs in the
+connection's session, so session state carries from one call to the next.
 
-Inside the transaction:
-
-- **Calls and plain JDBC see each other's work,** and no other session sees any of it until the commit.
-- **`OUT` parameters and cursors** read what the transaction has not committed yet.
-- **Every call runs in the connection's session,** so session state carries from one call to the next.
-
-> **The cost of this setup:** an interface created with `create` keeps what it read from the dictionary, and that
-> cache belongs to the instance. An interface created for each transaction reads the dictionary again, on the first
-> call of each method: about 5 queries for a routine with scalars. For a few transactions that is fine; in a hot path,
-> prefer Spring, or follow the [roadmap](roadmap.md#transactions-without-spring).
+The same works with any transaction manager of your own that gives you its connection. With Spring, there is no need
+for it: `penitent-spring` already takes part in `@Transactional`. In a Jakarta EE container, the `DataSource` it
+provides hands out the JTA transaction's connection by itself, so `create` with that `DataSource` should take part
+in the transaction without a view; this is not measured yet.
 
 ## When a call fails inside a transaction
 
@@ -132,9 +118,9 @@ uncommitted. Penitent does not roll anything back, so what happens next is your 
 
 <!-- snippet: transactions/failure-in-the-middle -->
 ```java
-orders.placeOrder(604, new BigDecimal("100.00"), orderId);
+inTransaction.placeOrder(604, new BigDecimal("100.00"), orderId);
 try {
-    orders.cancelOrder(-1);
+    inTransaction.cancelOrder(-1);
 } catch (PlsqlRoutineRaisedException e) {
     // only cancel_order was undone: the order placed above is still in the transaction
 }

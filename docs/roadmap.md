@@ -58,18 +58,19 @@ Each proxy reads the dictionary on the first call of each method and keeps the r
 
 ### Transactions without Spring
 
-Without Spring, several calls share a transaction only through a `DataSource` that always hands out the same
-connection, which the application writes itself, as [Transactions](transactions.md#a-transaction-you-manage) shows.
-An interface created for each transaction also reads the dictionary again, because the cache belongs to the
-instance. Still open:
+`PlsqlPackages.using` binds a view of an interface to the application's connection, sharing its cache, as
+[Transactions](transactions.md#a-transaction-you-manage) shows. Internally, a call gets its connection from a
+connection provider, which today is either the `DataSource` or the bound connection. Still open:
 
-- **A view bound to a connection,** derived from an interface that already exists and sharing its cache, as jOOQ
-  derives a configuration: something like `PlsqlPackages.using(orders, connection)`. The library would still never
-  commit.
-- **Or a transaction helper** in the core, such as `PlsqlTransaction.run(dataSource, () -> ...)`, which needs rules
-  for nesting, threads and a connection already in use.
+- **A public connection provider,** to hand out and give back connections in ways a `DataSource` makes awkward, such
+  as preparing the session before each call (`CLIENT_IDENTIFIER`, an application context for VPD). It needs the
+  contract the provider already follows: one connection per call, given back exactly once, and never a commit.
+- **A transaction helper** in the core, such as `PlsqlTransaction.run(dataSource, () -> ...)`, which needs rules for
+  nesting, threads and a connection already in use. Spring, a JTA container or `using` cover it today.
+- **Noticing a routine that ends the caller's transaction,** by comparing the transaction before and after the call,
+  for instance through `DBMS_TRANSACTION.LOCAL_TRANSACTION_ID`, to warn or to fail.
 
-`TransactionsTest` describes today's behavior, which either of them has to keep.
+`TransactionsTest` and `ConnectionBoundViewTest` describe today's behavior, which any of them has to keep.
 
 ### Writing `INDEX BY` and its keys
 

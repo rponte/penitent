@@ -62,7 +62,8 @@ the interface yourself. A `default` method of the interface still runs your own 
 When you call `orders.calculateFreight("SP", "CE")`:
 
 1. **A connection is taken from the `DataSource`.** With [`penitent-spring`](spring.md), it is the current
-   transaction's connection, if there is one.
+   transaction's connection, if there is one. A view made with [`PlsqlPackages.using`](transactions.md) uses the
+   connection it was given instead.
 2. **On the method's first call, the dictionary is read,** on that same connection: which routine the method calls,
    its parameters and their types, and the attributes of every composite involved. That is about 5 queries for a
    routine with scalars, and up to about 16 with nested composites. The result is cached in the proxy, so later
@@ -75,14 +76,16 @@ When you call `orders.calculateFreight("SP", "CE")`:
 5. **The routine runs.**
 6. **The results are read:** the return value and the `OUT` parameters are converted back to the Java types. A
    cursor is read whole into a list and closed.
-7. **The connection is given back,** and the value is returned to you.
+7. **The connection is given back,** unless it is a view's, which stays open, and the value is returned to you.
+   Penitent never commits or rolls back: the transaction belongs to whoever owns the connection.
 
 If the database fails at any step, the `SQLException` goes through the exception translator, which decides what you
 receive: a [`PlsqlRoutineRaisedException`](errors.md) when the error came from the routine's logic, and otherwise a
 `PlsqlExecutionException`, or a Spring `DataAccessException` with `penitent-spring`.
 
 A proxy is safe to share between threads: each call takes its own connection, and the only state kept between
-calls is the dictionary cache. Create it once, and reuse it.
+calls is the dictionary cache. Create it once, and reuse it. A view bound to a connection shares that cache, and
+follows the connection's rules: one thread at a time.
 
 ## Strict by design
 

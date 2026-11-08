@@ -2,6 +2,7 @@ package io.github.rponte.penitent;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.sql.Connection;
 import java.util.Objects;
 
 import javax.sql.DataSource;
@@ -35,9 +36,10 @@ import io.github.rponte.penitent.internal.proxy.RoutineInvocationHandler;
  * method at once.
  *
  * <p>The implementation is a JDK {@link Proxy}, safe to share between threads. Each call obtains a
- * connection from the {@code DataSource}, uses only that one and closes it. For the call to take part
- * in a transaction, pass a {@code DataSource} that returns the transaction's connection, as
- * {@code SpringPlsqlPackages} in {@code penitent-spring} does.
+ * connection from the {@code DataSource}, uses only that one and closes it; the library never
+ * commits, rolls back or changes auto-commit. For calls to take part in a transaction, either pass a
+ * {@code DataSource} that returns the transaction's connection, as {@code SpringPlsqlPackages} in
+ * {@code penitent-spring} does, or bind a view of the proxy to the connection with {@link #using}.
  *
  * <p>Parameters bind by <b>position</b>, unless the interface or the settings say
  * {@link PlsqlBind#BY_NAME}; the attributes of a composite type always bind by <b>name</b>, because
@@ -95,6 +97,44 @@ public final class PlsqlPackages {
 	}
 
 	/**
+	 * A view of {@code proxy} bound to {@code connection}, so that its calls take part in a transaction
+	 * the application, or its framework, controls:
+	 *
+	 * <pre>{@code
+	 * Orders orders = PlsqlPackages.create(Orders.class, dataSource);   // once, as usual
+	 *
+	 * try (Connection connection = dataSource.getConnection()) {
+	 *     connection.setAutoCommit(false);
+	 *     Orders inTransaction = PlsqlPackages.using(orders, connection);
+	 *     inTransaction.placeOrder(42, total, orderId);
+	 *     // ... plain JDBC on the same connection ...
+	 *     connection.commit();
+	 * }
+	 * }</pre>
+	 *
+	 * <p>The view implements the same interface, and shares the proxy's dictionary cache, settings and
+	 * exception translator: creating it reads nothing, and a method the proxy already called reads
+	 * nothing either. Every call of the view, and its {@link #validate}, runs on {@code connection},
+	 * which the view never closes, commits or rolls back, nor changes its auto-commit: the connection,
+	 * and its transaction, stay the application's.
+	 *
+	 * <p>A view is cheap, and meant to live as long as the transaction: one per transaction is the
+	 * intended use, and an unreferenced view is collected while the proxy lives on. Like the
+	 * connection, a view should not be used by two threads at once; the proxy it came from still can.
+	 *
+	 * @throws IllegalArgumentException if {@code proxy} was not created by this library
+	 */
+	public static <T> T using(T proxy, Connection connection) {
+		Objects.requireNonNull(proxy, "proxy");
+		Objects.requireNonNull(connection, "connection");
+		RoutineInvocationHandler handler = handlerOf(proxy);
+		Class<?> type = handler.type();
+		@SuppressWarnings("unchecked")
+		T view = (T) Proxy.newProxyInstance(type.getClassLoader(), new Class<?>[] { type }, handler.boundTo(connection));
+		return view;
+	}
+
+	/**
 	 * Checks every method of the proxy's interface against the database, without calling any routine,
 	 * so that a mapping error shows up now rather than on the first call. It uses one connection, and
 	 * leaves what it read cached: after it, no call reads the dictionary.
@@ -110,11 +150,15 @@ public final class PlsqlPackages {
 	 */
 	public static void validate(Object proxy) {
 		Objects.requireNonNull(proxy, "proxy");
+		handlerOf(proxy).validate();
+	}
+
+	private static RoutineInvocationHandler handlerOf(Object proxy) {
 		if (!Proxy.isProxyClass(proxy.getClass())
 				|| !(Proxy.getInvocationHandler(proxy) instanceof RoutineInvocationHandler handler)) {
 			throw new IllegalArgumentException(proxy.getClass().getName() + " is not a proxy created by PlsqlPackages");
 		}
-		handler.validate();
+		return handler;
 	}
 
 	/**

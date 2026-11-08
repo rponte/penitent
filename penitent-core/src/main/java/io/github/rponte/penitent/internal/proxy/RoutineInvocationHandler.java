@@ -21,12 +21,15 @@ import io.github.rponte.penitent.internal.metadata.ReturnType;
 /**
  * The handler behind each proxy that {@code PlsqlPackages} creates: it answers the default and
  * {@link Object} methods itself, and turns every other one into a call, of a routine or of an
- * anonymous block, on a connection of its own.
+ * anonymous block, on the connection its {@link Connections} hand out.
+ *
+ * <p>What it reads from the dictionary lives in {@code routines} and {@code blocks}; a handler derived
+ * for another connection shares them, so a view bound to a connection reads nothing again.
  */
 public final class RoutineInvocationHandler implements InvocationHandler {
 
 	private final Class<?> type;
-	private final DataSource dataSource;
+	private final Connections connections;
 	private final PlsqlExceptionTranslator translator;
 	private final RoutineCall routines;
 	private final BlockCall blocks;
@@ -35,13 +38,33 @@ public final class RoutineInvocationHandler implements InvocationHandler {
 	public RoutineInvocationHandler(Class<?> type, DataSource dataSource, PlsqlExceptionTranslator translator,
 			PlsqlConverters converters, PlsqlBind defaultBind) {
 		this.type = type;
-		this.dataSource = dataSource;
+		this.connections = new Connections.FromDataSource(dataSource);
 		this.translator = translator;
 		TypeCache types = new TypeCache(converters);
 		ValueEncoder encoder = new ValueEncoder(types);
 		ValueDecoder decoder = new ValueDecoder(types);
 		this.routines = new RoutineCall(type, defaultBind, types, encoder, decoder);
 		this.blocks = new BlockCall(types, encoder, decoder);
+	}
+
+	private RoutineInvocationHandler(RoutineInvocationHandler original, Connections connections) {
+		this.type = original.type;
+		this.connections = connections;
+		this.translator = original.translator;
+		this.routines = original.routines;
+		this.blocks = original.blocks;
+	}
+
+	public Class<?> type() {
+		return type;
+	}
+
+	/**
+	 * The same handler, with the same caches, settings and translator, bound to {@code connection}:
+	 * every call runs on it, and it is never closed, committed or rolled back.
+	 */
+	public RoutineInvocationHandler boundTo(Connection connection) {
+		return new RoutineInvocationHandler(this, new Connections.Bound(connection));
 	}
 
 	@Override
@@ -56,7 +79,8 @@ public final class RoutineInvocationHandler implements InvocationHandler {
 		Object[] arguments = args == null ? new Object[0] : args;
 		ReturnType.requireNoOptionalParameter(method);
 		boolean lobs = TemporaryLobs.open();
-		try (Connection connection = dataSource.getConnection()) {
+		try (Connections.Lease lease = connections.acquire()) {
+			Connection connection = lease.connection();
 			PlsqlBlock block = method.getAnnotation(PlsqlBlock.class);
 			Object result = block != null
 					? blocks.call(method, block, arguments, connection)
@@ -84,7 +108,8 @@ public final class RoutineInvocationHandler implements InvocationHandler {
 						.thenComparing(m -> java.util.Arrays.toString(m.getParameterTypes())))
 				.toList();
 		List<PlsqlMappingException> errors = new java.util.ArrayList<>();
-		try (Connection connection = dataSource.getConnection()) {
+		try (Connections.Lease lease = connections.acquire()) {
+			Connection connection = lease.connection();
 			for (Method method : methods) {
 				try {
 					ReturnType.requireNoOptionalParameter(method);
@@ -152,11 +177,12 @@ public final class RoutineInvocationHandler implements InvocationHandler {
 	}
 
 	/** The identity is the proxy's, which is what the caller sees, not this handler's. */
-	private static Object invokeObjectMethod(Object proxy, Method method, Object[] args) {
+	private Object invokeObjectMethod(Object proxy, Method method, Object[] args) {
 		return switch (method.getName()) {
 			case "equals" -> proxy == args[0];
 			case "hashCode" -> System.identityHashCode(proxy);
-			default -> "PlsqlPackages proxy for " + proxy.getClass().getInterfaces()[0].getName();
+			default -> "PlsqlPackages proxy for " + proxy.getClass().getInterfaces()[0].getName()
+					+ (connections instanceof Connections.Bound ? ", bound to a connection" : "");
 		};
 	}
 }

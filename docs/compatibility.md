@@ -239,6 +239,23 @@ For what each feature does, see the [documentation](README.md).
 | Enum by code: duplicate code, constant without a code, unknown code | Not supported, with a clear error |
 | One-way converter, or converter as a Spring bean | Not supported |
 
+## Transactions and connections
+
+| Situation | Status |
+|---|---|
+| A connection per call from the `DataSource`, given back after a call, a routine error, a mapping error, a cursor read and a validation | Validated |
+| The library never commits, rolls back or changes auto-commit | Validated |
+| Pool in auto-commit: each call commits on its own; a failed call undoes only its own work | Validated |
+| Pool without auto-commit and nothing that commits: the call succeeds and its work is lost when the pool takes the connection back | Validated |
+| On the application's connection: calls and plain JDBC share the transaction; `OUT` and cursors read uncommitted work; a failed call leaves the rest pending | Validated |
+| `PlsqlPackages.using`: every call and `validate` on the given connection, routines and blocks; the connection is never closed, committed or rolled back | Validated |
+| `PlsqlPackages.using`: shares the dictionary cache both ways, the settings and the translator; reads nothing to be created; one view per transaction in a loop reads the dictionary once in all | Validated |
+| `PlsqlPackages.using`: a view of a view; a closed connection fails as a translated connection failure; `null` and a foreign object rejected | Validated |
+| `PlsqlPackages.using`: an unreferenced view is collected while the interface lives on | Validated |
+| A routine's own `COMMIT` or `ROLLBACK` ends the caller's transaction, with and without Spring; a `ROLLBACK` erases savepoints, and a failing Spring nested transaction then reports `ORA-01086` | Validated |
+| An autonomous transaction commits only its own work; a cursor opened before the routine's `COMMIT` is read whole | Validated |
+| With `penitent-spring`: routines and `JdbcTemplate` committed and rolled back together; a routine error caught inside the transaction undoes only that call | Validated |
+
 ## Interface behavior
 
 | Situation | Status |
@@ -271,6 +288,7 @@ For what each feature does, see the [documentation](README.md).
 ## Not measured
 
 - Oracle before 23ai. Native `BOOLEAN` depends on 23ai.
+- A Jakarta EE container's `DataSource` inside a JTA transaction, with `create` or with `PlsqlPackages.using`.
 - `XMLTYPE`, `JSON`, `LONG`, `REF` and nested cursors.
 - Synonyms with a `db link`, which are currently ignored during resolution.
 - A `default` method of a non-public interface on the module path: the package must be open to the library, and

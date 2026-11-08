@@ -6,6 +6,13 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `PlsqlPackages.using(proxy, connection)`: a view of an interface bound to a connection of the application's, so
+  that its calls take part in a transaction the application, or its framework, controls. It shares the interface's
+  dictionary cache and settings, and never closes, commits or rolls back the connection. See
+  [Transactions and connections](https://github.com/rponte/penitent/blob/main/docs/transactions.md).
+
 ## [0.21.0]
 
 The first public release, and the first on Maven Central. Penitent maps Oracle PL/SQL packages to Java interfaces,

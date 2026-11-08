@@ -3,8 +3,6 @@ package io.github.rponte.penitent.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Proxy;
 import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -19,7 +17,6 @@ import io.github.rponte.penitent.PlsqlOut;
 import io.github.rponte.penitent.PlsqlPackage;
 import io.github.rponte.penitent.PlsqlPackages;
 import io.github.rponte.penitent.exception.PlsqlRoutineRaisedException;
-import io.github.rponte.penitent.integration.DocsTransactionsTest.Helpers.SingleConnection;
 
 /**
  * The examples of docs/transactions.md. The regions are what the page shows, and
@@ -38,36 +35,6 @@ class DocsTransactionsTest extends OracleIntegrationTest {
 	@PlsqlPackage("ORDERS_PKG")
 	interface Counting {
 		long countOrders(long customerId, String status, BigDecimal minTotal);
-	}
-
-	interface Helpers {
-
-		// snippet: transactions/single-connection
-		/** Hands out the same connection on every call, and leaves closing it to the application. */
-		public final class SingleConnection {
-
-		    public static DataSource of(Connection connection) {
-		        Connection kept = (Connection) Proxy.newProxyInstance(Connection.class.getClassLoader(),
-		                new Class<?>[] { Connection.class }, (proxy, method, args) -> {
-		                    if (method.getName().equals("close")) {
-		                        return null;   // the application closes it, after the commit or the rollback
-		                    }
-		                    try {
-		                        return method.invoke(connection, args);
-		                    } catch (InvocationTargetException e) {
-		                        throw e.getCause();
-		                    }
-		                });
-		        return (DataSource) Proxy.newProxyInstance(DataSource.class.getClassLoader(),
-		                new Class<?>[] { DataSource.class }, (proxy, method, args) -> {
-		                    if (method.getName().equals("getConnection")) {
-		                        return kept;
-		                    }
-		                    throw new UnsupportedOperationException(method.getName());
-		                });
-		    }
-		}
-		// end-snippet
 	}
 
 	private final DataSource dataSource = DATA_SOURCE;
@@ -94,14 +61,18 @@ class DocsTransactionsTest extends OracleIntegrationTest {
 	@Test
 	@DisplayName("in a transaction of the application's, calls and JDBC are committed together")
 	void transaction() throws SQLException {
+		// snippet: transactions/create
+		Orders orders = PlsqlPackages.create(Orders.class, dataSource);   // once, as usual
+		// end-snippet
+
 		// snippet: transactions/transaction
 		try (Connection connection = dataSource.getConnection()) {
 		    connection.setAutoCommit(false);
 		    try {
-		        Orders orders = PlsqlPackages.create(Orders.class, SingleConnection.of(connection));
+		        Orders inTransaction = PlsqlPackages.using(orders, connection);
 
 		        PlsqlOut<Long> orderId = new PlsqlOut<>();
-		        orders.placeOrder(602, new BigDecimal("100.00"), orderId);
+		        inTransaction.placeOrder(602, new BigDecimal("100.00"), orderId);
 		        try (PreparedStatement discount = connection.prepareStatement(
 		                "update orders set total = total * 0.9 where id = ?")) {
 		            discount.setLong(1, orderId.get());
@@ -128,7 +99,7 @@ class DocsTransactionsTest extends OracleIntegrationTest {
 		try (Connection connection = dataSource.getConnection()) {
 			connection.setAutoCommit(false);
 			try {
-				Orders orders = PlsqlPackages.create(Orders.class, SingleConnection.of(connection));
+				Orders orders = PlsqlPackages.using(PlsqlPackages.create(Orders.class, dataSource), connection);
 				PlsqlOut<Long> orderId = new PlsqlOut<>();
 				orders.placeOrder(603, new BigDecimal("100.00"), orderId);
 				orders.cancelOrder(-1);
@@ -149,13 +120,13 @@ class DocsTransactionsTest extends OracleIntegrationTest {
 		try (Connection connection = dataSource.getConnection()) {
 			connection.setAutoCommit(false);
 			try {
-				Orders orders = PlsqlPackages.create(Orders.class, SingleConnection.of(connection));
+				Orders inTransaction = PlsqlPackages.using(PlsqlPackages.create(Orders.class, dataSource), connection);
 				PlsqlOut<Long> orderId = new PlsqlOut<>();
 
 				// snippet: transactions/failure-in-the-middle
-				orders.placeOrder(604, new BigDecimal("100.00"), orderId);
+				inTransaction.placeOrder(604, new BigDecimal("100.00"), orderId);
 				try {
-				    orders.cancelOrder(-1);
+				    inTransaction.cancelOrder(-1);
 				} catch (PlsqlRoutineRaisedException e) {
 				    // only cancel_order was undone: the order placed above is still in the transaction
 				}
