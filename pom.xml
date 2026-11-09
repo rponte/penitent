@@ -43,6 +43,12 @@
 	<properties>
 		<maven.compiler.release>17</maven.compiler.release>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+		<!--
+			The flavor of the Oracle driver the modules compile and test against, provided by the application at run
+			time: ojdbc17, ojdbc11 or ojdbc8, all at the version of the Spring Boot BOM. The CI also runs the build
+			with -Djdbc.driver=ojdbc11 and -Djdbc.driver=ojdbc8.
+		-->
+		<jdbc.driver>ojdbc17</jdbc.driver>
 		<spring-boot.version>4.1.2</spring-boot.version>
 	</properties>
 
