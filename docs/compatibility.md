@@ -1,6 +1,6 @@
 # Compatibility
 
-Status of the code on `main`, the next version after `0.22.0`, measured on Java 17 and 21, with Oracle 23ai
+Status of version `0.23.0`, measured on Java 17 and 21, with Oracle 23ai
 (`gvenzl/oracle-free:23.26.3`) and `ojdbc17`; the whole suite also runs with `ojdbc11` and `ojdbc8`, version
 23.26.3, and with driver 21.24.0.0, as [Driver versions](#driver-versions) details. Versions up to `0.22.0` need
 Java 21.

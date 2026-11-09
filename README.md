@@ -28,7 +28,7 @@ BigDecimal freight = orders.calculateFreight("SP", "CE");   // 25.5
 
 ## Status
 
-Version `0.22.0`. The library is complete enough to use, and every feature listed in the
+Version `0.23.0`. The library is complete enough to use, and every feature listed in the
 [compatibility table](docs/compatibility.md) has a test against a real Oracle. Keep in mind:
 
 - It is measured on **Java 17 and 21, drivers 23.x (`ojdbc17`, `ojdbc11`, `ojdbc8`) and 21.x (`ojdbc11`, `ojdbc8`),
@@ -50,7 +50,7 @@ application chooses its version.
 <dependency>
     <groupId>io.github.rponte</groupId>
     <artifactId>penitent-spring-boot-starter</artifactId>
-    <version>0.22.0</version>
+    <version>0.23.0</version>
 </dependency>
 <dependency>
     <groupId>com.oracle.database.jdbc</groupId>
@@ -144,7 +144,7 @@ notice.
 
 ## Requirements
 
-- Java 17 or later, and Oracle Database, from the next version on; `0.22.0` and earlier need Java 21. The code is
+- Java 17 or later, and Oracle Database; `0.22.0` and earlier need Java 21. The code is
   tested on Java 17 and 21, against Oracle 23ai.
 - `ojdbc17`, `ojdbc11` or `ojdbc8`, version 23.x, or `ojdbc11` or `ojdbc8`, version 21.x, on the classpath of the
   application using the library (`provided` dependency). The tests run with each of them. Driver 21 cannot read a

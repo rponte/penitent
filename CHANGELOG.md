@@ -6,6 +6,15 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.23.0]
+
+Java 17, and the drivers before 23. The library is compiled for Java 17 and tested on it and on Java 21, with every
+artifact of driver 23, `ojdbc17`, `ojdbc11` and `ojdbc8`, and with driver 21, against Oracle 23ai. Where driver 21
+behaves differently, the library works around it, with the same result on both; the
+[compatibility table](https://rponte.github.io/penitent/compatibility/#driver-versions) lists each difference, and
+the one it cannot work around. On the way, a negative `Duration` of whole seconds now reaches the database as itself,
+which driver 23 got wrong.
+
 ### Fixed
 
 - Reading a `TIMESTAMP WITH LOCAL TIME ZONE` no longer depends on the driver unwrapping the pool's connection by
@@ -28,8 +37,6 @@ All notable changes to this project are listed here. The format follows
 
 ### Changed
 
-- A `Period` with days, which `INTERVAL YEAR TO MONTH` does not store, is refused with `PlsqlMappingException`
-  before the call, instead of the driver's `IllegalArgumentException`.
 - Java 17 is the minimum version, instead of 21: the library is compiled for Java 17, and every build runs the tests
   on Java 17 and on Java 21.
 - The `ojdbc11` and `ojdbc8` flavors of the Oracle driver are tested too, not only `ojdbc17`: every build runs the
@@ -37,6 +44,8 @@ All notable changes to this project are listed here. The format follows
 - Driver 21 is supported: every build also runs the whole suite with `ojdbc11` and `ojdbc8` 21.24.0.0, against Oracle
   23ai. The one thing it cannot do is read a `BOOLEAN` column in a cursor; the compatibility table lists what differs
   and what the library does about it.
+- A `Period` with days, which `INTERVAL YEAR TO MONTH` does not store, is refused with `PlsqlMappingException`
+  before the call, instead of the driver's `IllegalArgumentException`.
 
 ## [0.22.0]
 
@@ -84,6 +93,7 @@ driven by the database dictionary: see the [README](https://github.com/rponte/pe
 
 - Spring Boot 4.1.2 for the versions the library is built and tested with.
 
-[Unreleased]: https://github.com/rponte/penitent/compare/v0.22.0...HEAD
+[Unreleased]: https://github.com/rponte/penitent/compare/v0.23.0...HEAD
+[0.23.0]: https://github.com/rponte/penitent/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/rponte/penitent/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/rponte/penitent/releases/tag/v0.21.0
