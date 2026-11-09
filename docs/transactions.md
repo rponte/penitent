@@ -85,6 +85,66 @@ long orderId = transactions.runWithResult(tx -> {
   to `PlsqlTransactions.of` to choose another translator.
 - **Always:** the connection goes back to the `DataSource` with its auto-commit as it was found.
 
+### Exceptions from the block
+
+Nothing is wrapped. `run` and `runWithResult` are generic in the exception the block throws, `<E extends Exception>`,
+so the compiler knows what comes out, and what comes out is the exception the block threw, after the rollback.
+
+**A block that throws no checked exception** asks nothing of its caller. Routine errors, such as
+`PlsqlRoutineRaisedException`, are unchecked, and come out as they are:
+
+<!-- snippet: transactions/exceptions-none -->
+```java
+transactions.run(tx -> tx.using(orders).placeOrder(607, new BigDecimal("10.00"), orderId));   // no try, no throws
+```
+
+**A block that throws a `SQLException`,** because it uses JDBC, throws it to its caller, which handles or declares
+it as it would without the block. There is no wrapper to catch, and no cause to unwrap:
+
+<!-- snippet: transactions/exceptions-sql -->
+```java
+void discount(long orderId) throws SQLException {   // the same as without the block
+    transactions.run(tx -> {
+        try (PreparedStatement update = tx.connection().prepareStatement(
+                "update orders set total = total * 0.9 where id = ?")) {
+            update.setLong(1, orderId);
+            update.executeUpdate();
+        }
+    });
+}
+```
+
+**A block that throws two checked types** makes Java infer their common supertype, usually `Exception`, since it has
+no union types. The compiler then asks the caller for `Exception`, but what arrives is still the original, which a
+`catch` of its own type receives:
+
+<!-- snippet: transactions/exceptions-two-types -->
+```java
+try {
+    transactions.run(tx -> {
+        PlsqlOut<Long> orderId = new PlsqlOut<>();
+        tx.using(orders).placeOrder(609, new BigDecimal("100.00"), orderId);
+        discount(tx, orderId.get());   // throws SQLException
+        export(orderId.get());         // throws IOException
+    });
+} catch (IOException e) {
+    // the original IOException, not a wrapper; the order was rolled back
+    retryExportLater(e);
+} catch (Exception e) {
+    // E was inferred as Exception, the common supertype, so the compiler asks for it
+    reportFailure(e);
+}
+```
+
+To keep a narrower type, handle one of them inside the block.
+
+**What the library itself throws is unchecked:** a failed commit or a connection that cannot be obtained arrives
+through the exception translator, as a `PlsqlExecutionException` by default, and a misuse, such as a nested block or
+a view used after its block, as an `IllegalStateException`. Neither has to be declared.
+
+Unlike `@Transactional`, which by default does not roll back on a checked exception, a block rolls back on every
+exception, checked or not, and on an `Error`.
+
 **It is strict about leaving the transaction.** These fail with a clear message, instead of quietly running
 somewhere else:
 

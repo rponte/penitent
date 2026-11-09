@@ -3,10 +3,12 @@ package io.github.rponte.penitent.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import java.util.List;
 
 import javax.sql.DataSource;
 
@@ -16,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import io.github.rponte.penitent.PlsqlOut;
 import io.github.rponte.penitent.PlsqlPackage;
 import io.github.rponte.penitent.PlsqlPackages;
+import io.github.rponte.penitent.PlsqlTransaction;
 import io.github.rponte.penitent.PlsqlTransactions;
 import io.github.rponte.penitent.exception.PlsqlRoutineRaisedException;
 
@@ -79,6 +82,92 @@ class DocsTransactionsTest extends OracleIntegrationTest {
 
 		assertThat(orderId).isPositive();
 		assertThat(committed.countOrders(606, null, null)).isEqualTo(1);
+	}
+
+	private final Orders orders = PlsqlPackages.create(Orders.class, DATA_SOURCE);
+
+	private final PlsqlTransactions transactions = PlsqlTransactions.of(DATA_SOURCE);
+
+	@Test
+	@DisplayName("exceptions: a block without checked exceptions asks nothing of its caller")
+	void exceptions_none() {
+		PlsqlOut<Long> orderId = new PlsqlOut<>();
+
+		// snippet: transactions/exceptions-none
+		transactions.run(tx -> tx.using(orders).placeOrder(607, new BigDecimal("10.00"), orderId));   // no try, no throws
+		// end-snippet
+
+		assertThat(committed.countOrders(607, null, null)).isEqualTo(1);
+	}
+
+	@Test
+	@DisplayName("exceptions: a SQLException of the block reaches the caller as it is")
+	void exceptions_sql() throws SQLException {
+		PlsqlOut<Long> orderId = new PlsqlOut<>();
+		transactions.run(tx -> tx.using(orders).placeOrder(608, new BigDecimal("100.00"), orderId));
+
+		discount(orderId.get());
+
+		assertThat(committed.countOrders(608, null, new BigDecimal("90"))).isEqualTo(1);
+		assertThat(committed.countOrders(608, null, new BigDecimal("90.01"))).isZero();
+	}
+
+	// snippet: transactions/exceptions-sql
+	void discount(long orderId) throws SQLException {   // the same as without the block
+	    transactions.run(tx -> {
+	        try (PreparedStatement update = tx.connection().prepareStatement(
+	                "update orders set total = total * 0.9 where id = ?")) {
+	            update.setLong(1, orderId);
+	            update.executeUpdate();
+	        }
+	    });
+	}
+	// end-snippet
+
+	@Test
+	@DisplayName("exceptions: with two checked types, E is Exception, and the original still arrives unwrapped")
+	void exceptions_two_types() {
+
+		// snippet: transactions/exceptions-two-types
+		try {
+		    transactions.run(tx -> {
+		        PlsqlOut<Long> orderId = new PlsqlOut<>();
+		        tx.using(orders).placeOrder(609, new BigDecimal("100.00"), orderId);
+		        discount(tx, orderId.get());   // throws SQLException
+		        export(orderId.get());         // throws IOException
+		    });
+		} catch (IOException e) {
+		    // the original IOException, not a wrapper; the order was rolled back
+		    retryExportLater(e);
+		} catch (Exception e) {
+		    // E was inferred as Exception, the common supertype, so the compiler asks for it
+		    reportFailure(e);
+		}
+		// end-snippet
+
+		assertThat(caught).containsExactly("retryExportLater: IOException");
+		assertThat(committed.countOrders(609, null, null)).as("rolled back").isZero();
+	}
+
+	private final List<String> caught = new java.util.ArrayList<>();
+
+	private void retryExportLater(IOException e) {
+		caught.add("retryExportLater: " + e.getClass().getSimpleName());
+	}
+
+	private void reportFailure(Exception e) {
+		caught.add("reportFailure: " + e.getClass().getSimpleName());
+	}
+
+	private static void discount(PlsqlTransaction tx, long orderId) throws SQLException {
+		try (PreparedStatement update = tx.connection().prepareStatement("update orders set total = total * 0.9 where id = ?")) {
+			update.setLong(1, orderId);
+			update.executeUpdate();
+		}
+	}
+
+	private static void export(long orderId) throws IOException {
+		throw new IOException("export of order " + orderId + " failed");
 	}
 
 	@Test
