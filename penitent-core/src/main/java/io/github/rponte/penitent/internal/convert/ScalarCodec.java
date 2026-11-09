@@ -193,13 +193,17 @@ public final class ScalarCodec {
 	 * {@code Timestamp} it would go through the JVM's time zone; as itself, {@code createStruct} refuses
 	 * it, and a parameter loses its SQL type, so Oracle can no longer choose between overloads. The log
 	 * keeps the encoded value, which reads better.
+	 *
+	 * <p>The library builds them with {@link OracleDatetimeCodec}, not with the driver's
+	 * {@code TIMESTAMP.of} and {@code DATE.of}: before driver 23, those go through the JVM's time zone,
+	 * and a time that the zone skips moves an hour without any error.
 	 */
-	public static Object forDriver(Object encoded) throws SQLException {
+	public static Object forDriver(Object encoded) {
 		if (encoded instanceof LocalDateTime local) {
-			return TIMESTAMP.of(local);
+			return OracleDatetimeCodec.encodeTimestamp(local);
 		}
 		if (encoded instanceof LocalDate date) {
-			return oracle.sql.DATE.of(date);
+			return OracleDatetimeCodec.encodeDate(date);
 		}
 		return encoded;
 	}
@@ -236,11 +240,13 @@ public final class ScalarCodec {
 				// driver version, as OracleArrays does for the same reason.
 				return t.zonedDateTimeValue(connection.unwrap(OracleConnection.class));
 			}
+			// From the bytes, not with toLocalDateTime(): before driver 23, that goes through the JVM's time
+			// zone, and 02:30 on the day the clocks jump comes back as 03:30. See OracleDatetimeCodec.
 			if (value instanceof TIMESTAMP t) {
-				return t.toLocalDateTime();
+				return OracleDatetimeCodec.decode(t.toBytes());
 			}
 			if (value instanceof oracle.sql.DATE d) {
-				return d.toLocalDateTime();
+				return OracleDatetimeCodec.decode(d.toBytes());
 			}
 			if (value instanceof oracle.sql.INTERVALDS interval) {
 				return interval.getDuration();
