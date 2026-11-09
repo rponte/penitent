@@ -26,7 +26,7 @@ Orders orders = PlsqlPackages.create(Orders.class, dataSource);
 BigDecimal freight = orders.calculateFreight("SP", "CE");   // 25.5
 ```
 
-It runs on Java 21 with plain JDBC, Spring or Spring Boot, and is on
+It runs on Java 17 or later, with plain JDBC, Spring or Spring Boot, and is on
 [Maven Central](https://central.sonatype.com/namespace/io.github.rponte) as `io.github.rponte:penitent-core`. New to
 it? Start with [Getting started](getting-started.md): in about ten minutes, it calls a real PL/SQL package from plain
 Java and from Spring Boot. Every page uses the same orders package, so the examples build on each other.

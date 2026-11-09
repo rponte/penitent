@@ -4,7 +4,7 @@ In about ten minutes, you will call a real PL/SQL package from Java without writ
 `CallableStatement`, no `registerOutParameter`, no parameter positions to count. You write an interface, and Penitent
 reads everything else from the database.
 
-**You need** Java 21, an Oracle Database (23ai is the version the library is tested on) and a `DataSource` that
+**You need** Java 17 or later, an Oracle Database (23ai is the version the library is tested on) and a `DataSource` that
 connects to it.
 
 ## 1. The package

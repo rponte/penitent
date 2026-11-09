@@ -31,7 +31,8 @@ BigDecimal freight = orders.calculateFreight("SP", "CE");   // 25.5
 Version `0.22.0`. The library is complete enough to use, and every feature listed in the
 [compatibility table](docs/compatibility.md) has a test against a real Oracle. Keep in mind:
 
-- It is only measured on **Java 21, `ojdbc17` and Oracle 23ai**. Older versions are on the [roadmap](docs/roadmap.md).
+- It is measured on **Java 17 and 21, `ojdbc17` and Oracle 23ai**. Older drivers and databases are on the
+  [roadmap](docs/roadmap.md).
 - It is in `0.x`, so the public API may still change between minor versions.
 
 ## Installation
@@ -143,7 +144,7 @@ notice.
 
 ## Requirements
 
-- Java 21 and Oracle Database. The code is tested against Oracle 23ai.
+- Java 17 or later, and Oracle Database. The code is tested on Java 17 and 21, against Oracle 23ai.
 - `ojdbc17` on the classpath of the application using the library (`provided` dependency).
 - An SLF4J implementation, to see the log, such as the Logback that Spring Boot already ships. Without one, SLF4J
   warns once and discards the log.
