@@ -1,6 +1,7 @@
 package io.github.rponte.penitent.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.sql.Blob;
 import java.sql.Clob;
@@ -13,6 +14,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import io.github.rponte.penitent.PlsqlOut;
+import io.github.rponte.penitent.exception.PlsqlMappingException;
 import io.github.rponte.penitent.PlsqlPackage;
 import io.github.rponte.penitent.PlsqlRoutine;
 
@@ -97,6 +99,14 @@ class LobsAndIntervalsTest extends OracleIntegrationTest {
 	@DisplayName("INTERVAL YEAR TO MONTH becomes Period")
 	void interval_year_to_month() {
 		assertThat(lobs.echoIntervalYm(Period.of(2, 3, 0))).isEqualTo(Period.of(2, 3, 0));
+	}
+
+	@Test
+	@DisplayName("a Period with days is refused before the call: INTERVAL YEAR TO MONTH does not store them")
+	void period_with_days() {
+		assertThatThrownBy(() -> lobs.echoIntervalYm(Period.of(1, 2, 3)))
+				.isInstanceOf(PlsqlMappingException.class)
+				.hasMessage("echoIntervalYm(Period): Period P1Y2M3D has days, which INTERVAL YEAR TO MONTH does not store");
 	}
 
 	@Test
