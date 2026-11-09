@@ -20,17 +20,21 @@ Still open: whether it becomes a module of this project or a project of its own.
 
 ### Supported versions
 
-Today everything is measured on a single combination: Java 21, `ojdbc17` and Oracle 23ai. Widening it is planned in
-this order, since the Oracle version is the one that most often decides what a project can use:
+Today everything is measured with `ojdbc17` and Oracle 23ai, on Java 17 and 21. Widening it is planned from the
+easiest to the hardest, each step validated before the next:
 
-1. **Oracle before 23ai**, starting with 19c, the long-term release most projects still run. To check: the
-   dictionary views the library reads (`ALL_ARGUMENTS`, `ALL_PLSQL_TYPES`, `ALL_PLSQL_COLL_TYPES` and the others),
-   native `BOOLEAN`, which only exists from 23ai, and the binding of package types by name. Each version needs its
-   own Oracle in the test suite, with Testcontainers.
-2. **Older Java versions**, such as 17. The code uses Java 21 features, which would have to be replaced, and the build
-   would have to compile and test against each supported version.
-3. **Other JDBC drivers**, such as `ojdbc11` and `ojdbc8`. The driver decides how RECORD, `%ROWTYPE` and collections
-   are addressed, so `DriverAddressingTest` and the round-trip tests would run against each one.
+1. **The `ojdbc11` and `ojdbc8` flavors of the same driver version,** built for older JDKs from the same code. Few
+   driver APIs are used directly, so this is mostly a new entry in the CI matrix.
+2. **Older driver versions,** such as 21.x and 19.x, against Oracle 23ai. The `java.time` conversions, the native
+   `BOOLEAN`, which needs the 23 driver, and the way RECORD, `%ROWTYPE` and collections are addressed may differ; the
+   likely outcome is a minimum driver version, rather than every one.
+3. **Oracle 21c,** before 23ai, with its free image. There is no SQL `BOOLEAN`, so the native boolean has to degrade
+   to a clear error, and the fixtures split into what needs 23ai and what does not. The dictionary views the library
+   reads (`ALL_ARGUMENTS`, `ALL_PLSQL_TYPES`, `ALL_PLSQL_COLL_TYPES` and the others) exist since 12c, but their details
+   need checking.
+4. **Oracle 19c,** the long-term release most projects still run. What applies to 21c applies here, and 19c has no
+   free edition: its image comes from Oracle's container registry, after a login, and is large and slow to start, so
+   it may run in a separate, less frequent workflow.
 
 The goal is a test matrix in CI that states which combinations are validated, as the [compatibility table](compatibility.md) does
 today for the one combination.

@@ -6,6 +6,11 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Java 17 is the minimum version, instead of 21: the library is compiled for Java 17, and every build runs the tests
+  on Java 17 and on Java 21.
+
 ## [0.22.0]
 
 Transactions without Spring, and error messages with one shape. `PlsqlTransactions` runs a block in one transaction

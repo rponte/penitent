@@ -5,7 +5,7 @@ how to propose a change.
 
 ## Building
 
-You need Java 21 and Docker. The tests start their own Oracle through Testcontainers, so there is nothing to install
+You need Java 17 or later and Docker. The tests start their own Oracle through Testcontainers, so there is nothing to install
 or configure:
 
 ```
