@@ -15,12 +15,19 @@ permissions:
 
 jobs:
   build:
-    # compiled for Java 17, the minimum, and tested on it and on Java 21
+    # compiled for Java 17, the minimum, and tested on it and on Java 21, with ojdbc17; then each other flavor of
+    # the driver on Java 21, one axis at a time
     strategy:
       fail-fast: false
       matrix:
         java: ['21', '17']
-    name: build (Java ${{ matrix.java }})
+        driver: ['ojdbc17']
+        include:
+          - java: '21'
+            driver: 'ojdbc11'
+          - java: '21'
+            driver: 'ojdbc8'
+    name: build (Java ${{ matrix.java }}, ${{ matrix.driver }})
     runs-on: ubuntu-latest
     # the tests start their own Oracle through Testcontainers; most of the time is pulling its image
     timeout-minutes: 20
@@ -34,11 +41,11 @@ jobs:
           cache: maven
 
       # the same command as on a developer's machine: the build pins its own locale and time zone
-      - run: ./mvnw -B verify
+      - run: ./mvnw -B verify -Djdbc.driver=${{ matrix.driver }}
 
       - if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: test-reports-java-${{ matrix.java }}
+          name: test-reports-java-${{ matrix.java }}-${{ matrix.driver }}
           path: '**/target/surefire-reports/'
           retention-days: 7

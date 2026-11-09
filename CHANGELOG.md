@@ -10,6 +10,8 @@ All notable changes to this project are listed here. The format follows
 
 - Java 17 is the minimum version, instead of 21: the library is compiled for Java 17, and every build runs the tests
   on Java 17 and on Java 21.
+- The `ojdbc11` and `ojdbc8` flavors of the Oracle driver are tested too, not only `ojdbc17`: every build runs the
+  whole suite with each of them, at the driver version of the Spring Boot BOM.
 
 ## [0.22.0]
 

@@ -21,7 +21,7 @@
 		<!-- provided: whoever uses the library chooses the driver. Only OracleArrays imports it. -->
 		<dependency>
 			<groupId>com.oracle.database.jdbc</groupId>
-			<artifactId>ojdbc17</artifactId>
+			<artifactId>${jdbc.driver}</artifactId>
 			<scope>provided</scope>
 		</dependency>
 
