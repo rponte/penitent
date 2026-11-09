@@ -42,7 +42,10 @@ final class Jdbc {
 	 * the driver's to explain.
 	 *
 	 * <p>The known case is a cursor with a {@code BOOLEAN} column, the SQL type of 23ai: before driver
-	 * 23, the driver does not know the type code of the column, 252, and fails while describing it.
+	 * 23, the driver does not know the type code of the column, 252, and fails while describing it. The
+	 * database turns a {@code BOOLEAN} into a {@code NUMBER} for such a driver in a plain query, but not
+	 * in a cursor opened in PL/SQL, which is the only kind the library reads, and the library never sees
+	 * the query inside it: the conversion has to be in the query.
 	 */
 	static void execute(CallableStatement statement, String sql) {
 		try {
@@ -59,7 +62,8 @@ final class Jdbc {
 		String message = String.valueOf(e.getMessage());
 		if (message.contains("oacdty: 252")) {
 			return "the Oracle driver before 23 cannot read a BOOLEAN column in a cursor (" + message
-					+ "); convert it in the query, as in CASE WHEN flag THEN 'Y' ELSE 'N' END, and declare Boolean,"
+					+ "); convert it in the query, as in CASE WHEN flag THEN 'Y' WHEN NOT flag THEN 'N' END, which keeps"
+					+ " null, and declare Boolean,"
 					+ " or use driver 23. The connection was discarded";
 		}
 		return "the Oracle driver failed an internal check (" + message + "). The connection was discarded";
