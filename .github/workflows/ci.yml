@@ -16,7 +16,8 @@ permissions:
 jobs:
   build:
     # compiled for Java 17, the minimum, and tested on it and on Java 21, with the ojdbc17 artifact of the driver;
-    # then each other artifact of the same driver version on Java 21, one axis at a time
+    # then each other artifact of the same driver version on Java 21, and driver 21 in both of its artifacts (it
+    # has no ojdbc17), one axis at a time. Without jdbc-version, the driver is the one of the Spring Boot BOM
     strategy:
       fail-fast: false
       matrix:
@@ -27,7 +28,13 @@ jobs:
             jdbc-artifact: 'ojdbc11'
           - java: '21'
             jdbc-artifact: 'ojdbc8'
-    name: build (Java ${{ matrix.java }}, ${{ matrix.jdbc-artifact }})
+          - java: '21'
+            jdbc-artifact: 'ojdbc11'
+            jdbc-version: '21.24.0.0'
+          - java: '21'
+            jdbc-artifact: 'ojdbc8'
+            jdbc-version: '21.24.0.0'
+    name: build (Java ${{ matrix.java }}, ${{ matrix.jdbc-artifact }}${{ matrix.jdbc-version && format(' {0}', matrix.jdbc-version) || '' }})
     runs-on: ubuntu-latest
     # the tests start their own Oracle through Testcontainers; most of the time is pulling its image
     timeout-minutes: 20
@@ -41,11 +48,13 @@ jobs:
           cache: maven
 
       # the same command as on a developer's machine: the build pins its own locale and time zone
-      - run: ./mvnw -B verify -Doracle.jdbc.artifact=${{ matrix.jdbc-artifact }}
+      - run: >-
+          ./mvnw -B verify -Doracle.jdbc.artifact=${{ matrix.jdbc-artifact }}
+          ${{ matrix.jdbc-version && format('-Doracle.jdbc.version={0}', matrix.jdbc-version) || '' }}
 
       - if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: test-reports-java-${{ matrix.java }}-${{ matrix.jdbc-artifact }}
+          name: test-reports-java-${{ matrix.java }}-${{ matrix.jdbc-artifact }}${{ matrix.jdbc-version && format('-{0}', matrix.jdbc-version) || '' }}
           path: '**/target/surefire-reports/'
           retention-days: 7

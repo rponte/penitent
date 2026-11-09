@@ -2,7 +2,8 @@
 
 Status of the code on `main`, the next version after `0.22.0`, measured on Java 17 and 21, with Oracle 23ai
 (`gvenzl/oracle-free:23.26.3`) and `ojdbc17`; the whole suite also runs with `ojdbc11` and `ojdbc8`, version
-23.26.3. Versions up to `0.22.0` need Java 21.
+23.26.3, and with driver 21.24.0.0, as [Driver versions](#driver-versions) details. Versions up to `0.22.0` need
+Java 21.
 
 | Status | Meaning |
 |---|---|
@@ -14,6 +15,31 @@ test guarantees the message. There are no `@Disabled` tests left; the few plain 
 a test.
 
 For what each feature does, see the [documentation](README.md).
+
+## Driver versions
+
+The Oracle JDBC driver has a version of its own, apart from the database's: driver 21 connects to Oracle 23ai too.
+The number in the artifact, `ojdbc17`, `ojdbc11` or `ojdbc8`, is the Java version the jar is built for, not the
+driver version.
+
+| Driver | Artifacts | Status |
+|---|---|---|
+| 23.26.3 | `ojdbc17`, `ojdbc11`, `ojdbc8` | Validated: the whole suite |
+| 21.24.0.0 | `ojdbc11`, `ojdbc8` | Validated: the whole suite, with the differences below |
+| 19.x and older | | Not measured |
+
+Before driver 23, the driver does some things differently. The library works around them, so that the same code
+gives the same result on both versions, except for one case the driver cannot do at all:
+
+| Before driver 23, the driver… | What the library does | Status |
+|---|---|---|
+| converts `LocalDateTime` and `LocalDate` through the JVM's time zone, in both directions: 02:30 on the day the clocks jump becomes 03:30 | Builds and reads the bytes of `DATE` and `TIMESTAMP` itself, without a time zone | Validated |
+| has no `java.time` methods for intervals | Builds and reads the bytes of `INTERVAL` itself | Validated |
+| fails with `ClassCastException` reading a `TIMESTAMP WITH LOCAL TIME ZONE` behind a pool | Hands the driver its own connection | Validated |
+| refuses the standard `Types.BOOLEAN` ("Invalid column type: 16"), and reads a `null` `BOOLEAN` as `false` | Binds `BOOLEAN` as `OracleTypes.PLSQL_BOOLEAN` on every version, and asks the driver whether the value was `null` | Validated |
+| does not resolve `SCHEMA.TABLE%ROWTYPE`, because it puts the whole name in quotes | Binds `"SCHEMA".TABLE%ROWTYPE`, which every version resolves | Validated |
+| cannot read a `BOOLEAN` column in a cursor: it fails inside, and leaves the connection unusable | Discards the connection, so that the pool replaces it, and fails with a `PlsqlExecutionException` that says so. Convert the column in the query, as in `CASE WHEN flag THEN 'Y' ELSE 'N' END`, into a `Boolean` | Not supported, with a clear error |
+| writes its error messages without the `ORA-` number and without the link to the error's page | Nothing: the messages reach you as the driver writes them. `getErrorCode()` is the same on both versions | Validated |
 
 ## Scalar types as parameters and return values
 
@@ -57,6 +83,7 @@ For what each feature does, see the [documentation](README.md).
 | Session `NLS_LANGUAGE` and `NLS_TERRITORY` of `AMERICA` and `BRAZIL`, as the driver derives them from the JVM locale | Dates, timestamps with and without time zone, and intervals cross unchanged, also as attribute, element and cursor column | Validated |
 | `BOOLEAN` as return value | `boolean`, `Boolean` | Validated |
 | `BOOLEAN` as parameter, including `null` | `boolean`, `Boolean` | Validated |
+| `BOOLEAN` coming back `null`, as return value, `OUT` or `IN OUT` | `Boolean` `null`, not `false` | Validated |
 | `NUMBER` as parameter | `boolean`, `Boolean`, as `1`/`0` or the numeric literals of `@PlsqlBoolean` | Validated |
 | `NUMBER` as return value | `boolean`, `Boolean`, as `1`/`0` or the literals of `@PlsqlBoolean` on the method. Any other value is a `PlsqlMappingException` | Validated |
 | `VARCHAR2` as parameter and return value | `boolean`, `Boolean`, by the literals of `@PlsqlBoolean` on the parameter or on the method | Validated |
@@ -96,7 +123,7 @@ For what each feature does, see the [documentation](README.md).
 | `RAW` | `byte[]` | Validated |
 | `CHAR`, `NVARCHAR2` | `String` | Validated |
 | `BINARY_DOUBLE` | `Double` | Validated |
-| `BOOLEAN` in RECORD or OBJECT | `Boolean`, in both directions. `@PlsqlBoolean` has no effect | Validated |
+| `BOOLEAN` in RECORD or OBJECT | `Boolean`, in both directions, including `null`. `@PlsqlBoolean` has no effect | Validated |
 | `CLOB` when reading | `String` | Validated |
 | `CLOB` when writing | `String`, in a temporary LOB | Validated |
 | `BLOB` | `byte[]`, in a temporary LOB when writing | Validated |
@@ -137,6 +164,8 @@ For what each feature does, see the [documentation](README.md).
 | Columns without a property are ignored; no column matching is an error | Validated |
 | Empty cursor becomes an empty list | Validated |
 | Numeric column in `Boolean`, as `1`/`0`. Any other value is a `PlsqlMappingException` | Validated |
+| `BOOLEAN` column in `Boolean`, alone or in a row, including `null`, from driver 23 on | Validated |
+| `BOOLEAN` column before driver 23: see [Driver versions](#driver-versions) | Not supported, with a clear error |
 | Strongly typed `REF CURSOR` | Validated |
 | `Set<T>` or `Collection<T>` return value | Not supported, with a clear error |
 | `CLOB` column in `String` | Validated |
@@ -299,6 +328,7 @@ For what each feature does, see the [documentation](README.md).
 ## Not measured
 
 - Oracle before 23ai. Native `BOOLEAN` depends on 23ai.
+- Driver 19.x and older.
 - A Jakarta EE container's `DataSource` inside a JTA transaction, with `create` or with `PlsqlPackages.using`.
 - `XMLTYPE`, `JSON`, `LONG`, `REF` and nested cursors.
 - Synonyms with a `db link`, which are currently ignored during resolution.
