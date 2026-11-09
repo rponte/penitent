@@ -44,11 +44,16 @@
 		<maven.compiler.release>17</maven.compiler.release>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<!--
-			The flavor of the Oracle driver the modules compile and test against, provided by the application at run
-			time: ojdbc17, ojdbc11 or ojdbc8, all at the version of the Spring Boot BOM. The CI also runs the build
-			with -Djdbc.driver=ojdbc11 and -Djdbc.driver=ojdbc8.
+			The artifact of the Oracle JDBC driver the modules compile and test against, provided by the application
+			at run time: ojdbc17, ojdbc11 or ojdbc8. The number is the Java version the jar is built for, not a
+			version of the driver or of the database. The CI also runs the build with -Doracle.jdbc.artifact=ojdbc11
+			and -Doracle.jdbc.artifact=ojdbc8.
+
+			The version of the jar comes from the Spring Boot BOM, whose property for it is oracle-database.version:
+			Oracle numbers its driver releases after its database releases, but that version is the driver's, the jar
+			in this build, not the version of the database the tests connect to.
 		-->
-		<jdbc.driver>ojdbc17</jdbc.driver>
+		<oracle.jdbc.artifact>ojdbc17</oracle.jdbc.artifact>
 		<spring-boot.version>4.1.2</spring-boot.version>
 	</properties>
 
