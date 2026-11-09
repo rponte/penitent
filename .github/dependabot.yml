@@ -24,3 +24,12 @@ updates:
       dependencies:
         patterns: ["*"]
         update-types: ["patch"]
+
+  # the documentation site's tools, pinned in requirements-docs.txt
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      docs:
+        patterns: ["*"]

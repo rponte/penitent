@@ -38,6 +38,11 @@ under the first one.
 The examples on the pages are checked by `./mvnw verify`, not by the site's build: see the rule on the
 documentation's examples below.
 
+The `Documentation` workflow builds the site on every push and pull request, and publishes it to
+[rponte.github.io/penitent](https://rponte.github.io/penitent/) only after the `Release` workflow of a version tag
+succeeds, so the site always describes the latest released version. Run it by hand from a tag to publish that tag's
+site again.
+
 ## Rules
 
 - **Everything in English:** code, identifiers, messages, logs, Javadoc, comments, tests and documentation.
