@@ -7,7 +7,6 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
 
 import io.github.rponte.penitent.exception.PlsqlMappingException;
-import io.github.rponte.penitent.internal.metadata.CompositeType;
 
 /**
  * An anonymous PL/SQL block, for whatever does not have a {@code package.routine} shape.
@@ -56,9 +55,9 @@ public @interface PlsqlBlock {
 
 	/**
 	 * The Oracle name of the type of {@code :result}, when it is a composite type or a collection: the
-	 * block has no dictionary entry to take it from. It follows the table in {@link CompositeType}:
-	 * {@code TYPE}, {@code PACKAGE.RECORD} or {@code TABLE%ROWTYPE}, resolved in the session's schema,
-	 * and the dictionary says whether it is a collection, which becomes a {@code List<T>}.
+	 * block has no dictionary entry to take it from. It is one of {@code TYPE}, {@code PACKAGE.RECORD} or
+	 * {@code TABLE%ROWTYPE}, resolved in the session's schema, and the dictionary says whether it is a
+	 * collection, which becomes a {@code List<T>}.
 	 *
 	 * <p>{@code SYS_REFCURSOR} makes {@code :result} a cursor, read as for a routine. A block that
 	 * opens it, with {@code OPEN :result FOR}, does not need to say so. A {@code List} without either
