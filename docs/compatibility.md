@@ -1,6 +1,6 @@
 # Compatibility
 
-Status of version `0.21.0`, measured only on Oracle 23ai (`gvenzl/oracle-free:23.26.3`) with `ojdbc17`.
+Status of version `0.22.0`, measured only on Oracle 23ai (`gvenzl/oracle-free:23.26.3`) with `ojdbc17`.
 
 | Status | Meaning |
 |---|---|

@@ -28,7 +28,7 @@ BigDecimal freight = orders.calculateFreight("SP", "CE");   // 25.5
 
 ## Status
 
-Version `0.21.0`. The library is complete enough to use, and every feature listed in the
+Version `0.22.0`. The library is complete enough to use, and every feature listed in the
 [compatibility table](docs/compatibility.md) has a test against a real Oracle. Keep in mind:
 
 - It is only measured on **Java 21, `ojdbc17` and Oracle 23ai**. Older versions are on the [roadmap](docs/roadmap.md).
@@ -49,7 +49,7 @@ application chooses its version.
 <dependency>
     <groupId>io.github.rponte</groupId>
     <artifactId>penitent-spring-boot-starter</artifactId>
-    <version>0.21.0</version>
+    <version>0.22.0</version>
 </dependency>
 <dependency>
     <groupId>com.oracle.database.jdbc</groupId>

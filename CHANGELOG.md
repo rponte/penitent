@@ -6,6 +6,14 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.22.0]
+
+Transactions without Spring, and error messages with one shape. `PlsqlTransactions` runs a block in one transaction
+in the core alone, `PlsqlPackages.using` binds an interface to a connection you manage, and every mapping error of a
+method now starts with the method and its parameter types. The documentation is published at
+[rponte.github.io/penitent](https://rponte.github.io/penitent/), with the Javadoc at
+[/api](https://rponte.github.io/penitent/api/).
+
 ### Added
 
 - `PlsqlPackages.using(proxy, connection)`: a view of an interface bound to a connection of the application's, so
@@ -44,5 +52,6 @@ driven by the database dictionary: see the [README](https://github.com/rponte/pe
 
 - Spring Boot 4.1.2 for the versions the library is built and tested with.
 
-[Unreleased]: https://github.com/rponte/penitent/compare/v0.21.0...HEAD
+[Unreleased]: https://github.com/rponte/penitent/compare/v0.22.0...HEAD
+[0.22.0]: https://github.com/rponte/penitent/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/rponte/penitent/releases/tag/v0.21.0

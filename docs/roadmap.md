@@ -18,10 +18,6 @@ redefinition, only for the duration of the test, and generated from the dictiona
 
 Still open: whether it becomes a module of this project or a project of its own.
 
-### Publication
-
-- The Javadoc and this documentation published online.
-
 ### Supported versions
 
 Today everything is measured on a single combination: Java 21, `ojdbc17` and Oracle 23ai. Widening it is planned in
