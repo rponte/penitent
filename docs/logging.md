@@ -94,6 +94,9 @@ TRACE -> with bind values : P_ORDER_ID=-1
 DEBUG <- failed           : 1 ms: SQLException: ORA-01403: no data found | ORA-06512: at "SHOP.ORDERS_PKG", line 26 | ORA-06512: at line 1 | https://docs.oracle.com/error-help/db/ora-01403/
 ```
 
+The message is the driver's, as it reaches the library. Driver 23 ends it with the link to the error's page;
+drivers before it leave the link out.
+
 ## Good to know
 
 - **Truncation:** text over 2000 characters and collections over 5 elements are truncated, with their size. LOBs and

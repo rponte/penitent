@@ -20,12 +20,15 @@ Still open: whether it becomes a module of this project or a project of its own.
 
 ### Supported versions
 
-Today everything is measured on Oracle 23ai, on Java 17 and 21, with the `ojdbc17`, `ojdbc11` and `ojdbc8` flavors of
-driver 23.x. Widening it is planned from the easiest to the hardest, each step validated before the next:
+Today everything is measured on Oracle 23ai, on Java 17 and 21, with the `ojdbc17`, `ojdbc11` and `ojdbc8` artifacts
+of driver 23.x, and the `ojdbc11` and `ojdbc8` artifacts of driver 21.x. Widening it is planned from the easiest to
+the hardest, each step validated before the next:
 
-1. **Older driver versions,** such as 21.x and 19.x, against Oracle 23ai. The `java.time` conversions, the native
-   `BOOLEAN`, which needs the 23 driver, and the way RECORD, `%ROWTYPE` and collections are addressed may differ; the
-   likely outcome is a minimum driver version, rather than every one.
+1. **Driver 19.x,** against Oracle 23ai. Driver 21 differed from 23 in the `java.time` conversions, the native
+   `BOOLEAN` and the addressing of `%ROWTYPE`, and the library now works around each, as
+   [Driver versions](compatibility.md#driver-versions) lists; 19 is likely to differ in the same places, and maybe
+   in more. Only a `BOOLEAN` column in a cursor was beyond reach, because the driver fails before the library sees
+   the data.
 2. **Oracle 21c,** before 23ai, with its free image. There is no SQL `BOOLEAN`, so the native boolean has to degrade
    to a clear error, and the fixtures split into what needs 23ai and what does not. The dictionary views the library
    reads (`ALL_ARGUMENTS`, `ALL_PLSQL_TYPES`, `ALL_PLSQL_COLL_TYPES` and the others) exist since 12c, but their details
@@ -35,7 +38,7 @@ driver 23.x. Widening it is planned from the easiest to the hardest, each step v
    it may run in a separate, less frequent workflow.
 
 The goal is a test matrix in CI that states which combinations are validated, as the [compatibility table](compatibility.md) does
-today for the one combination.
+today for the combinations above.
 
 ## On demand
 

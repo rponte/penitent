@@ -17,6 +17,14 @@ All notable changes to this project are listed here. The format follows
 - A negative `Duration` of whole seconds, such as -1 second, reaches the database as itself. Driver 23 wrote it
   with one second less and -1,000,000,000 nanoseconds, which `to_char` and `extract` read as written: -1 second
   became `-0 00:00:00`, and the seconds of -1 minute became -60.
+- A native `BOOLEAN` binds on every driver version: it goes as `OracleTypes.PLSQL_BOOLEAN` instead of
+  `Types.BOOLEAN`, which drivers before 23 refuse with "Invalid column type: 16". A `null` that comes back is `null`
+  on every version too: driver 21 reads it as `false`.
+- A `%ROWTYPE` binds on every driver version, with the owner in quotes: before driver 23, the driver put the whole
+  name in quotes, and `SCHEMA.TABLE%ROWTYPE` failed with "Unable to resolve type".
+- Before driver 23, a cursor with a `BOOLEAN` column made the driver fail with an `AssertionError` and left the
+  connection unusable in the pool, so the next call on it failed with "Protocol violation". The call now fails with a
+  `PlsqlExecutionException` that explains the cause and the way around it, and the connection is discarded.
 
 ### Changed
 
@@ -26,6 +34,9 @@ All notable changes to this project are listed here. The format follows
   on Java 17 and on Java 21.
 - The `ojdbc11` and `ojdbc8` flavors of the Oracle driver are tested too, not only `ojdbc17`: every build runs the
   whole suite with each of them, at the driver version of the Spring Boot BOM.
+- Driver 21 is supported: every build also runs the whole suite with `ojdbc11` and `ojdbc8` 21.24.0.0, against Oracle
+  23ai. The one thing it cannot do is read a `BOOLEAN` column in a cursor; the compatibility table lists what differs
+  and what the library does about it.
 
 ## [0.22.0]
 
