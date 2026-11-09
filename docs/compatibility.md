@@ -253,6 +253,7 @@ For what each feature does, see the [documentation](README.md).
 | `PlsqlPackages.using`: shares the dictionary cache both ways, the settings and the translator; reads nothing to be created; one view per transaction in a loop reads the dictionary once in all | Validated |
 | `PlsqlPackages.using`: a view of a view; a closed connection fails as a translated connection failure; `null` and a foreign object rejected | Validated |
 | `PlsqlPackages.using`: an unreferenced view is collected while the interface lives on | Validated |
+| `PlsqlPackages.using` on an interface of `SpringPlsqlPackages`: Spring's exceptions kept (`BadSqlGrammarException`, `UncategorizedSQLException`, `PessimisticLockingFailureException`), routine errors as `PlsqlRoutineRaisedException`; inside a Spring transaction, the view runs on its own connection, not the transaction's | Validated |
 | A routine's own `COMMIT` or `ROLLBACK` ends the caller's transaction, with and without Spring; a `ROLLBACK` erases savepoints, and a failing Spring nested transaction then reports `ORA-01086` | Validated |
 | An autonomous transaction commits only its own work; a cursor opened before the routine's `COMMIT` is read whole | Validated |
 | With `penitent-spring`: routines and `JdbcTemplate` committed and rolled back together; a routine error caught inside the transaction undoes only that call | Validated |

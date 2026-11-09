@@ -22,6 +22,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import io.github.rponte.penitent.PlsqlBind;
 import io.github.rponte.penitent.PlsqlPackage;
+import io.github.rponte.penitent.PlsqlPackages;
 import io.github.rponte.penitent.PlsqlSettings;
 import io.github.rponte.penitent.PlsqlRoutine;
 import io.github.rponte.penitent.convert.PlsqlConverter;
@@ -327,6 +328,51 @@ class SpringPlsqlPackagesTest {
 				PlsqlSettings.defaults().withExceptionTranslator(failure -> new IllegalStateException("custom")));
 
 		assertThatThrownBy(withTranslator::sqlInvalid).isInstanceOf(IllegalStateException.class).hasMessage("custom");
+	}
+
+	@Test
+	@DisplayName("a view (PlsqlPackages.using) of a Spring interface keeps Spring's exceptions, and routine errors as they are")
+	void view_keeps_spring_translation() throws SQLException {
+		try (java.sql.Connection connection = TestDatabase.newDataSource().getConnection()) {
+			Fixture view = PlsqlPackages.using(fixture, connection);
+
+			assertThatThrownBy(view::sqlInvalid).isInstanceOf(BadSqlGrammarException.class);
+			assertThatThrownBy(() -> view.typeTheDriverRefuses(java.net.URI.create("urn:x")))
+					.isInstanceOf(UncategorizedSQLException.class);
+			assertThatThrownBy(view::raiseError)
+					.isInstanceOfSatisfying(PlsqlRoutineRaisedException.class, e -> assertThat(e.getCode()).isEqualTo(20100));
+			assertThat(connection.isClosed()).as("the view never closes the connection").isFalse();
+		}
+	}
+
+	@Test
+	@DisplayName("a view keeps Spring's exceptions for a lock too: PessimisticLockingFailureException")
+	void view_keeps_spring_translation_for_a_lock() throws SQLException {
+		try (java.sql.Connection connection = TestDatabase.newDataSource().getConnection()) {
+			Fixture view = PlsqlPackages.using(fixture, connection);
+
+			transaction.executeWithoutResult(status -> {
+				jdbc.execute("LOCK TABLE FIXTURE_SPRING_ITEM IN EXCLUSIVE MODE");
+				status.setRollbackOnly();
+
+				assertThatThrownBy(view::lockTable).isInstanceOf(PessimisticLockingFailureException.class);
+			});
+		}
+	}
+
+	@Test
+	@DisplayName("inside a Spring transaction, a view runs on the connection it was given, not on the transaction's")
+	void view_ignores_the_spring_transaction() throws SQLException {
+		try (java.sql.Connection connection = TestDatabase.newDataSource().getConnection()) {
+			Fixture view = PlsqlPackages.using(fixture, connection);
+			int viewSession = view.sessionId();
+
+			transaction.executeWithoutResult(status -> {
+				assertThat(view.sessionId()).as("the view's connection").isEqualTo(viewSession);
+				assertThat(fixture.sessionId()).as("the interface itself: the transaction's").isEqualTo(currentSession())
+						.isNotEqualTo(viewSession);
+			});
+		}
 	}
 
 	@Test

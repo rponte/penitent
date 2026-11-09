@@ -288,7 +288,12 @@ The view implements the same interface, and:
 - **is cheap, and meant to live as long as the transaction.** One view per transaction, even in a loop, reads the
   dictionary no more than the interface alone would, and a view nobody references is collected;
 - **follows the rules of the connection:** do not use one view from two threads at once. The interface it came from
-  is still safe to share.
+  is still safe to share;
+- **keeps the interface's exceptions:** a view of an interface created by `SpringPlsqlPackages` still raises Spring's
+  `DataAccessException` classes, such as `BadSqlGrammarException` or `PessimisticLockingFailureException`, and routine
+  errors as `PlsqlRoutineRaisedException`;
+- **runs on its connection even inside a Spring transaction:** the connection you gave wins over the transaction's,
+  so a view inside a `@Transactional` method is not part of that transaction.
 
 Inside the transaction, calls and plain JDBC see each other's work, and no other session sees any of it until the
 commit; `OUT` parameters and cursors read what the transaction has not committed yet; and every call runs in the
