@@ -182,6 +182,28 @@
 
 	<profiles>
 		<!--
+			Another version of the Oracle JDBC driver jar, instead of the one of the Spring Boot BOM:
+			-Doracle.jdbc.version=21.24.0.0, together with an artifact that exists in that version, such as
+			-Doracle.jdbc.artifact=ojdbc11. It is the version of the driver, not of the database the tests use.
+		-->
+		<profile>
+			<id>oracle-jdbc-version</id>
+			<activation>
+				<property>
+					<name>oracle.jdbc.version</name>
+				</property>
+			</activation>
+			<dependencyManagement>
+				<dependencies>
+					<dependency>
+						<groupId>com.oracle.database.jdbc</groupId>
+						<artifactId>${oracle.jdbc.artifact}</artifactId>
+						<version>${oracle.jdbc.version}</version>
+					</dependency>
+				</dependencies>
+			</dependencyManagement>
+		</profile>
+		<!--
 			Publishes to Maven Central, through the release workflow: ./mvnw -Prelease deploy. The
 			credentials and the signing key come from the environment, never from this file.
 		-->
