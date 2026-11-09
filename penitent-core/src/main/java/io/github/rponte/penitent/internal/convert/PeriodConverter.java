@@ -2,14 +2,15 @@ package io.github.rponte.penitent.internal.convert;
 
 import java.time.Period;
 
-import oracle.sql.INTERVALYM;
-
-/** {@code INTERVAL YEAR TO MONTH}. The driver's own type is opened before, in {@link ScalarCodec}. */
+/**
+ * {@code INTERVAL YEAR TO MONTH}. The driver's own type is built by {@link OracleIntervalCodec}, which works on
+ * every driver version, and opened before, in {@link ScalarCodec}.
+ */
 final class PeriodConverter implements BuiltInConverter<Period> {
 
 	@Override
 	public Object toDatabase(Period value) {
-		return INTERVALYM.toIntervalym(value);
+		return OracleIntervalCodec.encode(value);
 	}
 
 	@Override

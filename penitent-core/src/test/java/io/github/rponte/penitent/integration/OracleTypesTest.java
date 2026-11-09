@@ -9,7 +9,9 @@ import java.time.Duration;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import io.github.rponte.penitent.PlsqlBlock;
 import io.github.rponte.penitent.PlsqlPackage;
+import io.github.rponte.penitent.PlsqlPackages;
 import io.github.rponte.penitent.PlsqlRoutine;
 
 /** Oracle types beyond the basic ones in {@link ScalarsTest}, as parameter and return. */
@@ -39,6 +41,15 @@ class OracleTypesTest extends OracleIntegrationTest {
 		byte[] echoRaw(byte[] value);
 
 		Duration echoInterval(Duration value);
+	}
+
+	/** What the database received, in its own words. */
+	interface InTheDatabase {
+		@PlsqlBlock("begin :result := to_char(:value); end;")
+		String intervalAsText(Duration value);
+
+		@PlsqlBlock("begin :result := extract(second from :value); end;")
+		java.math.BigDecimal secondsOf(Duration value);
 	}
 
 	private final Types types = pkg(Types.class);
@@ -107,5 +118,19 @@ class OracleTypesTest extends OracleIntegrationTest {
 	@DisplayName("INTERVAL DAY TO SECOND becomes Duration")
 	void interval() {
 		assertThat(types.echoInterval(Duration.ofHours(2))).isEqualTo(Duration.ofHours(2));
+	}
+
+	@Test
+	@DisplayName("a negative Duration of whole seconds reaches the database as itself, not as a malformed interval")
+	void negative_interval() {
+		// Driver 23's INTERVALDS.toIntervalds sends these with -1,000,000,000 nanoseconds and one second less,
+		// which to_char and extract read as written: -1 second became -0 00:00:00, and a minute -59 seconds.
+		InTheDatabase database = PlsqlPackages.create(InTheDatabase.class, DATA_SOURCE);
+
+		assertThat(database.intervalAsText(Duration.ofSeconds(-1))).isEqualTo("-000000000 00:00:01.000000000");
+		assertThat(database.intervalAsText(Duration.ofHours(-25).plusMinutes(3)))
+				.isEqualTo("-000000001 00:57:00.000000000");
+		assertThat(database.secondsOf(Duration.ofMinutes(-1))).isZero();
+		assertThat(database.intervalAsText(Duration.ofMillis(-500))).isEqualTo("-000000000 00:00:00.500000000");
 	}
 }

@@ -14,9 +14,14 @@ All notable changes to this project are listed here. The format follows
   the JVM's time zone: the library builds and reads the bytes itself. Before driver 23, a local time that zone skips,
   such as 02:30 on the day daylight saving time starts, became 03:30 without any error, and a day without midnight
   got 01:00.
+- A negative `Duration` of whole seconds, such as -1 second, reaches the database as itself. Driver 23 wrote it
+  with one second less and -1,000,000,000 nanoseconds, which `to_char` and `extract` read as written: -1 second
+  became `-0 00:00:00`, and the seconds of -1 minute became -60.
 
 ### Changed
 
+- A `Period` with days, which `INTERVAL YEAR TO MONTH` does not store, is refused with `PlsqlMappingException`
+  before the call, instead of the driver's `IllegalArgumentException`.
 - Java 17 is the minimum version, instead of 21: the library is compiled for Java 17, and every build runs the tests
   on Java 17 and on Java 21.
 - The `ojdbc11` and `ojdbc8` flavors of the Oracle driver are tested too, not only `ojdbc17`: every build runs the

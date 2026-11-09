@@ -50,8 +50,9 @@ For what each feature does, see the [documentation](README.md).
 | Type with time zone in `LocalDateTime`, `LocalDate`, `java.util.Date`, `java.sql.Date` or `java.sql.Timestamp` | Rejected with `PlsqlMappingException`, before the call | Validated |
 | `DATE` or `TIMESTAMP` in `Instant`, `OffsetDateTime` or `ZonedDateTime` | Rejected with `PlsqlMappingException`, before the call | Validated |
 | Overload between `TIMESTAMP` and `TIMESTAMP WITH TIME ZONE` | The Java type picks the version | Validated |
-| `INTERVAL DAY TO SECOND` | `Duration` | Validated |
+| `INTERVAL DAY TO SECOND` | `Duration`, negative included | Validated |
 | `INTERVAL YEAR TO MONTH` | `Period` | Validated |
+| `Period` with days | Rejected with `PlsqlMappingException`, before the call: `INTERVAL YEAR TO MONTH` does not store them | Validated |
 | `DATE` and `TIMESTAMP` with the JVM in a time zone with daylight saving time: a local time that zone skips (02:30 when the clocks jump) or repeats, and a day without midnight | `LocalDateTime`, `LocalDate`, unchanged as parameter, return value, `OUT`, block, cursor column, attribute and collection element | Validated |
 | Session `NLS_LANGUAGE` and `NLS_TERRITORY` of `AMERICA` and `BRAZIL`, as the driver derives them from the JVM locale | Dates, timestamps with and without time zone, and intervals cross unchanged, also as attribute, element and cursor column | Validated |
 | `BOOLEAN` as return value | `boolean`, `Boolean` | Validated |

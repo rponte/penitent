@@ -2,14 +2,15 @@ package io.github.rponte.penitent.internal.convert;
 
 import java.time.Duration;
 
-import oracle.sql.INTERVALDS;
-
-/** {@code INTERVAL DAY TO SECOND}. The driver's own type is opened before, in {@link ScalarCodec}. */
+/**
+ * {@code INTERVAL DAY TO SECOND}. The driver's own type is built by {@link OracleIntervalCodec}, which works on
+ * every driver version, and opened before, in {@link ScalarCodec}.
+ */
 final class DurationConverter implements BuiltInConverter<Duration> {
 
 	@Override
 	public Object toDatabase(Duration value) {
-		return INTERVALDS.toIntervalds(value);
+		return OracleIntervalCodec.encode(value);
 	}
 
 	@Override

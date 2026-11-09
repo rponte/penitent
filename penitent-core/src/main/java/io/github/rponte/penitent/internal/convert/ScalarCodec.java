@@ -248,11 +248,12 @@ public final class ScalarCodec {
 			if (value instanceof oracle.sql.DATE d) {
 				return OracleDatetimeCodec.decode(d.toBytes());
 			}
+			// From the bytes: getDuration() and getPeriod() only exist from driver 23 on. See OracleIntervalCodec.
 			if (value instanceof oracle.sql.INTERVALDS interval) {
-				return interval.getDuration();
+				return OracleIntervalCodec.duration(interval.toBytes());
 			}
 			if (value instanceof oracle.sql.INTERVALYM interval) {
-				return interval.getPeriod();
+				return OracleIntervalCodec.period(interval.toBytes());
 			}
 			return value;
 		} catch (SQLException e) {
