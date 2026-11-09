@@ -5,16 +5,39 @@ on it and closes it, or, for a view made with `PlsqlPackages.using`, runs it on 
 commits, never rolls back and never changes auto-commit. So whether two calls are one transaction, or two, depends
 only on the connection they run on, and the transaction belongs to whoever owns it.
 
-This page shows the three setups you are likely to have, and what happens in each one.
+This page shows the four setups you are likely to have, when each one fits, and what happens in it.
 
-| Setup | Two calls are… | Who commits |
-|---|---|---|
-| [Spring, inside `@Transactional`](#with-spring) | one transaction, with your `JdbcTemplate` work | Spring |
-| [`PlsqlTransactions`, without Spring](#without-spring-plsqltransactions) | one transaction, with your plain JDBC work | the block, as it ends |
-| [A pool in auto-commit](#a-pool-in-auto-commit) | two transactions | each call, as it ends |
-| [A transaction you manage, with `PlsqlPackages.using`](#a-transaction-you-manage) | one transaction, with your plain JDBC work | you |
+## Choosing a setup
+
+Answer these in order, and stop at the first yes:
+
+1. **Does the application use Spring?** Use [Spring's transactions](#with-spring), with `penitent-spring`. Spring
+   already manages the connection and the transaction for everything else the application does; a second mechanism
+   beside it would split the work into two transactions.
+2. **Does the application run in a Jakarta EE container, with JTA?** Use the container's `DataSource` with
+   `PlsqlPackages.create`, and its transactions. The container hands out the transaction's connection by itself. This
+   is not measured yet.
+3. **Do several calls, or calls and your own JDBC, have to succeed or fail together?** Use
+   [`PlsqlTransactions`](#without-spring-plsqltransactions).
+4. **Is the connection, or the transaction, already in your hands,** from your own transaction manager, or from
+   legacy code that receives a `Connection`? Use [`PlsqlPackages.using`](#a-transaction-you-manage) on it.
+5. **Otherwise, each call stands alone:** a [pool in auto-commit](#a-pool-in-auto-commit) is all you need.
+
+| Setup | Use it when | Two calls are… | Who commits |
+|---|---|---|---|
+| [Spring, inside `@Transactional`](#with-spring) | the application uses Spring | one transaction, with your `JdbcTemplate` work | Spring |
+| [`PlsqlTransactions`](#without-spring-plsqltransactions) | the core alone, and the work must be atomic | one transaction, with your plain JDBC work | the block, as it ends |
+| [`PlsqlPackages.using`](#a-transaction-you-manage) | you already own the connection and its transaction | one transaction, with your plain JDBC work | you |
+| [A pool in auto-commit](#a-pool-in-auto-commit) | each call is a unit of work on its own | two transactions | each call, as it ends |
 
 ## With Spring
+
+**Use it when** the application uses Spring, even if only part of it calls PL/SQL. Spring then decides the
+boundaries of every transaction, for routines and `JdbcTemplate` alike, and Penitent only takes part.
+
+**Don't use `PlsqlTransactions` beside it.** A block would take its own connection from the pool and commit on its
+own, so the work inside a `@Transactional` method and the work inside the block would no longer be atomic, without
+any error.
 
 With [`penitent-spring`](spring.md), a call inside a `@Transactional` method uses the transaction's connection:
 
@@ -36,6 +59,14 @@ public long checkout(long customerId, BigDecimal total) {
 The `penitent-spring` tests cover each of these, and the next sections explain what happens underneath.
 
 ## Without Spring: `PlsqlTransactions`
+
+**Use it when** the application uses the core alone, and several calls, or calls and your own JDBC, have to succeed
+or fail together: placing an order and updating its stock, or calling a routine and writing an audit row in the same
+step.
+
+**Don't use it when** the application uses Spring or a Jakarta EE container, which already manage transactions; when
+each call is a unit of work by itself, where it only adds a commit the call would have made anyway; or when you need
+more than one connection, one thread and no nesting, such as propagation or timeouts.
 
 For an application that uses the core alone, `PlsqlTransactions` runs a block in one transaction: it commits when
 the block returns, and rolls back when it throws. It holds nothing but the `DataSource` and the exception
@@ -178,6 +209,13 @@ more, use Spring or a Jakarta EE container. A routine's own `COMMIT` or `ROLLBAC
 
 ## A pool in auto-commit
 
+**Use it when** each call stands on its own: a query, or a routine that is a unit of work by itself, including one
+that commits by itself. It is what you get with `PlsqlPackages.create` and nothing else, and the cheapest setup: no
+transaction to manage, and the connection goes back to the pool as soon as the call ends.
+
+**Don't use it when** two calls, or a call and your own JDBC, must succeed or fail together: the first call's work
+stays committed when the second one fails. Use `PlsqlTransactions` then.
+
 Without a transaction manager, the usual pool hands out connections in auto-commit. Each call is then a transaction
 of its own:
 
@@ -198,9 +236,16 @@ package variable or `DBMS_APPLICATION_INFO`, does not carry from one call to the
 
 ## A transaction you manage
 
-When you already have a connection, from your own transaction manager or code that cannot move into a block, bind the
-interface to it with `PlsqlPackages.using`, and commit or roll back yourself. `PlsqlTransactions` is built on the same
-view. Create the interface once, as usual:
+**Use it when** the connection, or the transaction, is already in your hands: your own transaction manager, a batch
+that commits every thousand rows, or legacy code that receives a `Connection` and cannot move into a block.
+`PlsqlTransactions` is built on the same view, so this is the lower level of the same mechanism.
+
+**Don't use it when** a `PlsqlTransactions` block would do. Here the commit, the rollback, restoring auto-commit and
+closing the connection are yours, and none of the block's protections apply: the connection is not guarded against a
+stray `commit`, and a view used after the connection is closed only fails then.
+
+Bind the interface to your connection with `PlsqlPackages.using`, and commit or roll back yourself. Create the
+interface once, as usual:
 
 <!-- snippet: transactions/create -->
 ```java
