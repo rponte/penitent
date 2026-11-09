@@ -33,6 +33,7 @@ nav = [
     { "Troubleshooting" = "troubleshooting.md" },
     { "Compatibility" = "compatibility.md" },
     { "Roadmap" = "roadmap.md" },
+    { "Javadoc" = "api/index.html" },
   ] },
 ]
 

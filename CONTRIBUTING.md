@@ -26,11 +26,14 @@ navigation in `zensical.toml`. To see the site while you edit, you need Python 3
 ```
 scripts/docs.sh          # http://localhost:8000/penitent/, rebuilt on each change
 scripts/docs.sh build    # into site/, failing on a broken link or anchor, as the CI does
+scripts/docs.sh api      # regenerates the Javadoc at /api, after a change to the code
 ```
 
 The first run creates a virtual environment in `.venv/`, ignored by git, with the version pinned in
-`requirements-docs.txt`. Nothing is installed outside the repository. Run a single server at a time: a second
-`serve` fails on the port, but clears `site/` first, and the first one then serves an empty folder.
+`requirements-docs.txt`. Nothing is installed outside the repository. The site includes the aggregated Javadoc of the
+modules at `/api`, generated into `docs/api/`, also ignored by git: `serve` generates it when it is missing, and
+`build` always does. Run a single server at a time: a second `serve`, or a `build` while one serves, clears `site/`
+under the first one.
 
 The examples on the pages are checked by `./mvnw verify`, not by the site's build: see the rule on the
 documentation's examples below.

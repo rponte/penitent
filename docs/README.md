@@ -71,7 +71,7 @@ Java and from Spring Boot. Every page uses the same orders package, so the examp
 |---|---|
 | [Compatibility](compatibility.md) | Every Oracle and Java type pair and behavior, and whether a test covers it |
 | [Roadmap](roadmap.md) | What comes next, what waits for a use case, and what is left out by design |
-| Javadoc | The `-javadoc.jar` of each module, on Maven Central |
+| [Javadoc](https://rponte.github.io/penitent/api/) | The public API of the three modules, on the site; also the `-javadoc.jar` of each module, on Maven Central |
 
 ## The examples are tested
 
