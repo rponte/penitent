@@ -38,11 +38,13 @@ The `penitent-spring` tests cover each of these, and the next sections explain w
 ## Without Spring: `PlsqlTransactions`
 
 For an application that uses the core alone, `PlsqlTransactions` runs a block in one transaction: it commits when
-the block returns, and rolls back when it throws. Create it once, like the interfaces:
+the block returns, and rolls back when it throws. It holds nothing but the `DataSource` and the exception
+translator, so creating it costs nothing: keep one, or create it where you need it. Use the same `DataSource`
+object as the interfaces, for the reason below:
 
 <!-- snippet: transactions/plsql-transactions -->
 ```java
-PlsqlTransactions transactions = PlsqlTransactions.of(dataSource);   // once, like the interfaces
+PlsqlTransactions transactions = PlsqlTransactions.of(dataSource);   // cheap: once, or where you need it
 ```
 
 Inside the block, an interface takes part through `tx.using`, and plain JDBC through `tx.connection()`:
@@ -162,6 +164,13 @@ com.example.shop.Orders uses the DataSource of the PlsqlTransaction open on this
 ```
 
 An interface of **another** `DataSource` is another resource, and runs on its own, outside the block's transaction.
+
+> **"The same `DataSource`" means the same object.** The check compares the `DataSource` of the block and the one an
+> interface was created with by identity, not by the database they reach. If one of them is wrapped, for metrics,
+> logging or tracing, or each has a pool of its own for the same URL, the interface counts as another resource: called
+> without `tx.using`, it runs outside the transaction, and nothing refuses it. Create `PlsqlTransactions` and the
+> interfaces from the same `DataSource` object, as a dependency injection container does by itself. `tx.using` works
+> either way.
 
 `PlsqlTransactions` is deliberately small: one connection, one thread, no nesting, no propagation, no timeout. For
 more, use Spring or a Jakarta EE container. A routine's own `COMMIT` or `ROLLBACK` still

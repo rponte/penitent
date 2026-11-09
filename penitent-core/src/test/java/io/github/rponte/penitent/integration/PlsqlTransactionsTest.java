@@ -489,6 +489,30 @@ class PlsqlTransactionsTest extends OracleIntegrationTest {
 		}
 
 		@Test
+		@DisplayName("the same DataSource means the same object: an interface of a wrapper of it is not refused, "
+				+ "and runs outside the transaction")
+		void wrapped_data_source_is_not_recognized(TestInfo test) throws SQLException {
+			String label = label(test);
+			DataSource wrapped = (DataSource) Proxy.newProxyInstance(DataSource.class.getClassLoader(),
+					new Class<?>[] { DataSource.class }, (proxy, method, args) -> {
+						try {
+							return method.invoke(DATA_SOURCE, args);
+						} catch (InvocationTargetException e) {
+							throw e.getCause();
+						}
+					});
+			Events throughWrapper = PlsqlPackages.create(Events.class, wrapped);
+
+			PlsqlTransactions.of(DATA_SOURCE).run(tx -> {
+				throughWrapper.recordEvent(label);
+				tx.setRollbackOnly();
+			});
+
+			assertThat(committed(label)).as("committed on its own, outside the block's rolled back transaction")
+					.isEqualTo(1);
+		}
+
+		@Test
 		@DisplayName("a block inside another, on the same thread, is refused, and the outer one goes on")
 		void nested_block(TestInfo test) throws SQLException {
 			String label = label(test);

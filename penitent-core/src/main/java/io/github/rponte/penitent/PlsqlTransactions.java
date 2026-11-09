@@ -11,7 +11,7 @@ import io.github.rponte.penitent.internal.transaction.LocalTransactions;
  * Jakarta EE container:
  *
  * <pre>{@code
- * PlsqlTransactions transactions = PlsqlTransactions.of(dataSource);   // once, like the interfaces
+ * PlsqlTransactions transactions = PlsqlTransactions.of(dataSource);   // cheap: once, or where you need it
  *
  * transactions.run(tx -> {
  *     Orders orders = tx.using(ordersPkg);
@@ -22,11 +22,17 @@ import io.github.rponte.penitent.internal.transaction.LocalTransactions;
  *
  * <p>The transaction is explicit and strict. An interface takes part only through
  * {@link PlsqlTransaction#using}; one of the same {@code DataSource} called directly inside the block
- * is refused, instead of running outside the transaction without anyone noticing. The block commits
- * when it returns, unless {@link PlsqlTransaction#setRollbackOnly} was called, and rolls back when it
- * throws anything, an {@link Error} or a checked exception included, which comes out as it was
- * thrown. The connection always goes back to the {@code DataSource} with its auto-commit as it
- * found it.
+ * is refused, instead of running outside the transaction without anyone noticing. "The same" means the
+ * same object: an interface created with a wrapper of the {@code DataSource}, or with another pool of
+ * the same database, is not recognized, so create both from the same {@code DataSource} object.
+ *
+ * <p>An instance holds only the {@code DataSource} and the exception translator: it is cheap, immutable
+ * and safe to share, and creating one where it is needed costs nothing.
+ *
+ * <p>The block commits when it returns, unless {@link PlsqlTransaction#setRollbackOnly} was called,
+ * and rolls back when it throws anything, an {@link Error} or a checked exception included, which
+ * comes out as it was thrown. The connection always goes back to the {@code DataSource} with its
+ * auto-commit as it found it.
  *
  * <p>It is deliberately small: one connection, one thread, no nesting, no propagation. For more,
  * use Spring or a Jakarta EE container, which the interfaces already take part in.

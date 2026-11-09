@@ -52,7 +52,7 @@ class DocsTransactionsTest extends OracleIntegrationTest {
 		Orders orders = PlsqlPackages.create(Orders.class, dataSource);
 
 		// snippet: transactions/plsql-transactions
-		PlsqlTransactions transactions = PlsqlTransactions.of(dataSource);   // once, like the interfaces
+		PlsqlTransactions transactions = PlsqlTransactions.of(dataSource);   // cheap: once, or where you need it
 		// end-snippet
 
 		// snippet: transactions/run

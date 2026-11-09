@@ -259,7 +259,7 @@ For what each feature does, see the [documentation](README.md).
 | `PlsqlTransactions`: a failed commit (`ORA-02091`) is rolled back and translated, with the `TRANSACTION` phase; a connection that cannot be obtained is translated and the block does not run; rollback and close failures are suppressed into the block's failure | Validated |
 | `PlsqlTransactions`: the connection goes back to the pool in every case, with auto-commit restored by the block itself, and left off when it was off | Validated |
 | `PlsqlTransactions`: `tx.connection()` refuses `commit`, `rollback()`, `setAutoCommit`, `close` and `abort`, allows savepoints and `unwrap` | Validated |
-| `PlsqlTransactions`: refuses a proxy of the same `DataSource` without `tx.using`, a view or the connection after the block or from another thread, and a nested block; a proxy of another `DataSource` runs on its own | Validated |
+| `PlsqlTransactions`: refuses a proxy of the same `DataSource` without `tx.using`, a view or the connection after the block or from another thread, and a nested block; a proxy of another `DataSource`, or of a wrapper of the same one, runs on its own, since the `DataSource` is compared by identity | Validated |
 | `PlsqlTransactions`: a routine's own `COMMIT` commits the block's work so far | Validated |
 
 ## Interface behavior
