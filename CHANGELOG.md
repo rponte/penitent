@@ -10,6 +10,10 @@ All notable changes to this project are listed here. The format follows
 
 - Reading a `TIMESTAMP WITH LOCAL TIME ZONE` no longer depends on the driver unwrapping the pool's connection by
   itself: before driver 23, it failed with a `ClassCastException` behind a pool such as Hikari's.
+- A `LocalDateTime` or `LocalDate` no longer depends on the driver version to cross a `DATE` or `TIMESTAMP` without
+  the JVM's time zone: the library builds and reads the bytes itself. Before driver 23, a local time that zone skips,
+  such as 02:30 on the day daylight saving time starts, became 03:30 without any error, and a day without midnight
+  got 01:00.
 
 ### Changed
 
