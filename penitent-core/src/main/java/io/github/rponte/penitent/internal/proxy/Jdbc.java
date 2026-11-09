@@ -26,6 +26,15 @@ final class Jdbc {
 	 * while {@code PLSQL_BOOLEAN} exists since driver 12.2 and binds the same on 21 and 23, in both
 	 * directions, null included. One SQL type for every version means one path, which the build tests on
 	 * each driver. A null that comes back needs {@code wasNull()} on driver 21: see {@code ScalarCodec.read}.
+	 *
+	 * <p>The other ways do not hold on every version. Driver 21 sends {@code setBoolean} as a
+	 * {@code NUMBER}, which a PL/SQL {@code BOOLEAN} refuses with {@code ORA-06550}, as it refuses
+	 * {@code setInt}. Driver 23 chooses for {@code setBoolean} and {@code Types.BOOLEAN}: the native type,
+	 * or a {@code NUMBER} when the connection properties {@code oracle.jdbc.sendBooleanAsNativeBoolean} or
+	 * {@code oracle.jdbc.sendBooleanInPLSQL} are off, or, outside PL/SQL, when the database is older than
+	 * 23ai. {@code PLSQL_BOOLEAN} always goes as the native type, whatever those properties and the
+	 * database version. None of this applies to a column of a cursor, which the driver reads by the type
+	 * the database describes, with nothing bound: see {@link #execute}.
 	 */
 	static final int ORACLE_PLSQL_BOOLEAN = 252;
 
