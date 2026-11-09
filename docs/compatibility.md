@@ -1,6 +1,7 @@
 # Compatibility
 
-Status of version `0.22.0`, measured on Java 17 and 21, with Oracle 23ai (`gvenzl/oracle-free:23.26.3`) and `ojdbc17`.
+Status of the code on `main`, the next version after `0.22.0`, measured on Java 17 and 21, with Oracle 23ai
+(`gvenzl/oracle-free:23.26.3`) and `ojdbc17`. Versions up to `0.22.0` need Java 21.
 
 | Status | Meaning |
 |---|---|

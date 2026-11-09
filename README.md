@@ -144,7 +144,8 @@ notice.
 
 ## Requirements
 
-- Java 17 or later, and Oracle Database. The code is tested on Java 17 and 21, against Oracle 23ai.
+- Java 17 or later, and Oracle Database, from the next version on; `0.22.0` and earlier need Java 21. The code is
+  tested on Java 17 and 21, against Oracle 23ai.
 - `ojdbc17` on the classpath of the application using the library (`provided` dependency).
 - An SLF4J implementation, to see the log, such as the Logback that Spring Boot already ships. Without one, SLF4J
   warns once and discards the log.
