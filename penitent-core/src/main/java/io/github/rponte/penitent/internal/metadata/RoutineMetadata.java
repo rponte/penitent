@@ -330,8 +330,8 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 			}
 		}
 		if (bound.isEmpty()) {
-			throw new PlsqlMappingException(method.getName() + " matches no version of "
-					+ versions.get(0).qualifiedName() + " by name: " + String.join("; ", refusals));
+			throw new PlsqlMappingException("no version of " + versions.get(0).qualifiedName()
+					+ " matches by name: " + String.join("; ", new java.util.LinkedHashSet<>(refusals)));
 		}
 		return bound.size() == 1 ? bound.get(0) : chooseVersion(bound, method, converters);
 	}
@@ -355,13 +355,13 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 			String javaName = javaNameOf(parameter);
 			Argument param = byOracleName.get(oracleName);
 			if (param == null) {
-				throw new PlsqlMappingException(method.getName() + ": parameter " + javaName + " looks for "
+				throw new PlsqlMappingException("parameter " + javaName + " looks for "
 						+ oracleName + ", which " + qualifiedName() + " does not have. Parameters: " + params
 						+ ". Use @PlsqlParam with the Oracle name.");
 			}
 			String other = javaNameOf.putIfAbsent(oracleName, javaName);
 			if (other != null) {
-				throw new PlsqlMappingException(method.getName() + ": " + other + " and " + javaName
+				throw new PlsqlMappingException("parameters " + other + " and " + javaName
 						+ " both map to " + oracleName + " of " + qualifiedName());
 			}
 			bound.add(param);
@@ -371,7 +371,7 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 				.map(Argument::name)
 				.toList();
 		if (!missing.isEmpty()) {
-			throw new PlsqlMappingException(method.getName() + ": " + qualifiedName() + " requires " + missing
+			throw new PlsqlMappingException(qualifiedName() + " requires " + missing
 					+ ", which has no DEFAULT, and the method declares no parameter for it. Parameters: " + params);
 		}
 		return new RoutineMetadata(schema, packageName, routineName, bound, true);
@@ -413,15 +413,12 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 			return winners.get(0);
 		}
 		String qualifiedName = versions.get(0).qualifiedName();
-		String all = versions.stream().map(version -> version.arguments().toString())
-				.collect(Collectors.joining(", "));
+		String all = versions.stream().map(RoutineMetadata::signature).collect(Collectors.joining(", "));
 		if (candidates.isEmpty()) {
-			throw new PlsqlMappingException(method.getName() + " matches no version of " + qualifiedName
-					+ ": " + all);
+			throw new PlsqlMappingException("no version of " + qualifiedName + " matches the method: " + all);
 		}
-		throw new PlsqlMappingException(method.getName() + " matches more than one version of " + qualifiedName
-				+ ": " + candidates.stream().map(version -> version.arguments().toString())
-						.collect(Collectors.joining(", "))
+		throw new PlsqlMappingException("more than one version of " + qualifiedName + " matches the method: "
+				+ candidates.stream().map(RoutineMetadata::signature).collect(Collectors.joining(", "))
 				+ ". Annotate the type with @PlsqlType or call the desired version with @PlsqlBlock.");
 	}
 
@@ -487,12 +484,12 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 		boolean holder = OutParameters.isDeclaredBy(parameter);
 		java.lang.reflect.Type generic = holder ? OutParameters.valueTypeOf(parameter) : parameter.getParameterizedType();
 		return ConverterLookup.find(converters, parameter.getAnnotation(PlsqlConvert.class),
-				declaredTypeOf(parameter), elementClassOf(generic), method.getName());
+				declaredTypeOf(parameter), elementClassOf(generic), "parameter " + parameter.getName());
 	}
 
 	public static AppliedConverter converterOfReturn(Method method, PlsqlConverters converters) {
 		return ConverterLookup.find(converters, method.getAnnotation(PlsqlConvert.class),
-				ReturnType.of(method), elementClassOf(ReturnType.genericOf(method)), method.getName());
+				ReturnType.of(method), elementClassOf(ReturnType.genericOf(method)), "the return value");
 	}
 
 	/** A package or, outside a package, a standalone routine: the object a synonym can point to. */
@@ -567,7 +564,7 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 					+ " procedures outside a package)");
 		}
 		List<String> available = dictionary.strings("""
-				select procedure_name from all_procedures
+				select distinct procedure_name from all_procedures
 				 where owner = ? and object_name = ? and procedure_name is not null
 				 order by procedure_name
 				""", owner, packageName);
@@ -578,6 +575,12 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 		}
 		throw new PlsqlMappingException("routine " + owner + "." + packageName + "." + routineName
 				+ " does not exist. Available: " + String.join(", ", available));
+	}
+
+	/** This version as a message shows it: {@code (P_VALUE NUMBER) RETURN VARCHAR2}, or without RETURN for a procedure. */
+	private String signature() {
+		String parameters = parameters().stream().map(Argument::toString).collect(Collectors.joining(", ", "(", ")"));
+		return returnValue().map(value -> parameters + " RETURN " + value.dataType()).orElse(parameters);
 	}
 
 	/** The return value, when it is a function. */

@@ -155,8 +155,8 @@ final class ValueDecoder {
 	/** @param source what returns the value: the routine, or the block's {@code :result} */
 	static void requireList(JavaTarget target, String source, String what) {
 		if (!List.class.isAssignableFrom(target.type())) {
-			throw new PlsqlMappingException(target.description() + " -> " + source
-					+ " returns " + what + "; declare List<T>, not " + target.type().getSimpleName());
+			throw new PlsqlMappingException(target.description() + " of " + source + " is " + what
+					+ "; declare List<T>, not " + target.type().getSimpleName());
 		}
 	}
 
@@ -165,8 +165,8 @@ final class ValueDecoder {
 				&& parameterized.getActualTypeArguments()[0] instanceof Class<?> element) {
 			return element;
 		}
-		throw new PlsqlMappingException(target.description()
-				+ " returns a List without an element type; declare List<SomeType>");
+		throw new PlsqlMappingException(target.description() + " is a List without an element type; declare"
+				+ " List<SomeType>");
 	}
 
 	/** Like {@link #elementTypeOf(JavaTarget)}, but the element may itself be generic, as in {@code List<List<String>>}. */
@@ -176,8 +176,8 @@ final class ValueDecoder {
 						|| parameterized.getActualTypeArguments()[0] instanceof ParameterizedType)) {
 			return parameterized.getActualTypeArguments()[0];
 		}
-		throw new PlsqlMappingException(target.description()
-				+ " returns a List without an element type; declare List<SomeType>");
+		throw new PlsqlMappingException(target.description() + " is a List without an element type; declare"
+				+ " List<SomeType>");
 	}
 
 	static Class<?> classOf(java.lang.reflect.Type type) {

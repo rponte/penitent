@@ -18,6 +18,15 @@ All notable changes to this project are listed here. The format follows
   transaction unnoticed is refused.
 - `PlsqlFailure.Phase.TRANSACTION`, for a failure to begin, commit or roll back a `PlsqlTransactions` block.
 
+### Changed
+
+- Every mapping error of a method has one shape: `method(types): detail`, as in
+  `countOrders(long, String): parameter customerId looks for P_CUSTOMER, which …`. The parameter types tell overloads
+  apart, and a parameter is named with its routine, as in `P_ORDER_ID of SHOP.ORDERS_PKG.PLACE_ORDER`. Code that
+  matches the text of these messages needs to follow.
+- The routines listed after `Available:` appear once each, instead of once per overload, and the versions of an
+  overloaded routine are shown as `(P_VALUE NUMBER) RETURN VARCHAR2`, without a `null` for the return value.
+
 ## [0.21.0]
 
 The first public release, and the first on Maven Central. Penitent maps Oracle PL/SQL packages to Java interfaces,

@@ -90,8 +90,8 @@ class ValidationTest extends OracleIntegrationTest {
 		assertThatThrownBy(() -> PlsqlPackages.validate(pkg(OutParametersTest.Outputs.class)))
 				.isInstanceOf(PlsqlMappingException.class)
 				.hasMessageStartingWith("6 methods of")
-				.hasMessageContaining("\n  - collectionWithoutList (P_VALUE)")
-				.hasMessageContaining("\n  - cursorWithoutList (P_VALUE)")
+				.hasMessageContaining("\n  - collectionWithoutList(PlsqlOut): P_VALUE of ")
+				.hasMessageContaining("\n  - cursorWithoutList(PlsqlOut): P_VALUE of ")
 				.hasMessageContaining("\n  - holderAsIn")
 				.hasMessageContaining("\n  - rawHolder")
 				.hasMessageContaining("\n  - wildcardHolder")
@@ -144,7 +144,7 @@ class ValidationTest extends OracleIntegrationTest {
 	void cursor_not_a_list() {
 		assertThatThrownBy(() -> PlsqlPackages.validate(pkg(CursorNotAList.class)))
 				.isInstanceOf(PlsqlMappingException.class)
-				.hasMessageContaining("returns a cursor; declare List<T>");
+				.hasMessageContaining("is a cursor; declare List<T>");
 	}
 
 	@Test

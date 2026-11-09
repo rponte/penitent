@@ -89,7 +89,11 @@ public final class RoutineInvocationHandler implements InvocationHandler {
 		}
 
 		Object[] arguments = args == null ? new Object[0] : args;
-		ReturnType.requireNoOptionalParameter(method);
+		try {
+			ReturnType.requireNoOptionalParameter(method);
+		} catch (PlsqlMappingException e) {
+			throw MappingMessages.of(method, e);
+		}
 		refuseOutsideTheTransaction();
 		boolean lobs = TemporaryLobs.open();
 		try (Connections.Lease lease = connections.acquire()) {
@@ -99,6 +103,8 @@ public final class RoutineInvocationHandler implements InvocationHandler {
 					? blocks.call(method, block, arguments, connection)
 					: routines.call(method, arguments, connection);
 			return ReturnType.wrap(method, result);
+		} catch (PlsqlMappingException e) {
+			throw MappingMessages.of(method, e);
 		} catch (SqlFailure e) {
 			throw translator.translate(e.failure());
 		} catch (SQLException e) {
@@ -134,9 +140,7 @@ public final class RoutineInvocationHandler implements InvocationHandler {
 						routines.validate(method, connection);
 					}
 				} catch (PlsqlMappingException e) {
-					String message = e.getMessage().startsWith(method.getName()) ? e.getMessage()
-							: method.getName() + ": " + e.getMessage();
-					errors.add(new PlsqlMappingException(message, e));
+					errors.add(MappingMessages.of(method, e));
 				}
 			}
 		} catch (SqlFailure e) {
@@ -145,14 +149,13 @@ public final class RoutineInvocationHandler implements InvocationHandler {
 			throw translator.translate(new PlsqlFailure(null, e, PlsqlFailure.Phase.CONNECTION));
 		}
 		if (errors.size() == 1) {
-			throw new PlsqlMappingException(type.getName() + "." + errors.get(0).getMessage(),
-					errors.get(0).getCause());
+			throw new PlsqlMappingException(type.getName() + "." + errors.get(0).getMessage(), errors.get(0));
 		}
 		if (!errors.isEmpty()) {
 			PlsqlMappingException all = new PlsqlMappingException(errors.size() + " methods of " + type.getName()
 					+ " do not match the database:" + errors.stream().map(e -> "\n  - " + e.getMessage())
 							.collect(java.util.stream.Collectors.joining()));
-			errors.forEach(e -> all.addSuppressed(e.getCause()));
+			errors.forEach(all::addSuppressed);
 			throw all;
 		}
 	}

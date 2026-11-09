@@ -16,8 +16,8 @@ you do not fix one only to find the next:
 <!-- snippet: validate-message -->
 ```text
 2 methods of com.example.shop.Orders do not match the database:
-  - cancelOrder declares a return value, but SHOP.ORDERS_PKG.CANCEL_ORDER is a procedure and returns nothing; use void
-  - placeOrder -> SHOP.ORDERS_PKG.PLACE_ORDER: P_ORDER_ID is OUT; declare PlsqlOut<T> in this position, not Long
+  - cancelOrder(long): the method declares a return value, but SHOP.ORDERS_PKG.CANCEL_ORDER is a procedure and returns nothing; use void
+  - placeOrder(long, BigDecimal, Long): P_ORDER_ID of SHOP.ORDERS_PKG.PLACE_ORDER is OUT; declare PlsqlOut<T> in this position, not Long
 ```
 
 ## Where to call it

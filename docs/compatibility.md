@@ -206,6 +206,7 @@ For what each feature does, see the [documentation](README.md).
 |---|---|---|
 | Nonexistent routine, package or standalone routine, wrong arity, procedure × function | `PlsqlMappingException` saying what the database expects | Validated |
 | Attribute without a property, mismatched `@PlsqlType`, duplicate Oracle name | `PlsqlMappingException` naming the problem | Validated |
+| Any mapping error of a method, in a call or in `validate` | The message starts with `method(types): `, once, and the detail does not repeat the method; the routines that exist are listed once each, overloads included | Validated |
 | `RAISE_APPLICATION_ERROR` | `PlsqlRoutineRaisedException` with Oracle's message in `getMessage()`, the unsigned number in `getCode()` and the text in `getReason()`, including multi-line text. The `SQLException` is kept as the cause | Validated |
 | `RAISE` of an exception with `EXCEPTION_INIT` in the `-20000` to `-20999` range | `PlsqlRoutineRaisedException` with the code, and an empty `getReason()`: nobody supplied a text | Validated |
 | A value the driver does not accept in an attribute or element, such as text in a `NUMBER` | `PlsqlMappingException` with the Oracle type and the attributes, instead of a driver exception | Validated |

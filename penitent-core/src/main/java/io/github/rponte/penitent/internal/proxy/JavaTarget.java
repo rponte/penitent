@@ -20,13 +20,13 @@ record JavaTarget(String description, Class<?> type, java.lang.reflect.Type gene
 		AppliedConverter converter) {
 
 	static JavaTarget ofReturn(Method method, PlsqlConverters converters) {
-		return new JavaTarget(method.getName(), ReturnType.of(method), ReturnType.genericOf(method),
+		return new JavaTarget("the return value", ReturnType.of(method), ReturnType.genericOf(method),
 				returnConversion(method), RoutineMetadata.converterOfReturn(method, converters));
 	}
 
 	static JavaTarget ofOut(Method method, java.lang.reflect.Parameter parameter, Argument argument,
 			PlsqlConverters converters) {
-		return new JavaTarget(method.getName() + " (" + argument.name() + ")",
+		return new JavaTarget(argument.name(),
 				OutParameters.valueClassOf(parameter), OutParameters.valueTypeOf(parameter),
 				ValueConversion.from(parameter.getAnnotation(PlsqlBoolean.class)),
 				RoutineMetadata.converterOf(method, parameter, converters));

@@ -350,7 +350,7 @@ class AnonymousBlockTest extends OracleIntegrationTest {
 	void parameter_without_declared_type() {
 		assertThatThrownBy(() -> shapes.withUndeclaredCollection(List.of("a")))
 				.isInstanceOf(PlsqlMappingException.class)
-				.hasMessage("withUndeclaredCollection: parameter value is a List; in a block, declare its Oracle type"
+				.hasMessage("withUndeclaredCollection(List): parameter value is a List; in a block, declare its Oracle type"
 						+ " with @PlsqlType, as in @PlsqlType(\"NAME_LIST_T\")");
 		assertThatThrownBy(() -> shapes.withUndeclaredComposite(new Address("Street A", 1)))
 				.isInstanceOf(PlsqlMappingException.class)
@@ -390,7 +390,7 @@ class AnonymousBlockTest extends OracleIntegrationTest {
 	void collection_result() {
 		assertThatThrownBy(shapes::returnsList)
 				.isInstanceOf(PlsqlMappingException.class)
-				.hasMessage("returnsList: :result is a List; declare resultType with the collection type, as in"
+				.hasMessage("returnsList(): :result is a List; declare resultType with the collection type, as in"
 						+ " resultType = \"NAME_LIST_T\", or open it as a cursor with OPEN :result FOR");
 	}
 
@@ -442,7 +442,7 @@ class AnonymousBlockTest extends OracleIntegrationTest {
 	void result_that_does_not_fit() {
 		assertThatThrownBy(shapes::cursorAsText)
 				.isInstanceOf(PlsqlMappingException.class)
-				.hasMessage("cursorAsText: :result is a cursor; declare List<T>, not String");
+				.hasMessage("cursorAsText(): :result is a cursor; declare List<T>, not String");
 		assertThatThrownBy(shapes::collectionAsText)
 				.isInstanceOf(PlsqlMappingException.class)
 				.hasMessageContaining("declare List<T>, not String");

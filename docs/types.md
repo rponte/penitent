@@ -82,7 +82,7 @@ Without `@PlsqlBoolean`, reading an `S` fails, instead of turning into `false`:
 
 <!-- snippet: boolean-literal -->
 ```text
-vipFlag -> SHOP.CUSTOMERS_PKG.VIP_FLAG: cannot convert 'S' to boolean: expected 'Y' or 'N'. Use @PlsqlBoolean to declare other literals.
+vipFlag(long): the return value of SHOP.CUSTOMERS_PKG.VIP_FLAG: cannot convert 'S' to boolean: expected 'Y' or 'N'. Use @PlsqlBoolean to declare other literals.
 ```
 
 Writing cannot fail the same way: without the annotation, the database receives `Y` or `N`, whatever your schema
@@ -118,7 +118,7 @@ Crossing the line in either direction would lose information without any error, 
 
 <!-- snippet: local-on-tstz -->
 ```text
-deliveryDeadline -> SHOP.CUSTOMERS_PKG.DELIVERY_DEADLINE: P_ORDERED_AT is TIMESTAMP WITH TIME ZONE, and LocalDateTime has no time zone; declare OffsetDateTime, ZonedDateTime or Instant
+deliveryDeadline(LocalDateTime): P_ORDERED_AT of SHOP.CUSTOMERS_PKG.DELIVERY_DEADLINE is TIMESTAMP WITH TIME ZONE, and LocalDateTime has no time zone; declare OffsetDateTime, ZonedDateTime or Instant
 ```
 
 And an `OffsetDateTime`, `ZonedDateTime` or `Instant` for a `DATE` or `TIMESTAMP` would have nowhere to store it. The
@@ -231,7 +231,7 @@ CustomerSummary summary(long id);
 
   <!-- snippet: missing-attribute -->
   ```text
-  Address does not cover attribute(s) of POSTAL_ADDRESS_T: [ZIP_CODE VARCHAR2]. Available properties: [STREET, CITY]. Use @PlsqlAttr to declare the name.
+  normalizeAddress(Address): Address does not cover attribute(s) of POSTAL_ADDRESS_T: [ZIP_CODE VARCHAR2]. Available properties: [STREET, CITY]. Use @PlsqlAttr to declare the name.
   ```
 - **JavaBeans** need a no-argument constructor and setters to be read. Inherited properties count.
 - **Inheritance:** an OBJECT type created `UNDER` another works too.

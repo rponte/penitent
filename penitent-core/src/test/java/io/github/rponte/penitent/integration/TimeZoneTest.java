@@ -362,17 +362,20 @@ class TimeZoneTest extends OracleIntegrationTest {
 
 		assertThatThrownBy(() -> timeZones.tstzAsLocalDateTime(value))
 				.isInstanceOf(PlsqlMappingException.class)
-				.hasMessageContaining("P_VALUE is TIMESTAMP WITH TIME ZONE")
+				.hasMessageContaining("P_VALUE of ")
+				.hasMessageContaining(" is TIMESTAMP WITH TIME ZONE")
 				.hasMessageContaining("declare OffsetDateTime, ZonedDateTime or Instant");
 		assertThatThrownBy(timeZones::resultAsLocalDateTime)
 				.isInstanceOf(PlsqlMappingException.class)
-				.hasMessageContaining("the return value is TIMESTAMP WITH TIME ZONE");
+				.hasMessageContaining("the return value of ")
+				.hasMessageContaining(" is TIMESTAMP WITH TIME ZONE");
 		assertThatThrownBy(timeZones::resultAsLocalDate)
 				.isInstanceOf(PlsqlMappingException.class)
 				.hasMessageContaining("LocalDate has no time zone");
 		assertThatThrownBy(() -> timeZones.outAsLocalDateTime(new PlsqlOut<>()))
 				.isInstanceOf(PlsqlMappingException.class)
-				.hasMessageContaining("P_VALUE is TIMESTAMP WITH TIME ZONE");
+				.hasMessageContaining("P_VALUE of ")
+				.hasMessageContaining(" is TIMESTAMP WITH TIME ZONE");
 		assertThatThrownBy(() -> timeZones.tsltzAsLocalDateTime(value))
 				.isInstanceOf(PlsqlMappingException.class)
 				.hasMessageContaining("TIMESTAMP WITH LOCAL TIME ZONE");
@@ -410,11 +413,13 @@ class TimeZoneTest extends OracleIntegrationTest {
 	void instant_rejected() {
 		assertThatThrownBy(() -> timeZones.timestampAsInstant(INSTANT))
 				.isInstanceOf(PlsqlMappingException.class)
-				.hasMessageContaining("P_VALUE is TIMESTAMP")
+				.hasMessageContaining("P_VALUE of ")
+				.hasMessageContaining(" is TIMESTAMP")
 				.hasMessageContaining("declare LocalDateTime");
 		assertThatThrownBy(() -> timeZones.dateAsInstant(INSTANT))
 				.isInstanceOf(PlsqlMappingException.class)
-				.hasMessageContaining("P_VALUE is DATE");
+				.hasMessageContaining("P_VALUE of ")
+				.hasMessageContaining(" is DATE");
 	}
 
 	@Test
@@ -422,17 +427,20 @@ class TimeZoneTest extends OracleIntegrationTest {
 	void time_zone_rejected_in_type_without_time_zone() {
 		assertThatThrownBy(() -> timeZones.offsetAsTimestamp(WITH_OFFSET))
 				.isInstanceOf(PlsqlMappingException.class)
-				.hasMessageContaining("P_VALUE is TIMESTAMP")
+				.hasMessageContaining("P_VALUE of ")
+				.hasMessageContaining(" is TIMESTAMP")
 				.hasMessageContaining("OffsetDateTime would lose the time zone");
 		assertThatThrownBy(() -> timeZones.zonedAsTimestamp(WITH_REGION))
 				.isInstanceOf(PlsqlMappingException.class)
 				.hasMessageContaining("ZonedDateTime would lose the time zone");
 		assertThatThrownBy(() -> timeZones.offsetAsDate(WITH_OFFSET))
 				.isInstanceOf(PlsqlMappingException.class)
-				.hasMessageContaining("P_VALUE is DATE");
+				.hasMessageContaining("P_VALUE of ")
+				.hasMessageContaining(" is DATE");
 		assertThatThrownBy(() -> timeZones.offsetResultFromTimestamp(WITH_OFFSET.toLocalDateTime()))
 				.isInstanceOf(PlsqlMappingException.class)
-				.hasMessageContaining("the return value is TIMESTAMP");
+				.hasMessageContaining("the return value of ")
+				.hasMessageContaining(" is TIMESTAMP");
 		assertThatThrownBy(() -> pkg(AttributeWithoutTimeZone.class).offset(new AttributeOffset(WITH_OFFSET)))
 				.isInstanceOf(PlsqlMappingException.class)
 				.hasMessageContaining("AttributeOffset.v")
@@ -477,17 +485,20 @@ class TimeZoneTest extends OracleIntegrationTest {
 
 		assertThatThrownBy(() -> lists.localAsTstz(value))
 				.isInstanceOf(PlsqlMappingException.class)
-				.hasMessageContaining("P_VALUE is a collection of TIMESTAMP")
+				.hasMessageContaining("P_VALUE of ")
+				.hasMessageContaining(" is a collection of TIMESTAMP")
 				.hasMessageContaining("LocalDateTime has no time zone");
 		assertThatThrownBy(() -> lists.localAsTstzFromArray(value.toArray(LocalDateTime[]::new)))
 				.isInstanceOf(PlsqlMappingException.class)
 				.hasMessageContaining("LocalDateTime has no time zone");
 		assertThatThrownBy(lists::localResult)
 				.isInstanceOf(PlsqlMappingException.class)
-				.hasMessageContaining("the return value is a collection");
+				.hasMessageContaining("the return value of ")
+				.hasMessageContaining(" is a collection");
 		assertThatThrownBy(() -> lists.outLocal(new PlsqlOut<>()))
 				.isInstanceOf(PlsqlMappingException.class)
-				.hasMessageContaining("P_VALUE is a collection");
+				.hasMessageContaining("P_VALUE of ")
+				.hasMessageContaining(" is a collection");
 		assertThatThrownBy(() -> lists.attributeLocal(new LocalDateTimeListAttribute(value)))
 				.isInstanceOf(PlsqlMappingException.class)
 				.hasMessageContaining("LocalDateTimeListAttribute.v")

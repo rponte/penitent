@@ -234,17 +234,17 @@ that says what was looked up and what the database has, so you can fix it withou
 
 <!-- snippet: routine-not-found -->
 ```text
-routine SHOP.ORDERS_PKG.CALCULATE_FRIEGHT does not exist. Available: APPLY_DISCOUNT, CALCULATE_FREIGHT, CANCEL_ORDER, COUNT_ORDERS, DESCRIBE, DESCRIBE, ORDER_STATUS, PLACE_ORDER
+calculateFrieght(String, String): routine SHOP.ORDERS_PKG.CALCULATE_FRIEGHT does not exist. Available: APPLY_DISCOUNT, CALCULATE_FREIGHT, CANCEL_ORDER, COUNT_ORDERS, DESCRIBE, ORDER_STATUS, PLACE_ORDER
 ```
 
 <!-- snippet: wrong-arity -->
 ```text
-calculateFreight declares 1 parameter(s), but SHOP.ORDERS_PKG.CALCULATE_FREIGHT expects 2: [P_ORIGIN VARCHAR2, P_DESTINATION VARCHAR2]
+calculateFreight(String): the method declares 1 parameter, but SHOP.ORDERS_PKG.CALCULATE_FREIGHT expects 2: [P_ORIGIN VARCHAR2, P_DESTINATION VARCHAR2]
 ```
 
 <!-- snippet: unknown-name -->
 ```text
-countOrders: parameter customerId looks for P_CUSTOMER, which SHOP.ORDERS_PKG.COUNT_ORDERS does not have. Parameters: [P_CUSTOMER_ID NUMBER, P_STATUS VARCHAR2, P_MIN_TOTAL NUMBER]. Use @PlsqlParam with the Oracle name.
+countOrders(long): parameter customerId looks for P_CUSTOMER, which SHOP.ORDERS_PKG.COUNT_ORDERS does not have. Parameters: [P_CUSTOMER_ID NUMBER, P_STATUS VARCHAR2, P_MIN_TOTAL NUMBER]. Use @PlsqlParam with the Oracle name.
 ```
 
 To check every method up front, in a test or at startup, use [`PlsqlPackages.validate`](validation.md).

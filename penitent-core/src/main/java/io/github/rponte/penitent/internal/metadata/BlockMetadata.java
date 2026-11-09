@@ -72,8 +72,8 @@ public record BlockMetadata(String sql, List<String> placeholders, String result
 		for (int i = 0; i < placeholders.size(); i++) {
 			if (RESULT.equalsIgnoreCase(placeholders.get(i))) {
 				if (resultPosition >= 0) {
-					throw new PlsqlMappingException(method.getName()
-							+ ": the block uses :result more than once; it is the only output and there can be only one");
+					throw new PlsqlMappingException(
+							"the block uses :result more than once; it is the only output and there can be only one");
 				}
 				resultPosition = i + 1;
 			}
@@ -100,13 +100,13 @@ public record BlockMetadata(String sql, List<String> placeholders, String result
 		}
 		Class<?> returned = ReturnType.of(method);
 		if (cursorResult && !List.class.isAssignableFrom(returned)) {
-			throw new PlsqlMappingException(method.getName() + ": :result is a cursor; declare List<T>, not "
+			throw new PlsqlMappingException(":result is a cursor; declare List<T>, not "
 					+ returned.getSimpleName());
 		}
 		boolean many = java.util.Collection.class.isAssignableFrom(returned)
 				|| (returned.isArray() && returned != byte[].class);
 		if (many && !cursorResult && block.resultType().isBlank()) {
-			throw new PlsqlMappingException(method.getName() + ": :result is a " + returned.getSimpleName()
+			throw new PlsqlMappingException(":result is a " + returned.getSimpleName()
 					+ "; declare resultType with the collection type, as in resultType = \"NAME_LIST_T\", or open it"
 					+ " as a cursor with OPEN :result FOR");
 		}
@@ -133,19 +133,19 @@ public record BlockMetadata(String sql, List<String> placeholders, String result
 
 		for (Parameter parameter : method.getParameters()) {
 			if (OutParameters.isDeclaredBy(parameter)) {
-				throw new PlsqlMappingException(method.getName() + ": a block does not accept PlsqlOut;"
+				throw new PlsqlMappingException("a block does not accept PlsqlOut;"
 						+ " its only output is :result");
 			}
 		}
 
 		boolean returnsValue = ReturnType.of(method) != void.class;
 		if (returnsValue && resultPosition < 0) {
-			throw new PlsqlMappingException(method.getName() + " declares return type "
+			throw new PlsqlMappingException("the method declares return type "
 					+ ReturnType.of(method).getSimpleName() + ", but the block has no :result");
 		}
 		if (!returnsValue && resultPosition >= 0) {
-			throw new PlsqlMappingException(method.getName()
-					+ " is void, but the block has :result; declare the return type or remove the :result");
+			throw new PlsqlMappingException(
+					"the method is void, but the block has :result; declare the return type or remove the :result");
 		}
 
 		Set<String> expected = new LinkedHashSet<>(placeholders);
@@ -159,7 +159,7 @@ public record BlockMetadata(String sql, List<String> placeholders, String result
 
 		List<String> unmatched = expected.stream().filter(n -> !declared.contains(n)).toList();
 		if (!unmatched.isEmpty()) {
-			throw new PlsqlMappingException(method.getName() + ": the block uses " + unmatched
+			throw new PlsqlMappingException("the block uses " + unmatched
 					+ ", which matches no parameter. Declared: " + declared
 					+ ". Use @PlsqlParam to declare the name.");
 		}
@@ -176,8 +176,8 @@ public record BlockMetadata(String sql, List<String> placeholders, String result
 			return named.value();
 		}
 		if (!parameter.isNamePresent()) {
-			throw new PlsqlMappingException(method.getName()
-					+ ": parameter names are not in the bytecode (compile with -parameters)"
+			throw new PlsqlMappingException(
+					"parameter names are not in the bytecode (compile with -parameters)"
 					+ " or use @PlsqlParam on each one");
 		}
 		return parameter.getName();

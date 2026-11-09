@@ -27,16 +27,16 @@ public final class RoutineValidation {
 		this.routine = routine;
 	}
 
-	/** Where a refusal happened, at the start of its message: the method and the routine it maps. */
-	private String where(Method method) {
-		return method.getName() + " -> " + routine.qualifiedName();
+	/** How a refusal names a parameter: {@code P_X of SCHEMA.PACKAGE.ROUTINE}, or the return value. */
+	private String nameOf(Argument argument) {
+		return (argument.isReturnValue() ? "the return value" : argument.name()) + " of " + routine.qualifiedName();
 	}
 
 	/**
 	 * Checks the arity. The message names the parameters the database expects, because that is the
 	 * information the user does not have at hand when getting it wrong.
 	 */
-	public void requireArity(int javaArgumentCount, String methodName) {
+	public void requireArity(int javaArgumentCount) {
 		List<Argument> params = routine.parameters();
 		int required = routine.requiredParameterCount();
 
@@ -44,25 +44,24 @@ public final class RoutineValidation {
 			String expected = required == params.size()
 					? String.valueOf(params.size())
 					: required + " to " + params.size() + " (the last ones have DEFAULT)";
-			throw new PlsqlMappingException(methodName + " declares " + javaArgumentCount
-					+ " parameter(s), but " + routine.qualifiedName() + " expects " + expected
-					+ ": " + params);
+			throw new PlsqlMappingException("the method declares " + javaArgumentCount
+					+ (javaArgumentCount == 1 ? " parameter" : " parameters") + ", but " + routine.qualifiedName()
+					+ " expects " + expected + ": " + params);
 		}
 	}
 
 	/** A function mapped to a {@code void} method would have its return value silently discarded. */
-	public void requireProcedure(String methodName) {
+	public void requireProcedure() {
 		routine.returnValue().ifPresent(ret -> {
-			throw new PlsqlMappingException(methodName + " is void, but " + routine.qualifiedName()
-					+ " is a function that returns " + ret.dataType()
-					+ "; declare the return type in the method");
+			throw new PlsqlMappingException("the method is void, but " + routine.qualifiedName()
+					+ " is a function that returns " + ret.dataType() + "; declare the return type in the method");
 		});
 	}
 
 	/** The reverse: a method with a return value pointing at a procedure would have nothing to return. */
-	public void requireFunction(String methodName) {
+	public void requireFunction() {
 		if (routine.returnValue().isEmpty()) {
-			throw new PlsqlMappingException(methodName + " declares a return value, but " + routine.qualifiedName()
+			throw new PlsqlMappingException("the method declares a return value, but " + routine.qualifiedName()
 					+ " is a procedure and returns nothing; use void");
 		}
 	}
@@ -87,9 +86,7 @@ public final class RoutineValidation {
 	private void requireTemporalTypeToAgree(Method method, Argument argument, Class<?> javaType) {
 		String refusal = ScalarCodec.temporalRefusal(argument.dataType(), javaType);
 		if (refusal != null) {
-			String name = argument.isReturnValue() ? "the return value" : argument.name();
-			throw new PlsqlMappingException(where(method) + ": " + name + " is "
-					+ argument.dataType() + ", and " + refusal);
+			throw new PlsqlMappingException(nameOf(argument) + " is " + argument.dataType() + ", and " + refusal);
 		}
 	}
 
@@ -105,17 +102,15 @@ public final class RoutineValidation {
 			Argument param = params.get(i);
 			boolean holder = OutParameters.isDeclaredBy(javaParameters[i]);
 			if (param.isOut() && !holder) {
-				throw new PlsqlMappingException(where(method) + ": " + param.name()
-						+ " is " + param.inOut() + "; declare PlsqlOut<T> in this position, not "
+				throw new PlsqlMappingException(nameOf(param) + " is " + param.inOut()
+						+ "; declare PlsqlOut<T> in this position, not "
 						+ javaParameters[i].getType().getSimpleName());
 			}
 			if (!param.isOut() && holder) {
-				throw new PlsqlMappingException(where(method) + ": " + param.name()
-						+ " is IN; declare the value in this position, not PlsqlOut");
+				throw new PlsqlMappingException(nameOf(param) + " is IN; declare the value in this position, not PlsqlOut");
 			}
 			if (holder && OutParameters.valueClassOf(javaParameters[i]) == null) {
-				throw new PlsqlMappingException(where(method) + ": " + param.name()
-						+ " is a PlsqlOut without a type; declare PlsqlOut<SomeType>");
+				throw new PlsqlMappingException(nameOf(param) + " is a PlsqlOut without a type; declare PlsqlOut<SomeType>");
 			}
 		}
 	}
@@ -153,7 +148,7 @@ public final class RoutineValidation {
 			if ("PL/SQL TABLE".equals(param.dataType())) {
 				requireIndexBySupported(dictionary, param);
 				if (param.isIn()) {
-					throw new PlsqlMappingException(where(method) + ": " + param.name()
+					throw new PlsqlMappingException(nameOf(param)
 							+ " is INDEX BY, and the driver would write it starting at index 0, not 1. Declare the"
 							+ " routine with a TABLE OF collection, or call it via @PlsqlBlock");
 				}
@@ -182,7 +177,7 @@ public final class RoutineValidation {
 		String refusal = indexByRefusal(applied != null && applied.elementWise() ? applied.databaseType()
 				: RoutineMetadata.elementClassOf(declared));
 		if (refusal != null) {
-			throw new PlsqlMappingException(where(method) + ": " + name + ": " + refusal);
+			throw new PlsqlMappingException(nameOf(argument) + ": " + refusal);
 		}
 	}
 
@@ -238,8 +233,7 @@ public final class RoutineValidation {
 				&& (!argument.isCollection()
 						|| RoutineMetadata.collectionTypeOf(dictionary, argument, routine.schema()).holdsScalars());
 		if (!fits) {
-			String name = argument.isReturnValue() ? "the return value" : argument.name();
-			throw new PlsqlMappingException(where(method) + ": " + name + " is "
+			throw new PlsqlMappingException(nameOf(argument) + " is "
 					+ argument.dataType() + ", and a converter only applies to a scalar value, or to the"
 					+ " scalar elements of a collection");
 		}
@@ -255,9 +249,8 @@ public final class RoutineValidation {
 		String oracleElement = RoutineMetadata.elementTypeNameOf(dictionary, argument, routine.schema());
 		String refusal = ScalarCodec.temporalRefusal(oracleElement, element);
 		if (refusal != null) {
-			String name = argument.isReturnValue() ? "the return value" : argument.name();
-			throw new PlsqlMappingException(where(method) + ": " + name
-					+ " is a collection of " + oracleElement + ", and " + refusal);
+			throw new PlsqlMappingException(nameOf(argument) + " is a collection of " + oracleElement + ", and "
+					+ refusal);
 		}
 	}
 
@@ -326,8 +319,7 @@ public final class RoutineValidation {
 				: nestingRefusal(RoutineMetadata.collectionTypeOf(dictionary, argument, routine.schema()),
 						RoutineMetadata.elementTypeOf(declared));
 		if (refusal != null) {
-			String name = argument.isReturnValue() ? "the return value" : argument.name();
-			throw new PlsqlMappingException(where(method) + ": " + name + ": " + refusal);
+			throw new PlsqlMappingException(nameOf(argument) + ": " + refusal);
 		}
 	}
 }

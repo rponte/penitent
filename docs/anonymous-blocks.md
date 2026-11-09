@@ -80,7 +80,7 @@ driver's `ORA-17004`:
 
 <!-- snippet: block-without-type -->
 ```text
-countTags: parameter tags is a List; in a block, declare its Oracle type with @PlsqlType, as in @PlsqlType("NAME_LIST_T")
+countTags(List): parameter tags is a List; in a block, declare its Oracle type with @PlsqlType, as in @PlsqlType("NAME_LIST_T")
 ```
 
 The same goes for a `List`, array, `record` or JavaBean parameter without `@PlsqlType`, and for a `List` `:result`

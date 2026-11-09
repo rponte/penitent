@@ -3,16 +3,19 @@
 The problems people run into most, by the message or the symptom you see. Every message on this page is what
 Penitent prints, word for word.
 
+A mapping error always starts with the method and the types of its parameters, as in `countOrders(long, String):`,
+so you can tell overloads apart, and then says what was looked up and what exists.
+
 ## The routine or package is not found
 
 <!-- snippet: package-not-found -->
 ```text
-package SHOP.ORDER_PKG does not exist or is not visible to this user
+orderStatus(long): package SHOP.ORDER_PKG does not exist or is not visible to this user
 ```
 
 <!-- snippet: routine-not-found -->
 ```text
-routine SHOP.ORDERS_PKG.CALCULATE_FRIEGHT does not exist. Available: APPLY_DISCOUNT, CALCULATE_FREIGHT, CANCEL_ORDER, COUNT_ORDERS, DESCRIBE, DESCRIBE, ORDER_STATUS, PLACE_ORDER
+calculateFrieght(String, String): routine SHOP.ORDERS_PKG.CALCULATE_FRIEGHT does not exist. Available: APPLY_DISCOUNT, CALCULATE_FREIGHT, CANCEL_ORDER, COUNT_ORDERS, DESCRIBE, ORDER_STATUS, PLACE_ORDER
 ```
 
 - **A typo** in `@PlsqlPackage`, `@PlsqlRoutine` or the method name. The second message lists what the package does
@@ -28,17 +31,17 @@ routine SHOP.ORDERS_PKG.CALCULATE_FRIEGHT does not exist. Available: APPLY_DISCO
 
 <!-- snippet: procedure-as-function -->
 ```text
-cancelOrder declares a return value, but SHOP.ORDERS_PKG.CANCEL_ORDER is a procedure and returns nothing; use void
+cancelOrder(long): the method declares a return value, but SHOP.ORDERS_PKG.CANCEL_ORDER is a procedure and returns nothing; use void
 ```
 
 <!-- snippet: wrong-arity -->
 ```text
-calculateFreight declares 1 parameter(s), but SHOP.ORDERS_PKG.CALCULATE_FREIGHT expects 2: [P_ORIGIN VARCHAR2, P_DESTINATION VARCHAR2]
+calculateFreight(String): the method declares 1 parameter, but SHOP.ORDERS_PKG.CALCULATE_FREIGHT expects 2: [P_ORIGIN VARCHAR2, P_DESTINATION VARCHAR2]
 ```
 
 <!-- snippet: out-without-plsqlout -->
 ```text
-placeOrder -> SHOP.ORDERS_PKG.PLACE_ORDER: P_ORDER_ID is OUT; declare PlsqlOut<T> in this position, not Long
+placeOrder(long, BigDecimal, Long): P_ORDER_ID of SHOP.ORDERS_PKG.PLACE_ORDER is OUT; declare PlsqlOut<T> in this position, not Long
 ```
 
 The message says what the database has. A procedure maps to a `void` method, and an `OUT` or `IN OUT` parameter to
@@ -52,7 +55,7 @@ To find every mismatch of an interface at once, instead of one call at a time, r
 
 <!-- snippet: parameters-flag -->
 ```text
-upper: parameter names are not in the bytecode (compile with -parameters) or use @PlsqlParam on each one
+upper(String): parameter names are not in the bytecode (compile with -parameters) or use @PlsqlParam on each one
 ```
 
 An [anonymous block](anonymous-blocks.md) binds `:name` by the Java parameter's name, and so does binding by name
@@ -76,7 +79,7 @@ The Spring Boot parent already turns it on. With Gradle, add `options.compilerAr
 
 <!-- snippet: unknown-name -->
 ```text
-countOrders: parameter customerId looks for P_CUSTOMER, which SHOP.ORDERS_PKG.COUNT_ORDERS does not have. Parameters: [P_CUSTOMER_ID NUMBER, P_STATUS VARCHAR2, P_MIN_TOTAL NUMBER]. Use @PlsqlParam with the Oracle name.
+countOrders(long): parameter customerId looks for P_CUSTOMER, which SHOP.ORDERS_PKG.COUNT_ORDERS does not have. Parameters: [P_CUSTOMER_ID NUMBER, P_STATUS VARCHAR2, P_MIN_TOTAL NUMBER]. Use @PlsqlParam with the Oracle name.
 ```
 
 - **A Java name that does not follow the routine's:** there is no prefix convention, so `customerId` looks for
@@ -88,17 +91,17 @@ countOrders: parameter customerId looks for P_CUSTOMER, which SHOP.ORDERS_PKG.CO
 
 <!-- snippet: null-primitive -->
 ```text
-roundToCents -> SHOP.ROUND_TO_CENTS: NULL does not fit in long; declare Long
+roundToCents(BigDecimal): the return value of SHOP.ROUND_TO_CENTS: NULL does not fit in long; declare Long
 ```
 
 <!-- snippet: boolean-literal -->
 ```text
-vipFlag -> SHOP.CUSTOMERS_PKG.VIP_FLAG: cannot convert 'S' to boolean: expected 'Y' or 'N'. Use @PlsqlBoolean to declare other literals.
+vipFlag(long): the return value of SHOP.CUSTOMERS_PKG.VIP_FLAG: cannot convert 'S' to boolean: expected 'Y' or 'N'. Use @PlsqlBoolean to declare other literals.
 ```
 
 <!-- snippet: local-on-tstz -->
 ```text
-deliveryDeadline -> SHOP.CUSTOMERS_PKG.DELIVERY_DEADLINE: P_ORDERED_AT is TIMESTAMP WITH TIME ZONE, and LocalDateTime has no time zone; declare OffsetDateTime, ZonedDateTime or Instant
+deliveryDeadline(LocalDateTime): P_ORDERED_AT of SHOP.CUSTOMERS_PKG.DELIVERY_DEADLINE is TIMESTAMP WITH TIME ZONE, and LocalDateTime has no time zone; declare OffsetDateTime, ZonedDateTime or Instant
 ```
 
 Penitent refuses a conversion that would lose information: a `NULL` turned into `0`, an unknown flag turned into
@@ -109,7 +112,7 @@ Penitent refuses a conversion that would lose information: a `NULL` turned into 
 
 <!-- snippet: missing-attribute -->
 ```text
-Address does not cover attribute(s) of POSTAL_ADDRESS_T: [ZIP_CODE VARCHAR2]. Available properties: [STREET, CITY]. Use @PlsqlAttr to declare the name.
+normalizeAddress(Address): Address does not cover attribute(s) of POSTAL_ADDRESS_T: [ZIP_CODE VARCHAR2]. Available properties: [STREET, CITY]. Use @PlsqlAttr to declare the name.
 ```
 
 Every Oracle attribute needs a Java property, matched by name: `zipCode` is `ZIP_CODE`. Add the property, or map a

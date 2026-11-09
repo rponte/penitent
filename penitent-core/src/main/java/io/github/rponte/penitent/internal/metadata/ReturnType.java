@@ -42,7 +42,7 @@ public final class ReturnType {
 						|| optional.getActualTypeArguments()[0] instanceof ParameterizedType)) {
 			return optional.getActualTypeArguments()[0];
 		}
-		throw new PlsqlMappingException(method.getName() + " returns Optional without a concrete type;"
+		throw new PlsqlMappingException("the method returns Optional without a concrete type;"
 				+ " declare Optional<SomeType>");
 	}
 
@@ -50,7 +50,7 @@ public final class ReturnType {
 	public static void requireNoOptionalParameter(Method method) {
 		for (java.lang.reflect.Parameter parameter : method.getParameters()) {
 			if (parameter.getType() == Optional.class) {
-				throw new PlsqlMappingException(method.getName() + ": parameter " + parameter.getName()
+				throw new PlsqlMappingException("parameter " + parameter.getName()
 						+ " is Optional, which is only supported as a return type; pass the value or null");
 			}
 		}

@@ -302,12 +302,11 @@ class ConvertersTest extends OracleIntegrationTest {
 	void forgotten_null() {
 		assertThatThrownBy(conversions::forgottenNull)
 				.isInstanceOf(PlsqlMappingException.class)
-				.hasMessageContaining("forgottenNull -> ")
+				.hasMessageStartingWith("forgottenNull(): the return value of ")
 				.hasMessageContaining("TaxIdConverter failed to read NULL");
 		assertThatThrownBy(() -> conversions.forgottenWrite(null))
 				.isInstanceOf(PlsqlMappingException.class)
-				.hasMessageContaining("forgottenWrite -> ")
-				.hasMessageContaining("parameter P_VALUE")
+				.hasMessageStartingWith("forgottenWrite(TaxId): P_VALUE of ")
 				.hasMessageContaining("TaxIdConverter failed to write NULL");
 	}
 

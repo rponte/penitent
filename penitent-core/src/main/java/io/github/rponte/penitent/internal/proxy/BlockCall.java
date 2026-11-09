@@ -111,7 +111,7 @@ final class BlockCall {
 				log.result(result);
 				return result;
 			} catch (ScalarCodec.ConversionException e) {
-				throw new PlsqlMappingException(method.getName() + ": " + e.getMessage(), e);
+				throw new PlsqlMappingException(e.getMessage(), e);
 			} catch (SQLException e) {
 				throw new SqlFailure(metadata.sql(), e, PlsqlFailure.Phase.RESULT);
 			}
@@ -158,15 +158,15 @@ final class BlockCall {
 		BlockMetadata.DeclaredType declared = sessionTypes.of(metadata.resultType());
 		Class<?> returned = ReturnType.of(method);
 		if (declared.isCollection()) {
-			ValueDecoder.requireList(JavaTarget.ofReturn(method, types.converters()), ":result of the block",
+			ValueDecoder.requireList(JavaTarget.ofReturn(method, types.converters()), "the block",
 					"a collection");
 			String refusal = RoutineValidation.nestingRefusal(declared.collection(),
 					RoutineMetadata.elementTypeOf(ReturnType.genericOf(method)));
 			if (refusal != null) {
-				throw new PlsqlMappingException(method.getName() + ": :result: " + refusal);
+				throw new PlsqlMappingException(":result: " + refusal);
 			}
 		} else if (Collection.class.isAssignableFrom(returned) || returned.isArray()) {
-			throw new PlsqlMappingException(method.getName() + ": resultType " + metadata.resultType()
+			throw new PlsqlMappingException("resultType " + metadata.resultType()
 					+ " is a composite type; declare its record or JavaBean, not " + returned.getSimpleName());
 		}
 		statement.registerOutParameter(position, declared.isCollection() ? Types.ARRAY : Types.STRUCT,
@@ -184,7 +184,7 @@ final class BlockCall {
 		PlsqlBoolean literals = parameter.getAnnotation(PlsqlBoolean.class);
 		AppliedConverter applied = scalarInBlock(ConverterLookup.find(types.converters(),
 				parameter.getAnnotation(PlsqlConvert.class), parameter.getType(),
-				RoutineMetadata.elementClassOf(parameter.getParameterizedType()), method.getName()), method);
+				RoutineMetadata.elementClassOf(parameter.getParameterizedType()), "parameter " + parameter.getName()), method);
 		Object value = applied == null ? declaredValue : applied.toDatabase(declaredValue);
 		Class<?> javaType = applied == null ? parameter.getType() : applied.databaseType();
 		String typeName = declaredTypeOf(parameter, javaType);
@@ -217,12 +217,12 @@ final class BlockCall {
 	/** Sent as a scalar, a List or a JavaBean would reach Oracle as something it cannot read ({@code ORA-17004}). */
 	private static void requireNoDeclaredTypeNeeded(Method method, String name, Class<?> javaType) {
 		if (Collection.class.isAssignableFrom(javaType) || (javaType.isArray() && javaType != byte[].class)) {
-			throw new PlsqlMappingException(method.getName() + ": parameter " + name + " is a "
+			throw new PlsqlMappingException("parameter " + name + " is a "
 					+ javaType.getSimpleName() + "; in a block, declare its Oracle type with @PlsqlType, as in"
 					+ " @PlsqlType(\"NAME_LIST_T\")");
 		}
 		if (JavaProperties.isComposite(javaType)) {
-			throw new PlsqlMappingException(method.getName() + ": parameter " + name + " is "
+			throw new PlsqlMappingException("parameter " + name + " is "
 					+ javaType.getSimpleName() + ", a composite; in a block, declare its Oracle type with @PlsqlType,"
 					+ " on the parameter or on " + javaType.getSimpleName() + ", as in @PlsqlType(\"ADDRESS_T\")");
 		}
@@ -237,10 +237,10 @@ final class BlockCall {
 			String refusal = RoutineValidation.nestingRefusal(type.collection(),
 					RoutineMetadata.elementTypeOf(parameter.getParameterizedType()));
 			if (refusal != null) {
-				throw new PlsqlMappingException(method.getName() + ": parameter " + name + ": " + refusal);
+				throw new PlsqlMappingException("parameter " + name + ": " + refusal);
 			}
 		} else if (many || Collection.class.isAssignableFrom(parameter.getType())) {
-			throw new PlsqlMappingException(method.getName() + ": parameter " + name + " is declared as "
+			throw new PlsqlMappingException("parameter " + name + " is declared as "
 					+ type.composite().bindName() + ", a composite type, but is a "
 					+ (value == null ? parameter.getType() : value.getClass()).getSimpleName()
 					+ "; name the collection type in @PlsqlType");
@@ -287,7 +287,7 @@ final class BlockCall {
 	/** A block has no scalar collection to convert per element, nor a dictionary to validate against. */
 	private static AppliedConverter scalarInBlock(AppliedConverter applied, Method method) {
 		if (applied != null && applied.elementWise()) {
-			throw new PlsqlMappingException(method.getName() + ": in a block, a converter only applies to a scalar"
+			throw new PlsqlMappingException("in a block, a converter only applies to a scalar"
 					+ " value");
 		}
 		return applied;
@@ -300,7 +300,7 @@ final class BlockCall {
 		JavaTarget target = JavaTarget.ofReturn(method, types.converters());
 		if (metadata.cursorResult()) {
 			return decoder.decodeCursor((java.sql.ResultSet) statement.getObject(metadata.resultPosition()), target,
-					":result of the block", connection);
+					"the block", connection);
 		}
 		if (metadata.resultType().isBlank()) {
 			AppliedConverter applied = scalarInBlock(RoutineMetadata.converterOfReturn(method, types.converters()),

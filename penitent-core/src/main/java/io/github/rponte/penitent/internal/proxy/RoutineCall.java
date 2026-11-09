@@ -100,14 +100,14 @@ final class RoutineCall {
 
 	private void requireToAgree(Method method, RoutineMetadata routine, int argumentCount) {
 		RoutineValidation validation = new RoutineValidation(routine);
-		validation.requireArity(argumentCount, method.getName());
+		validation.requireArity(argumentCount);
 		validation.requireOutParametersToAgree(method);
 		validation.requireTemporalTypesToAgree(method, types.converters());
 
 		if (ReturnType.of(method) != void.class) {
-			validation.requireFunction(method.getName());
+			validation.requireFunction();
 		} else {
-			validation.requireProcedure(method.getName());
+			validation.requireProcedure();
 		}
 	}
 
@@ -198,7 +198,7 @@ final class RoutineCall {
 				PlsqlBoolean literals = javaParameters[i].getAnnotation(PlsqlBoolean.class);
 				if (parameter.isOut()) {
 					if (args[i] == null) {
-						throw new PlsqlMappingException(method.getName() + ": " + parameter.name()
+						throw new PlsqlMappingException(parameter.name() + " of " + routine.qualifiedName()
 								+ " is " + parameter.inOut() + "; pass a PlsqlOut, not null");
 					}
 					if (parameter.isIn()) {
@@ -221,11 +221,13 @@ final class RoutineCall {
 				if (!expectsResult) {
 					return null;
 				}
-				return decoder.decodeValue(statement, 1, routine.returnValue().orElseThrow(),
-						JavaTarget.ofReturn(method, types.converters()), routine, connection, log, null);
-			} catch (ScalarCodec.ConversionException e) {
-				throw new PlsqlMappingException(method.getName() + " -> " + routine.qualifiedName()
-						+ ": " + e.getMessage(), e);
+				try {
+					return decoder.decodeValue(statement, 1, routine.returnValue().orElseThrow(),
+							JavaTarget.ofReturn(method, types.converters()), routine, connection, log, null);
+				} catch (ScalarCodec.ConversionException e) {
+					throw new PlsqlMappingException("the return value of " + routine.qualifiedName() + ": "
+							+ e.getMessage(), e);
+				}
 			} catch (SQLException e) {
 				throw new SqlFailure(sql, e, PlsqlFailure.Phase.RESULT);
 			}
@@ -248,8 +250,8 @@ final class RoutineCall {
 			return value == null ? null
 					: java.util.Arrays.stream(ValueEncoder.toArray(value)).map(applied::toDatabase).toList().toArray();
 		} catch (ScalarCodec.ConversionException e) {
-			throw new PlsqlMappingException(method.getName() + " -> " + routine.qualifiedName() + ": parameter "
-					+ parameter.name() + ": " + e.getMessage(), e);
+			throw new PlsqlMappingException(parameter.name() + " of " + routine.qualifiedName() + ": "
+					+ e.getMessage(), e);
 		}
 	}
 
@@ -265,8 +267,8 @@ final class RoutineCall {
 					PlsqlOutAccess.set((PlsqlOut<?>) args[i], decoder.decodeValue(statement, i + 1 + offset,
 							parameters.get(i), target, routine, connection, log, parameters.get(i).name()));
 				} catch (ScalarCodec.ConversionException e) {
-					throw new ScalarCodec.ConversionException(
-							"parameter " + parameters.get(i).name() + ": " + e.getMessage(), e);
+					throw new PlsqlMappingException(parameters.get(i).name() + " of " + routine.qualifiedName() + ": "
+							+ e.getMessage(), e);
 				}
 			}
 		}

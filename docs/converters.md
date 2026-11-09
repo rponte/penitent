@@ -140,7 +140,7 @@ To register converters for every interface at once, put them in [Settings](setti
 
   <!-- snippet: converter-null -->
   ```text
-  findByTaxId -> SHOP.CUSTOMERS_PKG.FIND_BY_TAX_ID: parameter P_TAX_ID: the converter of TaxId failed to write NULL: java.lang.NullPointerException
+  findByTaxId(TaxId): P_TAX_ID of SHOP.CUSTOMERS_PKG.FIND_BY_TAX_ID: the converter of TaxId failed to write NULL: java.lang.NullPointerException
   ```
 
   A whole collection that is `null` does not go through the converter.

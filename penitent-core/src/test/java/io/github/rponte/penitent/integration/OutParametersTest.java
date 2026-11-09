@@ -271,8 +271,7 @@ class OutParametersTest extends OracleIntegrationTest {
 	void invalid_value() {
 		assertThatThrownBy(() -> outputs.textAsNumber(new PlsqlOut<>()))
 				.isInstanceOf(PlsqlMappingException.class)
-				.hasMessageContaining("OUT_INVALID_NUMBER")
-				.hasMessageContaining("parameter P_VALUE")
+				.hasMessageStartingWith("textAsNumber(PlsqlOut): P_VALUE of PLSQL_TEST.FIXTURE_OUT.OUT_INVALID_NUMBER: ")
 				.hasMessageContaining("'abc'");
 	}
 
@@ -296,11 +295,11 @@ class OutParametersTest extends OracleIntegrationTest {
 	void validation() {
 		assertThatThrownBy(() -> outputs.withoutHolder(1, 2, null))
 				.isInstanceOf(PlsqlMappingException.class)
-				.hasMessageContaining("P_TOTAL is OUT")
+				.hasMessageContaining("P_TOTAL of PLSQL_TEST.FIXTURE_OUT.PLUS is OUT")
 				.hasMessageContaining("declare PlsqlOut<T>");
 		assertThatThrownBy(() -> outputs.holderAsIn(new PlsqlOut<>(), 2, new PlsqlOut<>()))
 				.isInstanceOf(PlsqlMappingException.class)
-				.hasMessageContaining("P_A is IN");
+				.hasMessageContaining("P_A of PLSQL_TEST.FIXTURE_OUT.PLUS is IN");
 		assertThatThrownBy(() -> outputs.rawHolder(1, 2, new PlsqlOut<Integer>()))
 				.isInstanceOf(PlsqlMappingException.class)
 				.hasMessageContaining("PlsqlOut without a type");

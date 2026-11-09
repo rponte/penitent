@@ -166,7 +166,7 @@ class NamedNotationTest extends OracleIntegrationTest {
 	void overload_without_match() {
 		assertThatThrownBy(() -> pkg(UnpairedOverload.class).g(1))
 				.isInstanceOf(PlsqlMappingException.class)
-				.hasMessageContaining("matches no version of PLSQL_TEST.FIXTURE_NAMED.G by name")
+				.hasMessageContaining("g(int): no version of PLSQL_TEST.FIXTURE_NAMED.G matches by name")
 				.hasMessageContaining("P_X NUMBER")
 				.hasMessageContaining("P_Y NUMBER");
 	}
