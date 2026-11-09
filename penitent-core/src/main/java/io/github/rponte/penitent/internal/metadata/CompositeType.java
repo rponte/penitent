@@ -12,7 +12,7 @@ package io.github.rponte.penitent.internal.metadata;
  *   <tr><th>form</th><th>bindName</th><th>attributes in</th></tr>
  *   <tr><td>OBJECT</td><td>{@code TYPE}</td><td>{@code ALL_TYPE_ATTRS}</td></tr>
  *   <tr><td>package RECORD</td><td>{@code PACKAGE.RECORD}</td><td>{@code ALL_PLSQL_TYPE_ATTRS}</td></tr>
- *   <tr><td>{@code %ROWTYPE}</td><td>{@code TABLE%ROWTYPE}</td><td>{@code ALL_TAB_COLUMNS}</td></tr>
+ *   <tr><td>{@code %ROWTYPE}</td><td>{@code TABLE%ROWTYPE}, after the owner in quotes</td><td>{@code ALL_TAB_COLUMNS}</td></tr>
  * </table>
  *
  * <p>The last two work since Oracle 12.1. Table A-5 of the JDBC guide says
@@ -35,9 +35,16 @@ public record CompositeType(Kind kind, String schema, String container, String s
 	 * The name prefixed with its owner, which is what the driver needs: without it, the name is
 	 * looked up in the session's schema, which is not the type's schema when the package lives in
 	 * another schema.
+	 *
+	 * <p>A {@code %ROWTYPE} has the owner in quotes, {@code "SCHEMA".TABLE%ROWTYPE}, so that it binds on
+	 * every driver version. Before driver 23, the driver puts the whole name in quotes before the database
+	 * resolves it, and {@code "SCHEMA"."TABLE%ROWTYPE"} is a type that does not exist; a name that already
+	 * starts with a quote goes as it is, and the database reads the suffix. Driver 23 accepts both
+	 * spellings. The owner comes from the dictionary with its exact case, which the quotes keep.
+	 * {@code DriverAddressingTest} pins each driver's behavior.
 	 */
 	public String qualifiedBindName() {
-		return schema + "." + bindName;
+		return kind == Kind.ROWTYPE ? "\"" + schema + "\"." + bindName : schema + "." + bindName;
 	}
 
 	@Override
