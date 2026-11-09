@@ -153,6 +153,13 @@ class CompositeAttributesTest extends OracleIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("a null BOOLEAN in an OBJECT and in a RECORD stays null")
+	void null_boolean_attribute() {
+		assertThat(attributes.echoBoolean(new WithBoolean(null)).v()).isNull();
+		assertThat(attributes.echoBooleanRecord(new BooleanRecord(BigDecimal.ONE, null)).flag()).isNull();
+	}
+
+	@Test
 	@DisplayName("CLOB becomes String, on read")
 	void clob_on_read() {
 		assertThat(attributes.aClob().v()).isEqualTo("abc");

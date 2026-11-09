@@ -2,6 +2,7 @@ package io.github.rponte.penitent.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -12,10 +13,16 @@ import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import com.zaxxer.hikari.HikariDataSource;
+
 import io.github.rponte.penitent.PlsqlAttr;
+import io.github.rponte.penitent.PlsqlBlock;
 import io.github.rponte.penitent.PlsqlPackage;
+import io.github.rponte.penitent.PlsqlPackages;
 import io.github.rponte.penitent.PlsqlRoutine;
+import io.github.rponte.penitent.exception.PlsqlExecutionException;
 import io.github.rponte.penitent.exception.PlsqlMappingException;
+import oracle.jdbc.OracleDriver;
 
 class CursorTest extends OracleIntegrationTest {
 
@@ -57,6 +64,26 @@ class CursorTest extends OracleIntegrationTest {
 	}
 
 	record IdAsFlag(Boolean id) {
+	}
+
+	record Flagged(Integer id, Boolean flag) {
+	}
+
+	/** A column of the SQL BOOLEAN of 23ai, which is newer than driver 21. */
+	interface BooleanColumns {
+		@PlsqlBlock("""
+				begin open :result for
+				  select v from (select 1 o, true v from dual union all select 2, false from dual
+				                 union all select 3, cast(null as boolean) from dual) order by o;
+				end;""")
+		List<Boolean> flags();
+
+		@PlsqlBlock("""
+				begin open :result for
+				  select 1 id, true flag from dual union all select 2, false from dual
+				  union all select 3, cast(null as boolean) from dual order by id;
+				end;""")
+		List<Flagged> rows();
 	}
 
 	@PlsqlPackage("FIXTURE_COMPOSITES")
@@ -246,5 +273,37 @@ class CursorTest extends OracleIntegrationTest {
 				.isInstanceOf(PlsqlMappingException.class)
 				.hasMessageContaining("column ID")
 				.hasMessageContaining("'2'");
+	}
+
+	@Test
+	@DisplayName("a BOOLEAN column, alone or in a row, with true, false and null")
+	void boolean_column() {
+		assumeTrue(new OracleDriver().getMajorVersion() >= 23, "driver 21 cannot read the column: see the next test");
+		BooleanColumns columns = PlsqlPackages.create(BooleanColumns.class, DATA_SOURCE);
+
+		assertThat(columns.flags()).containsExactly(true, false, null);
+		assertThat(columns.rows()).containsExactly(new Flagged(1, true), new Flagged(2, false), new Flagged(3, null));
+	}
+
+	@Test
+	@DisplayName("before driver 23, a BOOLEAN column fails clearly, and the connection does not go back to the pool")
+	void boolean_column_before_driver_23() {
+		assumeTrue(new OracleDriver().getMajorVersion() < 23, "only drivers before 23 cannot read the column");
+		// One connection: the call after the failure can only work if the pool replaced it.
+		try (HikariDataSource pool = newPool()) {
+			pool.setMaximumPoolSize(1);
+			BooleanColumns columns = PlsqlPackages.create(BooleanColumns.class, pool);
+
+			assertThatThrownBy(columns::flags)
+					.isInstanceOf(PlsqlExecutionException.class)
+					.hasMessageContaining("the Oracle driver before 23 cannot read a BOOLEAN column")
+					.hasMessageContaining("CASE WHEN flag THEN 'Y' ELSE 'N' END");
+			assertThat(PlsqlPackages.create(Strings.class, pool).echo("after")).isEqualTo("after");
+		}
+	}
+
+	interface Strings {
+		@PlsqlBlock("begin :result := :value; end;")
+		String echo(String value);
 	}
 }

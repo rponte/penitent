@@ -32,11 +32,44 @@ final class Jdbc {
 	private Jdbc() {
 	}
 
+	/**
+	 * Runs the statement. An {@link AssertionError} from the driver is its own internal check failing in
+	 * the middle of a response, so the connection is left at an unknown point of the protocol: it is
+	 * aborted, so that the pool replaces it instead of handing it to the next call, which would fail with
+	 * "Protocol violation" for no reason of its own. The error then goes the way of any other failure of
+	 * the call, through the translator, as a {@code SQLException} that says what happened and keeps the
+	 * driver's error as its cause. Only {@code AssertionError} is caught: any other {@code Error} is not
+	 * the driver's to explain.
+	 *
+	 * <p>The known case is a cursor with a {@code BOOLEAN} column, the SQL type of 23ai: before driver
+	 * 23, the driver does not know the type code of the column, 252, and fails while describing it.
+	 */
 	static void execute(CallableStatement statement, String sql) {
 		try {
 			statement.execute();
 		} catch (SQLException e) {
 			throw new SqlFailure(sql, e, PlsqlFailure.Phase.EXECUTION);
+		} catch (AssertionError e) {
+			abortConnectionOf(statement, e);
+			throw new SqlFailure(sql, new SQLException(driverFailure(e), e), PlsqlFailure.Phase.EXECUTION);
+		}
+	}
+
+	private static String driverFailure(AssertionError e) {
+		String message = String.valueOf(e.getMessage());
+		if (message.contains("oacdty: 252")) {
+			return "the Oracle driver before 23 cannot read a BOOLEAN column in a cursor (" + message
+					+ "); convert it in the query, as in CASE WHEN flag THEN 'Y' ELSE 'N' END, and declare Boolean,"
+					+ " or use driver 23. The connection was discarded";
+		}
+		return "the Oracle driver failed an internal check (" + message + "). The connection was discarded";
+	}
+
+	private static void abortConnectionOf(CallableStatement statement, AssertionError failure) {
+		try {
+			statement.getConnection().abort(Runnable::run);
+		} catch (SQLException | RuntimeException e) {
+			failure.addSuppressed(e);
 		}
 	}
 
