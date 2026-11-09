@@ -77,6 +77,25 @@ bound connection. Still open:
 `TransactionsTest`, `ConnectionBoundViewTest` and `PlsqlTransactionsTest` describe today's behavior, which any of
 them has to keep.
 
+### Jakarta EE and JTA
+
+Inside a Jakarta EE container, the `DataSource` hands out the JTA transaction's connection by itself, so `create`
+should take part in the transaction without anything else. This is not measured yet. The plan is to measure it
+without a full application server, which would be slow and hard to keep working: a JTA transaction manager and a
+pool that enlists its connections, Narayana and Agroal, in a plain JUnit test against the same Oracle.
+
+The tests would live in a module of their own, `penitent-jta-tests`, which depends on `penitent-core`, reuses its
+Oracle and fixtures through the core's test jar, and is never published to Maven Central. That keeps the JTA
+libraries out of the core's test classpath. The scenarios to measure first:
+
+- `create` with the JTA `DataSource`: calls and plain JDBC committed and rolled back together by the transaction
+  manager.
+- `PlsqlTransactions` inside a JTA transaction, which is expected to fail, since `setAutoCommit` and `commit` are not
+  allowed on an enlisted connection. If so, it should refuse with a clear message instead.
+- `PlsqlPackages.using` on a connection of the JTA transaction.
+- A routine's own `COMMIT` inside an XA transaction, which Oracle is expected to refuse with `ORA-02089`, unlike plain
+  JDBC, where it commits everything before it.
+
 ### Writing `INDEX BY` and its keys
 
 Currently the library rejects writing an `INDEX BY` and every `INDEX BY VARCHAR2`, and reading an
