@@ -15,19 +15,19 @@ permissions:
 
 jobs:
   build:
-    # compiled for Java 17, the minimum, and tested on it and on Java 21, with ojdbc17; then each other flavor of
-    # the driver on Java 21, one axis at a time
+    # compiled for Java 17, the minimum, and tested on it and on Java 21, with the ojdbc17 artifact of the driver;
+    # then each other artifact of the same driver version on Java 21, one axis at a time
     strategy:
       fail-fast: false
       matrix:
         java: ['21', '17']
-        driver: ['ojdbc17']
+        jdbc-artifact: ['ojdbc17']
         include:
           - java: '21'
-            driver: 'ojdbc11'
+            jdbc-artifact: 'ojdbc11'
           - java: '21'
-            driver: 'ojdbc8'
-    name: build (Java ${{ matrix.java }}, ${{ matrix.driver }})
+            jdbc-artifact: 'ojdbc8'
+    name: build (Java ${{ matrix.java }}, ${{ matrix.jdbc-artifact }})
     runs-on: ubuntu-latest
     # the tests start their own Oracle through Testcontainers; most of the time is pulling its image
     timeout-minutes: 20
@@ -41,11 +41,11 @@ jobs:
           cache: maven
 
       # the same command as on a developer's machine: the build pins its own locale and time zone
-      - run: ./mvnw -B verify -Djdbc.driver=${{ matrix.driver }}
+      - run: ./mvnw -B verify -Doracle.jdbc.artifact=${{ matrix.jdbc-artifact }}
 
       - if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: test-reports-java-${{ matrix.java }}-${{ matrix.driver }}
+          name: test-reports-java-${{ matrix.java }}-${{ matrix.jdbc-artifact }}
           path: '**/target/surefire-reports/'
           retention-days: 7
