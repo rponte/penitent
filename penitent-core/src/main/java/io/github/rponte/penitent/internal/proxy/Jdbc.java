@@ -20,6 +20,15 @@ final class Jdbc {
 	static final int ORACLE_INTERVALYM = -103;
 	static final int ORACLE_INTERVALDS = -104;
 
+	/**
+	 * {@code OracleTypes.PLSQL_BOOLEAN}, for every {@code BOOLEAN} the library binds, not the standard
+	 * {@link Types#BOOLEAN}: before driver 23, {@code Types.BOOLEAN} fails with "Invalid column type: 16",
+	 * while {@code PLSQL_BOOLEAN} exists since driver 12.2 and binds the same on 21 and 23, in both
+	 * directions, null included. One SQL type for every version means one path, which the build tests on
+	 * each driver. A null that comes back needs {@code wasNull()} on driver 21: see {@code ScalarCodec.read}.
+	 */
+	static final int ORACLE_PLSQL_BOOLEAN = 252;
+
 	private Jdbc() {
 	}
 
@@ -39,7 +48,7 @@ final class Jdbc {
 			case "REF CURSOR" -> Types.REF_CURSOR;
 			// BOOLEAN became a first-class SQL type in 23ai; before that it could only be
 			// exposed through a wrapper, which is why older schemas often have _WRAP packages
-			case "BOOLEAN", "PL/SQL BOOLEAN" -> Types.BOOLEAN;
+			case "BOOLEAN", "PL/SQL BOOLEAN" -> ORACLE_PLSQL_BOOLEAN;
 			// numerics always with their real type: as VARCHAR, the database would format the value
 			// using the session's NLS settings, and "1,5" would no longer be a number on this side
 			case "NUMBER", "FLOAT" -> Types.NUMERIC;

@@ -196,7 +196,7 @@ final class BlockCall {
 		requireNoDeclaredTypeNeeded(method, name, javaType);
 		if (literals == null && (javaType == boolean.class || javaType == Boolean.class)) {
 			log.sent(name, value);
-			statement.setObject(position, value, Types.BOOLEAN);
+			statement.setObject(position, value, Jdbc.ORACLE_PLSQL_BOOLEAN);
 		} else {
 			Object bindable = ScalarCodec.encode(value, ValueConversion.from(literals));
 			log.sent(name, bindable);
@@ -266,7 +266,7 @@ final class BlockCall {
 		AppliedConverter applied = scalarInBlock(RoutineMetadata.converterOfReturn(method, types.converters()), method);
 		Class<?> returnType = applied == null ? ReturnType.of(method) : applied.databaseType();
 		if (returnType == boolean.class || returnType == Boolean.class) {
-			return method.isAnnotationPresent(PlsqlBoolean.class) ? Types.VARCHAR : Types.BOOLEAN;
+			return method.isAnnotationPresent(PlsqlBoolean.class) ? Types.VARCHAR : Jdbc.ORACLE_PLSQL_BOOLEAN;
 		}
 		if (returnType == java.time.LocalDate.class) {
 			return Types.DATE;

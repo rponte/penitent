@@ -168,7 +168,9 @@ public final class ScalarCodec {
 	 * @param declared the Java type the value becomes, or the converter's database type
 	 */
 	public static Object read(CallableStatement statement, int position, Class<?> declared) throws SQLException {
-		return isLocalTemporal(declared) ? statement.getObject(position, declared) : statement.getObject(position);
+		Object value = isLocalTemporal(declared) ? statement.getObject(position, declared) : statement.getObject(position);
+		// Driver 21 returns false for a null BOOLEAN, and only wasNull() tells them apart.
+		return value instanceof Boolean && statement.wasNull() ? null : value;
 	}
 
 	/**
