@@ -454,8 +454,11 @@ class TransactionsTest extends OracleIntegrationTest {
 		@DisplayName("in auto-commit, the driver refuses a commit or a rollback by the application")
 		void commit_in_auto_commit() throws SQLException {
 			try (Connection connection = DATA_SOURCE.getConnection()) {
-				assertThatThrownBy(connection::commit).isInstanceOf(SQLException.class).hasMessageContaining("ORA-17273");
-				assertThatThrownBy(connection::rollback).isInstanceOf(SQLException.class).hasMessageContaining("ORA-17274");
+				// by error code: before driver 23, the message does not carry the ORA- number
+				assertThatThrownBy(connection::commit).isInstanceOfSatisfying(SQLException.class,
+						e -> assertThat(e.getErrorCode()).isEqualTo(17273));
+				assertThatThrownBy(connection::rollback).isInstanceOfSatisfying(SQLException.class,
+						e -> assertThat(e.getErrorCode()).isEqualTo(17274));
 			}
 		}
 	}
