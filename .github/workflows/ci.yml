@@ -15,6 +15,12 @@ permissions:
 
 jobs:
   build:
+    # the baseline, and the oldest Java the library is meant to run on
+    strategy:
+      fail-fast: false
+      matrix:
+        java: ['21', '17']
+    name: build (Java ${{ matrix.java }})
     runs-on: ubuntu-latest
     # the tests start their own Oracle through Testcontainers; most of the time is pulling its image
     timeout-minutes: 20
@@ -24,15 +30,15 @@ jobs:
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
-          java-version: 21
+          java-version: ${{ matrix.java }}
           cache: maven
 
       # the same command as on a developer's machine: the build pins its own locale and time zone
-      - run: ./mvnw -B verify
+      - run: ./mvnw -B verify -Dmaven.compiler.release=${{ matrix.java }}
 
       - if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: test-reports
+          name: test-reports-java-${{ matrix.java }}
           path: '**/target/surefire-reports/'
           retention-days: 7
