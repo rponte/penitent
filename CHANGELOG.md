@@ -6,6 +6,11 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Reading a `TIMESTAMP WITH LOCAL TIME ZONE` no longer depends on the driver unwrapping the pool's connection by
+  itself: before driver 23, it failed with a `ClassCastException` behind a pool such as Hikari's.
+
 ### Changed
 
 - Java 17 is the minimum version, instead of 21: the library is compiled for Java 17, and every build runs the tests

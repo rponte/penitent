@@ -15,6 +15,7 @@ import java.util.Map;
 
 import io.github.rponte.penitent.PlsqlBoolean;
 import io.github.rponte.penitent.exception.PlsqlMappingException;
+import oracle.jdbc.OracleConnection;
 import oracle.sql.TIMESTAMP;
 import oracle.sql.TIMESTAMPLTZ;
 import oracle.sql.TIMESTAMPTZ;
@@ -230,7 +231,10 @@ public final class ScalarCodec {
 				return t.toZonedDateTime();
 			}
 			if (value instanceof TIMESTAMPLTZ t) {
-				return t.zonedDateTimeValue(connection);
+				// The driver itself, not the pool's proxy: before driver 23, zonedDateTimeValue casts its argument
+				// to OracleConnection, and fails behind any pool, such as Hikari's. Unwrapping works on every
+				// driver version, as OracleArrays does for the same reason.
+				return t.zonedDateTimeValue(connection.unwrap(OracleConnection.class));
 			}
 			if (value instanceof TIMESTAMP t) {
 				return t.toLocalDateTime();
