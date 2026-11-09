@@ -198,6 +198,15 @@ class OutParametersTest extends OracleIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("a null BOOLEAN in IN OUT comes back null, not false")
+	void native_boolean_null() {
+		// NOT NULL is NULL. Driver 21 returns false for a null BOOLEAN, and only wasNull() tells them apart.
+		PlsqlOut<Boolean> value = PlsqlOut.of(null);
+		outputs.invertBoolean(value);
+		assertThat(value.get()).isNull();
+	}
+
+	@Test
 	@DisplayName("@PlsqlBoolean applies in both directions of an IN OUT")
 	void boolean_with_literals() {
 		PlsqlOut<Boolean> value = PlsqlOut.of(true);

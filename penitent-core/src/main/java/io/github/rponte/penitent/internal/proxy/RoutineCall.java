@@ -291,7 +291,7 @@ final class RoutineCall {
 		if (bindable == null) {
 			bindNull(statement, position, parameter, schema);
 		} else if (parameter.isBoolean() && bindable instanceof Boolean) {
-			statement.setObject(position, bindable, Types.BOOLEAN);
+			statement.setObject(position, bindable, Jdbc.ORACLE_PLSQL_BOOLEAN);
 		} else {
 			statement.setObject(position, ScalarCodec.forDriver(bindable));
 		}
