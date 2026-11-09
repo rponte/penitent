@@ -18,6 +18,24 @@ under a minute. The CI runs the same command.
 The build always runs in the `en-US` locale and the `UTC` time zone, whatever your machine uses, so its result does
 not depend on where it runs. The hostile cases are covered on purpose, by tests, as described below.
 
+### Another JDBC driver
+
+The Oracle JDBC driver is `provided`: the application chooses it, so the build runs against more than one. Three
+properties pick it, and they are about different things:
+
+| Property | What it chooses | Default |
+|---|---|---|
+| `oracle.jdbc.artifact` | the driver's artifact: `ojdbc17`, `ojdbc11` or `ojdbc8`. The number is the Java version the jar is built for | `ojdbc17` |
+| `oracle.jdbc.version` | the version of that jar, such as `21.24.0.0` | the Spring Boot BOM's, through its `oracle-database.version` property, which is the driver's version despite its name |
+
+```
+./mvnw verify -Doracle.jdbc.artifact=ojdbc11                                  # another artifact, same version
+./mvnw verify -Doracle.jdbc.artifact=ojdbc11 -Doracle.jdbc.version=21.24.0.0  # an older driver
+```
+
+Neither changes the database the tests connect to, which is always Oracle 23ai. The 21 driver has no `ojdbc17`, so
+it takes `ojdbc11` or `ojdbc8`.
+
 ### The documentation site
 
 The pages in `docs/` are plain Markdown, and [Zensical](https://zensical.org) builds them into the site, with the
