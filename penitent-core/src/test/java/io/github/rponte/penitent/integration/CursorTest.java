@@ -84,6 +84,15 @@ class CursorTest extends OracleIntegrationTest {
 				  union all select 3, cast(null as boolean) from dual order by id;
 				end;""")
 		List<Flagged> rows();
+
+		/** The way around driver 21, which the library's error suggests: text in the query, keeping null. */
+		@PlsqlBlock("""
+				begin open :result for
+				  select case when v then 'Y' when not v then 'N' end v
+				  from (select 1 o, true v from dual union all select 2, false from dual
+				        union all select 3, cast(null as boolean) from dual) order by o;
+				end;""")
+		List<Boolean> flagsAsText();
 	}
 
 	@PlsqlPackage("FIXTURE_COMPOSITES")
@@ -297,7 +306,7 @@ class CursorTest extends OracleIntegrationTest {
 			assertThatThrownBy(columns::flags)
 					.isInstanceOf(PlsqlExecutionException.class)
 					.hasMessageContaining("the Oracle driver before 23 cannot read a BOOLEAN column")
-					.hasMessageContaining("CASE WHEN flag THEN 'Y' ELSE 'N' END");
+					.hasMessageContaining("CASE WHEN flag THEN 'Y' WHEN NOT flag THEN 'N' END");
 			assertThat(PlsqlPackages.create(Strings.class, pool).echo("after")).isEqualTo("after");
 		}
 	}
@@ -305,5 +314,11 @@ class CursorTest extends OracleIntegrationTest {
 	interface Strings {
 		@PlsqlBlock("begin :result := :value; end;")
 		String echo(String value);
+	}
+
+	@Test
+	@DisplayName("a BOOLEAN column turned into Y/N in the query reads on every driver, null included")
+	void boolean_column_as_text() {
+		assertThat(PlsqlPackages.create(BooleanColumns.class, DATA_SOURCE).flagsAsText()).containsExactly(true, false, null);
 	}
 }
