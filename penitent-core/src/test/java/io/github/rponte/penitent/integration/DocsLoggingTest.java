@@ -20,6 +20,7 @@ import io.github.rponte.penitent.PlsqlPackage;
 import io.github.rponte.penitent.PlsqlPackages;
 import io.github.rponte.penitent.PlsqlParam;
 import io.github.rponte.penitent.exception.PlsqlRoutineRaisedException;
+import oracle.jdbc.OracleDriver;
 
 /**
  * The log of docs/logging.md, compared with the page. Durations and line numbers change from run to
@@ -83,8 +84,16 @@ class DocsLoggingTest extends OracleIntegrationTest {
 		return normalized(Docs.asDocumented(log.toString(), DocsLoggingTest.class)).stripTrailing();
 	}
 
+	private static final int DRIVER = new OracleDriver().getMajorVersion();
+
+	/**
+	 * What changes between runs, and, before driver 23, the link to the error's page that driver 23
+	 * appends to the database's message: the page shows the default driver's output, and the rest of
+	 * the log is the same on every driver.
+	 */
 	private static String normalized(String log) {
-		return log.replaceAll("\\d+ ms", "# ms").replaceAll("line \\d+", "line #");
+		String normalized = log.replaceAll("\\d+ ms", "# ms").replaceAll("line \\d+", "line #");
+		return DRIVER >= 23 ? normalized : normalized.replaceAll(" \\| https://docs\\.oracle\\.com/error-help/\\S+", "");
 	}
 
 	@Test
