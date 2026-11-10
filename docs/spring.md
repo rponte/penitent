@@ -101,7 +101,7 @@ With Spring Boot, the dependency is all you need. It registers the interfaces of
 <dependency>
     <groupId>io.github.rponte</groupId>
     <artifactId>penitent-spring-boot-starter</artifactId>
-    <version>0.23.0</version>
+    <version>0.24.0</version>
 </dependency>
 ```
 

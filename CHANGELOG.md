@@ -6,6 +6,13 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.24.0]
+
+Driver 19. Every Oracle JDBC driver from 19 to 23 now gives the same results against Oracle 23ai: where driver 19
+lacks the `java.time` conversions of the two types with a time zone, or gets one of them wrong, the library reads and
+builds their bytes itself. The README and the documentation's home page are rewritten to show what Penitent saves over
+plain JDBC and Spring's `SimpleJdbcCall`.
+
 ### Changed
 
 - Driver 19 is supported: every build also runs the whole suite with `ojdbc10` and `ojdbc8` 19.33.0.0, against Oracle
@@ -13,6 +20,9 @@ All notable changes to this project are listed here. The format follows
   TIME ZONE` attribute or collection element at the value's local time without its offset, three hours off for
   10:30-03:00; the library reads and builds those bytes itself. As with driver 21, the one thing it cannot do is read
   a `BOOLEAN` column in a cursor.
+- The README, the documentation's home page and the comparison with JDBC are rewritten: type-safe calls checked
+  against the database, a quick start with a package, its interface and the log of a call, and what plain JDBC and
+  Spring's `SimpleJdbcCall` each leave to you.
 
 ## [0.23.0]
 
@@ -101,7 +111,8 @@ driven by the database dictionary: see the [README](https://github.com/rponte/pe
 
 - Spring Boot 4.1.2 for the versions the library is built and tested with.
 
-[Unreleased]: https://github.com/rponte/penitent/compare/v0.23.0...HEAD
+[Unreleased]: https://github.com/rponte/penitent/compare/v0.24.0...HEAD
+[0.24.0]: https://github.com/rponte/penitent/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/rponte/penitent/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/rponte/penitent/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/rponte/penitent/releases/tag/v0.21.0
