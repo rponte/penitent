@@ -56,9 +56,10 @@ class ScalarCodecTest {
 		LocalDateTime gap = LocalDateTime.parse("2025-03-09T02:30:15");
 
 		assertThat(ScalarCodec.forDriver(gap)).isInstanceOf(oracle.sql.TIMESTAMP.class);
-		assertThat(((oracle.sql.TIMESTAMP) ScalarCodec.forDriver(gap)).toLocalDateTime()).isEqualTo(gap);
-		assertThat(((oracle.sql.DATE) ScalarCodec.forDriver(gap.toLocalDate())).toLocalDate())
-				.isEqualTo(gap.toLocalDate());
+		// read back with the library's own decoder, which every driver version has
+		assertThat(OracleDatetimeCodec.decode(((oracle.sql.TIMESTAMP) ScalarCodec.forDriver(gap)).toBytes())).isEqualTo(gap);
+		assertThat(OracleDatetimeCodec.decode(((oracle.sql.DATE) ScalarCodec.forDriver(gap.toLocalDate())).toBytes()))
+				.isEqualTo(gap.toLocalDate().atStartOfDay());
 		assertThat(ScalarCodec.forDriver("text")).isEqualTo("text");
 	}
 
