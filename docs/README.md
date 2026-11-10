@@ -37,7 +37,7 @@ Java and from Spring Boot. Every page uses the same orders package, so the examp
 |---|---|
 | [Getting started](getting-started.md) | From a PL/SQL package to a Java call, in plain Java and in Spring Boot |
 | [How Penitent works](concepts.md) | The terms (routine, container, dictionary) and what happens in a call |
-| [Coming from JDBC or `SimpleJdbcCall`](coming-from-jdbc.md) | The same call in each style, and what changes |
+| [Coming from JDBC or Spring's `SimpleJdbcCall`](coming-from-jdbc.md) | The same call in each style, and what each one leaves to you |
 
 ## I want to…
 
