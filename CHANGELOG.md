@@ -6,6 +6,14 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Driver 19 is supported: every build also runs the whole suite with `ojdbc10` and `ojdbc8` 19.33.0.0, against Oracle
+  23ai. Driver 19 has no `java.time` methods for the two types with a time zone, and stores a `TIMESTAMP WITH LOCAL
+  TIME ZONE` attribute or collection element at the value's local time without its offset, three hours off for
+  10:30-03:00; the library reads and builds those bytes itself. As with driver 21, the one thing it cannot do is read
+  a `BOOLEAN` column in a cursor.
+
 ## [0.23.0]
 
 Java 17, and the drivers before 23. The library is compiled for Java 17 and tested on it and on Java 21, with every

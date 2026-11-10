@@ -16,8 +16,8 @@ permissions:
 jobs:
   build:
     # compiled for Java 17, the minimum, and tested on it and on Java 21, with the ojdbc17 artifact of the driver;
-    # then each other artifact of the same driver version on Java 21, and driver 21 in both of its artifacts (it
-    # has no ojdbc17), one axis at a time. Without jdbc-version, the driver is the one of the Spring Boot BOM
+    # then each other artifact of the same driver version on Java 21, and drivers 21 and 19 in each of their
+    # artifacts (neither has ojdbc17), one axis at a time. Without jdbc-version, the driver is the Spring Boot BOM's
     strategy:
       fail-fast: false
       matrix:
@@ -34,6 +34,12 @@ jobs:
           - java: '21'
             jdbc-artifact: 'ojdbc8'
             jdbc-version: '21.24.0.0'
+          - java: '21'
+            jdbc-artifact: 'ojdbc10'
+            jdbc-version: '19.33.0.0'
+          - java: '21'
+            jdbc-artifact: 'ojdbc8'
+            jdbc-version: '19.33.0.0'
     name: build (Java ${{ matrix.java }}, ${{ matrix.jdbc-artifact }}${{ matrix.jdbc-version && format(' {0}', matrix.jdbc-version) || '' }})
     runs-on: ubuntu-latest
     # the tests start their own Oracle through Testcontainers; most of the time is pulling its image

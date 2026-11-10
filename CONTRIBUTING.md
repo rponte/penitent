@@ -25,16 +25,23 @@ properties pick it, and they are about different things:
 
 | Property | What it chooses | Default |
 |---|---|---|
-| `oracle.jdbc.artifact` | the driver's artifact: `ojdbc17`, `ojdbc11` or `ojdbc8`. The number is the Java version the jar is built for | `ojdbc17` |
-| `oracle.jdbc.version` | the version of that jar, such as `21.24.0.0` | the Spring Boot BOM's, through its `oracle-database.version` property, which is the driver's version despite its name |
+| `oracle.jdbc.artifact` | the driver's artifact: `ojdbc17`, `ojdbc11`, `ojdbc10` or `ojdbc8`. The number is the Java version the jar is built for | `ojdbc17` |
+| `oracle.jdbc.version` | the version of that jar, such as `21.24.0.0` or `19.33.0.0` | the Spring Boot BOM's, through its `oracle-database.version` property, which is the driver's version despite its name |
 
 ```
 ./mvnw verify -Doracle.jdbc.artifact=ojdbc11                                  # another artifact, same version
 ./mvnw verify -Doracle.jdbc.artifact=ojdbc11 -Doracle.jdbc.version=21.24.0.0  # an older driver
+./mvnw verify -Doracle.jdbc.artifact=ojdbc8 -Doracle.jdbc.version=19.33.0.0   # the oldest one the build tests
 ```
 
-Neither changes the database the tests connect to, which is always Oracle 23ai. The 21 driver has no `ojdbc17`, so
-it takes `ojdbc11` or `ojdbc8`.
+Neither changes the database the tests connect to, which is always Oracle 23ai. Each driver version comes in its own
+artifacts: 23 in `ojdbc17`, `ojdbc11` and `ojdbc8`, 21 in `ojdbc11` and `ojdbc8`, and 19 in `ojdbc10` and `ojdbc8`.
+
+Where an older driver behaves differently, the library takes one code path for every version, usually by reading or
+building the bytes of Oracle's types itself, as the `*Codec` classes in `internal.convert` do. Their Javadoc says
+which driver needs it and why. A test named `same_as_driver_23` compares each codec with driver 23, the reference,
+through `Driver23` in the tests, which calls driver 23 by reflection so that the tests still compile on older drivers,
+where they skip themselves.
 
 ### The documentation site
 
