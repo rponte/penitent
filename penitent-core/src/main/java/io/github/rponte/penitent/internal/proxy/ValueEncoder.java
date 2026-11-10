@@ -8,6 +8,7 @@ import io.github.rponte.penitent.PlsqlBoolean;
 import io.github.rponte.penitent.exception.PlsqlMappingException;
 import io.github.rponte.penitent.internal.binding.OracleArrays;
 import io.github.rponte.penitent.internal.binding.TemporaryLobs;
+import io.github.rponte.penitent.internal.convert.OracleTimeZoneCodec;
 import io.github.rponte.penitent.internal.convert.ScalarCodec;
 import io.github.rponte.penitent.internal.convert.ScalarCodec.ValueConversion;
 import io.github.rponte.penitent.internal.metadata.CollectionType;
@@ -92,7 +93,9 @@ final class ValueEncoder {
 				}
 				encoded[i] = encodeCollection(element, type.collectionElement(), literals, connection);
 			} else {
-				encoded[i] = ScalarCodec.encode(element, ValueConversion.from(literals));
+				// a TIMESTAMP WITH LOCAL TIME ZONE element is built by the library: see OracleTimeZoneCodec
+				encoded[i] = OracleTimeZoneCodec.forComposite(type.scalarElement(),
+						ScalarCodec.encode(element, ValueConversion.from(literals)), connection);
 			}
 		}
 		return OracleArrays.create(connection, type.bindName(), encoded);

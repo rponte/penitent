@@ -15,7 +15,6 @@ import java.util.Map;
 
 import io.github.rponte.penitent.PlsqlBoolean;
 import io.github.rponte.penitent.exception.PlsqlMappingException;
-import oracle.jdbc.OracleConnection;
 import oracle.sql.TIMESTAMP;
 import oracle.sql.TIMESTAMPLTZ;
 import oracle.sql.TIMESTAMPTZ;
@@ -225,22 +224,23 @@ public final class ScalarCodec {
 	}
 
 	/**
-	 * In a cursor, an attribute or an element, the driver may return its own types. The two with a
-	 * time zone become {@link ZonedDateTime}, the only one that does not lose the region, and
-	 * {@link TIMESTAMPLTZ} needs the connection because it does not store a time zone: the session
-	 * decides it. {@code DATE} and {@code TIMESTAMP} become {@link LocalDateTime} straight from their
-	 * bytes, without the JVM's time zone.
+	 * In a cursor, an attribute or an element, the driver may return its own types. Every one of them is read
+	 * from its bytes, so that the result is the same on every driver version. The two with a time zone become
+	 * {@link ZonedDateTime}, the only one that does not lose the region, and {@link TIMESTAMPLTZ} needs the
+	 * connection because it does not store a time zone: the database's and the session's decide it (see
+	 * {@link OracleTimeZoneCodec}). {@code DATE} and {@code TIMESTAMP} become {@link LocalDateTime}, without the
+	 * JVM's time zone (see {@link OracleDatetimeCodec}).
 	 */
 	private static Object unwrapOracleTimestamp(Object value, Connection connection) {
 		try {
+			// Both from the bytes, not with the driver's toZonedDateTime() and zonedDateTimeValue(Connection): driver
+			// 19 does not have them, and its OffsetDateTime versions lose the region. See OracleTimeZoneCodec.
 			if (value instanceof TIMESTAMPTZ t) {
-				return t.toZonedDateTime();
+				return OracleTimeZoneCodec.decodeTimestampTz(t.toBytes());
 			}
 			if (value instanceof TIMESTAMPLTZ t) {
-				// The driver itself, not the pool's proxy: before driver 23, zonedDateTimeValue casts its argument
-				// to OracleConnection, and fails behind any pool, such as Hikari's. Unwrapping works on every
-				// driver version, as OracleArrays does for the same reason.
-				return t.zonedDateTimeValue(connection.unwrap(OracleConnection.class));
+				return OracleTimeZoneCodec.decodeTimestampLtz(t.toBytes(), OracleTimeZoneCodec.databaseZone(connection),
+						OracleTimeZoneCodec.sessionZone(connection));
 			}
 			// From the bytes, not with toLocalDateTime(): before driver 23, that goes through the JVM's time
 			// zone, and 02:30 on the day the clocks jump comes back as 03:30. See OracleDatetimeCodec.
