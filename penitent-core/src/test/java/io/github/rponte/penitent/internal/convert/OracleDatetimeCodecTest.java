@@ -3,7 +3,6 @@ package io.github.rponte.penitent.internal.convert;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -13,7 +12,6 @@ import java.util.TimeZone;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import oracle.jdbc.OracleDriver;
 import oracle.sql.DATE;
 import oracle.sql.TIMESTAMP;
 
@@ -102,8 +100,8 @@ class OracleDatetimeCodecTest {
 
 	@Test
 	@DisplayName("byte for byte the same as driver 23, over B.C., the calendar change of 1582, nanoseconds and every hour")
-	void same_as_driver_23() throws SQLException {
-		assumeTrue(new OracleDriver().getMajorVersion() >= 23, "driver 23 is the reference");
+	void same_as_driver_23() {
+		assumeTrue(Driver23.isTheDriver(), "driver 23 is the reference");
 
 		List<String> differences = new ArrayList<>();
 		int[] years = { -4713, -4712, -1000, -1, 0, 1, 99, 100, 999, 1000, 1582, 1600, 1900, 1969, 1970, 2000, 2024,
@@ -116,7 +114,7 @@ class OracleDatetimeCodecTest {
 						LocalDateTime value = LocalDateTime.of(year, month, month == 2 ? 28 : 15, hour, hour * 2 + 1,
 								59 - hour, nano);
 						byte[] ours = OracleDatetimeCodec.encodeTimestamp(value).toBytes();
-						byte[] driver = TIMESTAMP.of(value).toBytes();
+						byte[] driver = Driver23.timestamp(value);
 						if (!java.util.Arrays.equals(ours, driver)) {
 							differences.add(value + ": " + java.util.Arrays.toString(ours) + " != "
 									+ java.util.Arrays.toString(driver));
@@ -124,21 +122,21 @@ class OracleDatetimeCodecTest {
 					}
 				}
 				LocalDate date = LocalDate.of(year, month, 15);
-				if (!java.util.Arrays.equals(OracleDatetimeCodec.encodeDate(date).toBytes(), DATE.of(date).toBytes())) {
+				if (!java.util.Arrays.equals(OracleDatetimeCodec.encodeDate(date).toBytes(), Driver23.date(date))) {
 					differences.add("DATE " + date);
 				}
 			}
 		}
 		for (int year : years) {
 			for (int nano : nanos) {
-				byte[] bytes = TIMESTAMP.of(LocalDateTime.of(year, 6, 15, 2, 30, 15, nano)).toBytes();
-				if (!OracleDatetimeCodec.decode(bytes).equals(new TIMESTAMP(bytes).toLocalDateTime())) {
+				byte[] bytes = Driver23.timestamp(LocalDateTime.of(year, 6, 15, 2, 30, 15, nano));
+				if (!OracleDatetimeCodec.decode(bytes).equals(Driver23.localDateTime(bytes))) {
 					differences.add("reading " + java.util.Arrays.toString(bytes));
 				}
 			}
 		}
 		LocalDate gregorianChange = LocalDate.of(1582, 10, 10);
-		if (!java.util.Arrays.equals(OracleDatetimeCodec.encodeDate(gregorianChange).toBytes(), DATE.of(gregorianChange).toBytes())) {
+		if (!java.util.Arrays.equals(OracleDatetimeCodec.encodeDate(gregorianChange).toBytes(), Driver23.date(gregorianChange))) {
 			differences.add("DATE " + gregorianChange);
 		}
 

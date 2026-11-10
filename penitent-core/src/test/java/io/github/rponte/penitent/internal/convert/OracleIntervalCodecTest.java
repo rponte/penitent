@@ -14,9 +14,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import io.github.rponte.penitent.exception.PlsqlMappingException;
-import oracle.jdbc.OracleDriver;
-import oracle.sql.INTERVALDS;
-import oracle.sql.INTERVALYM;
 
 /**
  * The bytes of an Oracle {@code INTERVAL}, built by the library from a {@code Duration} or a
@@ -101,31 +98,27 @@ class OracleIntervalCodecTest {
 
 	@Test
 	@DisplayName("byte for byte the same as driver 23, in both directions")
-	void same_as_driver_23() throws Exception {
-		assumeTrue(new OracleDriver().getMajorVersion() >= 23, "driver 23 is the reference");
+	void same_as_driver_23() {
+		assumeTrue(Driver23.isTheDriver(), "driver 23 is the reference");
 
 		List<String> differences = new ArrayList<>();
 		for (Duration duration : DURATIONS) {
-			INTERVALDS driver = (INTERVALDS) INTERVALDS.class.getMethod("toIntervalds", Duration.class)
-					.invoke(null, duration);
+			byte[] driver = Driver23.intervalDs(duration);
 			// Not a reference here: see negative_whole_seconds.
 			boolean malformedByDriver23 = duration.isNegative() && duration.getNano() == 0;
-			if (!malformedByDriver23 && !Arrays.equals(OracleIntervalCodec.encode(duration).toBytes(), driver.toBytes())) {
+			if (!malformedByDriver23 && !Arrays.equals(OracleIntervalCodec.encode(duration).toBytes(), driver)) {
 				differences.add("writing " + duration);
 			}
-			if (!OracleIntervalCodec.duration(driver.toBytes()).equals(INTERVALDS.class.getMethod("getDuration")
-					.invoke(driver))) {
+			if (!OracleIntervalCodec.duration(driver).equals(Driver23.duration(driver))) {
 				differences.add("reading " + duration);
 			}
 		}
 		for (Period period : PERIODS) {
-			INTERVALYM driver = (INTERVALYM) INTERVALYM.class.getMethod("toIntervalym", Period.class)
-					.invoke(null, period);
-			if (!Arrays.equals(OracleIntervalCodec.encode(period).toBytes(), driver.toBytes())) {
+			byte[] driver = Driver23.intervalYm(period);
+			if (!Arrays.equals(OracleIntervalCodec.encode(period).toBytes(), driver)) {
 				differences.add("writing " + period);
 			}
-			if (!OracleIntervalCodec.period(driver.toBytes()).equals(INTERVALYM.class.getMethod("getPeriod")
-					.invoke(driver))) {
+			if (!OracleIntervalCodec.period(driver).equals(Driver23.period(driver))) {
 				differences.add("reading " + period);
 			}
 		}
