@@ -750,9 +750,10 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 		String elementName = elements.get(0)[2];
 		if (isCollection(dictionary, schema, elementOwner, elementContainer, elementName)) {
 			return new CollectionType(bindName, null, collectionTypeOf(dictionary,
-					elementOwner != null ? elementOwner : schema, elementContainer, elementName));
+					elementOwner != null ? elementOwner : schema, elementContainer, elementName), null);
 		}
-		return new CollectionType(bindName, elementOf(schema, elementOwner, elementContainer, elementName), null);
+		CompositeType composite = elementOf(schema, elementOwner, elementContainer, elementName);
+		return new CollectionType(bindName, composite, null, composite == null ? elementName : null);
 	}
 
 	private static boolean isCollection(Dictionary dictionary, String schema, String owner, String container,

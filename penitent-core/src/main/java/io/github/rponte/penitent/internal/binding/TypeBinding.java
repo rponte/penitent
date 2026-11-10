@@ -18,6 +18,7 @@ import io.github.rponte.penitent.internal.Caches;
 import io.github.rponte.penitent.internal.binding.JavaProperties.JavaProperty;
 import io.github.rponte.penitent.internal.convert.AppliedConverter;
 import io.github.rponte.penitent.internal.convert.ConverterLookup;
+import io.github.rponte.penitent.internal.convert.OracleTimeZoneCodec;
 import io.github.rponte.penitent.internal.convert.ScalarCodec;
 import io.github.rponte.penitent.internal.convert.ScalarCodec.ValueConversion;
 import io.github.rponte.penitent.internal.metadata.CollectionType;
@@ -391,11 +392,12 @@ public final class TypeBinding {
 	}
 
 	private Object encodeAttribute(Attribute attribute, Object raw, Connection connection) throws SQLException {
+		// a TIMESTAMP WITH LOCAL TIME ZONE attribute is built by the library: see OracleTimeZoneCodec
 		if (attribute.converter() != null && !attribute.converter().elementWise()) {
-			return TemporaryLobs.forLob(attribute.oracleType(),
+			return TemporaryLobs.forLob(attribute.oracleType(), OracleTimeZoneCodec.forComposite(attribute.oracleType(),
 					ScalarCodec.encode(withContext(attribute, () -> attribute.converter().toDatabase(raw)),
 							attribute.conversion()),
-					connection);
+					connection), connection);
 		}
 		if (raw == null) {
 			return null;
@@ -406,7 +408,8 @@ public final class TypeBinding {
 		if (attribute.isCollection()) {
 			return encodeCollectionAttribute(attribute, raw, connection);
 		}
-		return TemporaryLobs.forLob(attribute.oracleType(), ScalarCodec.encode(raw, attribute.conversion()), connection);
+		return TemporaryLobs.forLob(attribute.oracleType(), OracleTimeZoneCodec.forComposite(attribute.oracleType(),
+				ScalarCodec.encode(raw, attribute.conversion()), connection), connection);
 	}
 
 	private Object encodeCollectionAttribute(Attribute attribute, Object raw, Connection connection)
@@ -425,15 +428,17 @@ public final class TypeBinding {
 		for (int i = 0; i < source.length; i++) {
 			Object element = source[i];
 			if (attribute.converter() != null) {
-				encoded[i] = ScalarCodec.encode(withContext(attribute, () -> attribute.converter().toDatabase(element)),
-						attribute.conversion());
+				encoded[i] = OracleTimeZoneCodec.forComposite(collection.elementTypeName(), ScalarCodec.encode(
+						withContext(attribute, () -> attribute.converter().toDatabase(element)), attribute.conversion()),
+						connection);
 			} else if (source[i] == null) {
 				encoded[i] = null;
 			} else if (collection.element() != null) {
 				encoded[i] = elementBinding(attribute, connection).toStruct(source[i], connection);
 			} else {
 				// the element inherits the attribute's conversion: that is how a List<Enum> becomes a VARCHAR2_LIST
-				encoded[i] = ScalarCodec.encode(source[i], attribute.conversion());
+				encoded[i] = OracleTimeZoneCodec.forComposite(collection.elementTypeName(),
+						ScalarCodec.encode(source[i], attribute.conversion()), connection);
 			}
 		}
 		return OracleArrays.create(connection, collection.bindName(), encoded);
