@@ -1,8 +1,26 @@
 # Penitent
 
-Penitent maps Oracle PL/SQL packages to Java interfaces. You write the interface; Penitent reads the routines'
-signatures and types from the database dictionary, builds the calls, and refuses any method that does not match the
-database, with a message that says what exists.
+**Type-safe calls to Oracle PL/SQL from Java interfaces, checked against the database's own signatures.**
+
+You describe a package as a Java interface, and Penitent builds every call from the routines' signatures in the
+database dictionary: the compiler checks your calls, the database checks your interface, and Oracle type names and
+parameter order are never written by hand.
+
+## A package, an interface, a call
+
+Take a PL/SQL package:
+
+<!-- snippet: fixture -->
+```sql
+CREATE OR REPLACE PACKAGE orders_pkg AS
+    FUNCTION  calculate_freight(p_origin VARCHAR2, p_destination VARCHAR2) RETURN NUMBER;
+    PROCEDURE place_order(p_customer_id NUMBER, p_total NUMBER, p_order_id OUT NUMBER);
+    PROCEDURE cancel_order(p_order_id NUMBER);
+    FUNCTION  order_status(p_order_id NUMBER) RETURN VARCHAR2;
+END orders_pkg;
+```
+
+Describe it as a Java interface, with plain Java types:
 
 <!-- snippet: getting-started/interface -->
 ```java
@@ -19,6 +37,8 @@ public interface Orders {
 }
 ```
 
+And call it like any other Java object:
+
 <!-- snippet: getting-started/create-and-call -->
 ```java
 Orders orders = PlsqlPackages.create(Orders.class, dataSource);
@@ -26,18 +46,76 @@ Orders orders = PlsqlPackages.create(Orders.class, dataSource);
 BigDecimal freight = orders.calculateFreight("SP", "CE");   // 25.5
 ```
 
-It runs on Java 17 or later, with plain JDBC, Spring or Spring Boot, and is on
-[Maven Central](https://central.sonatype.com/namespace/io.github.rponte) as `io.github.rponte:penitent-core`. New to
-it? Start with [Getting started](getting-started.md): in about ten minutes, it calls a real PL/SQL package from plain
-Java and from Spring Boot. Every page uses the same orders package, so the examples build on each other.
+<!-- snippet: getting-started/out-parameter -->
+```java
+PlsqlOut<Long> orderId = new PlsqlOut<>();
+orders.placeOrder(42, new BigDecimal("100.00"), orderId);
+
+orders.orderStatus(orderId.get());   // "OPEN"
+```
+
+No `CallableStatement`, no `registerOutParameter`, no positions to keep in order. Curious what that same call takes
+without Penitent? [See how much boilerplate plain JDBC needs](coming-from-jdbc.md).
+
+## Why Penitent
+
+- **Type-safe.** Each routine is a Java method: the compiler checks every argument, your IDE completes them, and a
+  refactoring finds every caller.
+- **Checked against the database.** Penitent matches each method to its routine, parameter by parameter and type by
+  type, and [Validation](validation.md) checks every interface at startup, so a package that changed is noticed
+  before the first request.
+- **Rich types, no ceremony.** An OBJECT, a RECORD or a `%ROWTYPE` is a Java `record`, a collection is a `List<T>`,
+  and a cursor is a `List<T>` of records, all matched by name. Dates cross without the JVM's time zone getting in the
+  way. See [Types](types.md).
+- **Plain Java or Spring.** The core needs no framework. With Spring, calls join your transactions; with Spring Boot,
+  every interface is a bean, ready to inject. See [Spring and Spring Boot](spring.md).
+- **Every call in the log.** The SQL Penitent built, the values it bound and the `OUT` values it read, by parameter
+  name. See [Logging](logging.md).
+- **Tested against a real Oracle.** Every feature in the [compatibility table](compatibility.md) runs in the build,
+  against a real database, and so do the Java and SQL examples on these pages.
+
+## Install
+
+Penitent is on [Maven Central](https://central.sonatype.com/namespace/io.github.rponte). Pick the module that fits
+your application, `penitent-core` for plain Java, `penitent-spring` for Spring, or `penitent-spring-boot-starter` for
+Spring Boot, and add the Oracle driver your application uses:
+
+<!-- snippet: untested -->
+```xml
+<dependency>
+    <groupId>io.github.rponte</groupId>
+    <artifactId>penitent-core</artifactId>
+    <version>0.23.0</version>
+</dependency>
+<dependency>
+    <groupId>com.oracle.database.jdbc</groupId>
+    <artifactId>ojdbc17</artifactId>
+    <version>23.26.3.0.0</version>
+</dependency>
+```
+
+## Runs on
+
+Java 17 and 21, and these combinations of Oracle JDBC driver and database, tested on every change:
+
+| Oracle JDBC driver | Oracle Database 23ai | 21c | 19c |
+|---|:---:|:---:|:---:|
+| **23.x**: `ojdbc17`, `ojdbc11`, `ojdbc8` | ✅ | ❔ | ❔ |
+| **21.x**: `ojdbc11`, `ojdbc8` | ✅ ¹ | ❔ | ❔ |
+| **19.x** and older | ❔ | ❔ | ❔ |
+
+✅ every build runs the whole suite with it · ❔ not measured yet, on the [roadmap](roadmap.md)<br>
+¹ except a `BOOLEAN` column in a cursor: see [Driver versions](compatibility.md#driver-versions).
 
 ## Start here
 
 | Page | What it covers |
 |---|---|
-| [Getting started](getting-started.md) | From a PL/SQL package to a Java call, in plain Java and in Spring Boot |
+| [Getting started](getting-started.md) | From a PL/SQL package to a Java call, in plain Java and in Spring Boot, in about ten minutes |
 | [How Penitent works](concepts.md) | The terms (routine, container, dictionary) and what happens in a call |
 | [Coming from JDBC or Spring's `SimpleJdbcCall`](coming-from-jdbc.md) | The same call in each style, and what each one leaves to you |
+
+Every page uses the same orders package, so the examples build on each other.
 
 ## I want to…
 
