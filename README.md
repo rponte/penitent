@@ -157,16 +157,17 @@ Which Oracle JDBC driver works with which Oracle Database, as the build tests th
 |---|:---:|:---:|:---:|
 | **23.x**: `ojdbc17`, `ojdbc11`, `ojdbc8` | ✅ | ❔ | ❔ |
 | **21.x**: `ojdbc11`, `ojdbc8` | ✅ ¹ | ❔ | ❔ |
-| **19.x** and older | ❔ | ❔ | ❔ |
+| **19.x**: `ojdbc10`, `ojdbc8` | ✅ ¹ | ❔ | ❔ |
+| **18.x** and older | ❔ | ❔ | ❔ |
 
 ✅ every build runs the whole suite with it · ❔ not measured yet, on the [roadmap](docs/roadmap.md)<br>
-¹ except a `BOOLEAN` column in a cursor, which driver 21 cannot read: [Driver versions](docs/compatibility.md#driver-versions)
+¹ except a `BOOLEAN` column in a cursor, which drivers before 23 cannot read: [Driver versions](docs/compatibility.md#driver-versions)
 lists each difference from driver 23, how the library works around it, and the way around that one.
 
 - **Java 17 and 21.** The build runs on both, on Java 17 with `ojdbc17`. `0.22.0` and earlier need Java 21.
-- **The driver has a version of its own**, apart from the database's: driver 21 talks to Oracle 23ai too. The number
-  in the artifact, as in `ojdbc11`, is the Java version the jar is built for, not the driver version; `ojdbc17`
-  exists only from driver 23 on.
+- **The driver has a version of its own**, apart from the database's: drivers 21 and 19 talk to Oracle 23ai too.
+  The number in the artifact, as in `ojdbc11`, is the Java version the jar is built for, not the driver version;
+  `ojdbc17` exists only from driver 23 on, and `ojdbc10` only in driver 19.
 
 You also need an SLF4J implementation to see the log, such as the Logback that Spring Boot ships, and, for
 `@PlsqlBlock` and for binding by name without `@PlsqlParam`, to compile with `-parameters`, which the Spring Boot

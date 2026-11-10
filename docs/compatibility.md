@@ -2,7 +2,7 @@
 
 Status of version `0.23.0`, measured on Java 17 and 21, with Oracle 23ai
 (`gvenzl/oracle-free:23.26.3`) and `ojdbc17`; the whole suite also runs with `ojdbc11` and `ojdbc8`, version
-23.26.3, and with driver 21.24.0.0, as [Driver versions](#driver-versions) details. Versions up to `0.22.0` need
+23.26.3, and with drivers 21.24.0.0 and 19.33.0.0, as [Driver versions](#driver-versions) details. Versions up to `0.22.0` need
 Java 21.
 
 | Status | Meaning |
@@ -18,28 +18,40 @@ For what each feature does, see the [documentation](README.md).
 
 ## Driver versions
 
-The Oracle JDBC driver has a version of its own, apart from the database's: driver 21 connects to Oracle 23ai too.
-The number in the artifact, `ojdbc17`, `ojdbc11` or `ojdbc8`, is the Java version the jar is built for, not the
-driver version.
+The Oracle JDBC driver has a version of its own, apart from the database's: drivers 21 and 19 connect to Oracle 23ai
+too. The number in the artifact, `ojdbc17`, `ojdbc11`, `ojdbc10` or `ojdbc8`, is the Java version the jar is built
+for, not the driver version, and each driver version comes in its own set: `ojdbc17` only from 23 on, `ojdbc10` only
+in 19.
 
 | Driver | Artifacts | Status |
 |---|---|---|
 | 23.26.3 | `ojdbc17`, `ojdbc11`, `ojdbc8` | Validated: the whole suite |
 | 21.24.0.0 | `ojdbc11`, `ojdbc8` | Validated: the whole suite, with the differences below |
-| 19.x and older | | Not measured |
+| 19.33.0.0 | `ojdbc10`, `ojdbc8` | Validated: the whole suite, with the differences below |
+| 18.x and older | | Not measured |
 
 Before driver 23, the driver does some things differently. The library works around them, so that the same code
-gives the same result on both versions, except for one case the driver cannot do at all:
+gives the same result on every version, except for one case the driver cannot do at all. These apply to drivers 21
+and 19:
 
 | Before driver 23, the driver… | What the library does | Status |
 |---|---|---|
 | converts `LocalDateTime` and `LocalDate` through the JVM's time zone, in both directions: 02:30 on the day the clocks jump becomes 03:30 | Builds and reads the bytes of `DATE` and `TIMESTAMP` itself, without a time zone | Validated |
 | has no `java.time` methods for intervals | Builds and reads the bytes of `INTERVAL` itself | Validated |
-| fails with `ClassCastException` reading a `TIMESTAMP WITH LOCAL TIME ZONE` behind a pool | Hands the driver its own connection | Validated |
+| fails with `ClassCastException` reading a `TIMESTAMP WITH LOCAL TIME ZONE` behind a pool | Reads the bytes itself (see driver 19 below), and asks the driver's own connection, not the pool's proxy, for the time zones | Validated |
 | refuses the standard `Types.BOOLEAN` ("Invalid column type: 16"), and reads a `null` `BOOLEAN` as `false` | Binds `BOOLEAN` as `OracleTypes.PLSQL_BOOLEAN` on every version, and asks the driver whether the value was `null` | Validated |
 | does not resolve `SCHEMA.TABLE%ROWTYPE`, because it puts the whole name in quotes | Binds `"SCHEMA".TABLE%ROWTYPE`, which every version resolves | Validated |
 | cannot read a `BOOLEAN` column in a cursor opened in PL/SQL: it fails inside, before the library sees the data, and leaves the connection unusable. The database converts the column to `NUMBER` for such a driver only in a plain query, which a cursor is not | Cannot make it work, because the query is yours. It discards the connection, so that the pool replaces it, and fails with a `PlsqlExecutionException` that says so. Convert the column in the query, as in `CASE WHEN flag THEN 'Y' WHEN NOT flag THEN 'N' END`, which keeps `null`, and read it into a `Boolean` | Not supported, with a clear error; the conversion in the query is Validated |
-| writes its error messages without the `ORA-` number and without the link to the error's page | Nothing: the messages reach you as the driver writes them. `getErrorCode()` is the same on both versions | Validated |
+| writes its error messages without the `ORA-` number and without the link to the error's page | Nothing: the messages reach you as the driver writes them. `getErrorCode()` is the same on every version | Validated |
+
+Driver 19 also differs in the two types with a time zone. The library reads their bytes itself on every driver, as
+driver 23 does, and builds them where driver 19 gets them wrong:
+
+| Driver 19… | What the library does | Status |
+|---|---|---|
+| has no `toZonedDateTime()` for a `TIMESTAMP WITH TIME ZONE`, only methods that give an `OffsetDateTime` and lose the region | Reads the instant and the time zone from the bytes, and the region's name from the driver's `ZONEIDMAP`, the same table on every version | Validated |
+| has no `zonedDateTimeValue` for a `TIMESTAMP WITH LOCAL TIME ZONE`, and converts it through `java.util.Calendar`, with a fixed offset of the session | Reads the database's local time from the bytes, and moves it to the session's time zone | Validated |
+| stores a `TIMESTAMP WITH LOCAL TIME ZONE` attribute of an OBJECT, or element of a collection, at the value's local time without its offset: 10:30-03:00 became 10:30 UTC, three hours off, without any error | Builds the bytes itself, at the value's local time in the database's time zone. A parameter does not have the problem | Validated |
 
 ## Scalar types as parameters and return values
 
@@ -328,7 +340,7 @@ gives the same result on both versions, except for one case the driver cannot do
 ## Not measured
 
 - Oracle before 23ai. Native `BOOLEAN` depends on 23ai.
-- Driver 19.x and older.
+- Drivers 18.x and older.
 - A Jakarta EE container's `DataSource` inside a JTA transaction, with `create` or with `PlsqlPackages.using`.
 - `XMLTYPE`, `JSON`, `LONG`, `REF` and nested cursors.
 - Synonyms with a `db link`, which are currently ignored during resolution.

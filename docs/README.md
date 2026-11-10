@@ -102,10 +102,12 @@ Java 17 and 21, and these combinations of Oracle JDBC driver and database, teste
 |---|:---:|:---:|:---:|
 | **23.x**: `ojdbc17`, `ojdbc11`, `ojdbc8` | ✅ | ❔ | ❔ |
 | **21.x**: `ojdbc11`, `ojdbc8` | ✅ ¹ | ❔ | ❔ |
-| **19.x** and older | ❔ | ❔ | ❔ |
+| **19.x**: `ojdbc10`, `ojdbc8` | ✅ ¹ | ❔ | ❔ |
+| **18.x** and older | ❔ | ❔ | ❔ |
 
 ✅ every build runs the whole suite with it · ❔ not measured yet, on the [roadmap](roadmap.md)<br>
-¹ except a `BOOLEAN` column in a cursor: see [Driver versions](compatibility.md#driver-versions).
+¹ except a `BOOLEAN` column in a cursor, which drivers before 23 cannot read: see
+[Driver versions](compatibility.md#driver-versions).
 
 ## Start here
 
