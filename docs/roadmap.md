@@ -178,6 +178,51 @@ and the Spring Boot starter. What remains:
 - **More properties in the starter,** such as `penitent.considerNested` or a `DataSource` by name, if an application needs
   them. Today these go through `@EnablePlsqlPackages`.
 
+### Immutable classes built through a constructor
+
+A composite maps to a `record`, built through its canonical constructor, or to a JavaBean, built through a
+no-argument constructor and its setters. An immutable class that is neither, with `final` fields and a constructor
+that takes them all, as many domain models and Lombok's `@Value` produce, would fit the same mapping. The open
+question is how to match each constructor parameter to an attribute: by the parameter names, when compiled with
+`-parameters`, by an annotation such as `@ConstructorProperties`, or both.
+
+### Generating Java code from the schema
+
+Today the developer writes each interface and each `record` by hand, and validation at startup checks them against
+the dictionary. The library already reads everything needed to write them: routines, parameters, OBJECT and RECORD
+types, collections and `%ROWTYPE`. A generator, most likely a Maven plugin, could turn a package into its interface
+and records, as a starting point to keep or as a build step. Still open: whether the code is generated once and then
+owned by the developer, or on every build; how to reach the database at build time; and how naming choices, such as
+`camelCase` and the record names, are made configurable.
+
+### Observability with OpenTelemetry
+
+Each call is a natural span: routine, interface and method, time spent in the dictionary and in the call, and the
+outcome, including the Oracle error code. The cleanest path is the public listener in
+[Call logging](#call-logging), with an OpenTelemetry module built on it, outside the core, as Spring is. Until then,
+the call log and the instrumentation of the driver or the pool already cover the essentials.
+
+### Bean Validation on interface methods
+
+An interface is a plain Java interface, so Bean Validation should already work where a framework validates method
+calls, such as Spring's `@Validated` on a bean, with constraints like `@NotNull` or `@Size` on the parameters. To
+measure and document: constraints on parameters and return values, cascading into records with `@Valid`, and the
+exception that reaches the caller before any call to the database.
+
+### Resilience4j on interface methods
+
+For the same reason, Resilience4j's annotations, such as `@Retry`, `@CircuitBreaker` and `@TimeLimiter`, should
+already work on an interface registered as a Spring bean. To measure and document: which exceptions are worth a
+retry, such as a lost connection, a deadlock or a lock timeout, and which never are, such as an error raised by the
+routine; and how a retry behaves inside a transaction, where it should not run on its own.
+
+### Asynchronous calls
+
+A method of an interface could return `CompletableFuture<T>`, or `Future<T>`, and run the call on an executor, so
+that the caller does not wait for the database. A connection serves one thread at a time, so such a call takes its
+own connection and runs outside any transaction, which the design has to make explicit, along with the executor to
+use, virtual threads included, and how errors arrive through the future.
+
 ## By design
 
 These are decisions, not gaps. Changing one would need a strong case.
