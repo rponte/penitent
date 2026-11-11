@@ -17,6 +17,7 @@ import io.github.rponte.penitent.exception.PlsqlMappingException;
 import io.github.rponte.penitent.internal.binding.TemporaryLobs;
 import io.github.rponte.penitent.internal.metadata.Dictionary.SqlFailure;
 import io.github.rponte.penitent.internal.metadata.ReturnType;
+import io.github.rponte.penitent.internal.metadata.RoutineMetadata;
 
 /**
  * The handler behind each proxy that {@code PlsqlPackages} creates: it answers the default and
@@ -111,6 +112,23 @@ public final class RoutineInvocationHandler implements InvocationHandler {
 			throw translator.translate(new PlsqlFailure(null, e, PlsqlFailure.Phase.CONNECTION));
 		} finally {
 			TemporaryLobs.close(lobs);
+		}
+	}
+
+	/**
+	 * The routine a call of {@code method} would run, read from the dictionary as the call reads it, and
+	 * cached as the call caches it: for a tool that has to know the routine behind a method, such as the
+	 * mocks of {@code penitent-test}.
+	 */
+	public RoutineMetadata describe(Method method) {
+		try (Connections.Lease lease = connections.acquire()) {
+			return routines.describeOnce(method, lease.connection());
+		} catch (PlsqlMappingException e) {
+			throw MappingMessages.of(method, e);
+		} catch (SqlFailure e) {
+			throw translator.translate(e.failure());
+		} catch (SQLException e) {
+			throw translator.translate(new PlsqlFailure(null, e, PlsqlFailure.Phase.CONNECTION));
 		}
 	}
 

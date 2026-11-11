@@ -59,6 +59,13 @@ final class RoutineCall {
 		return call(routine, method, arguments, ReturnType.of(method) != void.class, connection);
 	}
 
+	/** What a call of {@code method} would run: the routine, its owner and the version that fits the method. */
+	RoutineMetadata describeOnce(Method method, Connection connection) {
+		RoutineMetadata routine = Caches.get(routines, method, m -> describe(m, connection));
+		requireToAgree(method, routine, method.getParameterCount());
+		return routine;
+	}
+
 	/**
 	 * Everything a call would check, without calling: the signature, the method against it, and the
 	 * composite types the method declares, all the way down. What stays for the call is what depends

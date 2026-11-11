@@ -1,6 +1,7 @@
 # 0001. Mocking PL/SQL in integration tests with editions
 
-- **Status:** Accepted, 2026-11-11. Implementation starts with Oracle 23ai.
+- **Status:** Accepted, 2026-11-11. The core, without JUnit, is implemented and measured on Oracle 23ai; its tests
+  are skipped on other versions until they are measured.
 - **Module:** `penitent-test`.
 
 ## Context
@@ -40,8 +41,9 @@ verify(pkg).calculaFrete("SP", "CE");
    [IslandSQL](https://github.com/IslandSQL/IslandSQL). The declare section and body of the mocked subprogram are
    replaced by generated code; its heading, every other subprogram, private ones included, and the package spec stay
    as the database has them. Declarations such as `%TYPE`, `SUBTYPE` and `DEFAULT` are kept verbatim.
-3. **The generated code** records the call, then checks each stub in order: a matching one returns its value, sets
-   its `OUT` values or raises its error. No match is an error that names the routine (strict). Other PL/SQL that calls
+3. **The generated code** records the call, then checks the stubs, the last one first, so that the last stub that
+   matches wins, as in Mockito: a matching one returns its value, sets its `OUT` values or raises its error. No match
+   is an error that names the routine and shows the arguments (strict). Other PL/SQL that calls
    the routine sees the mock too.
 4. **One edition per test,** created before the test, so that a Spring test transaction opens its connection already
    in it, and dropped after the test. Each stub is compiled into the edition as soon as it is complete, on a connection
@@ -51,14 +53,16 @@ verify(pkg).calculaFrete("SP", "CE");
    closed.
 6. **Prerequisites are explicit DDL,** shipped in the jar and in the documentation, for the user to apply as a
    migration, a Flyway callback or a container init script:
-   - `penitent-mock-admin.sql`, for a DBA: `ENABLE EDITIONS` for the schema, and `CREATE ANY EDITION` and
-     `DROP ANY EDITION`;
+   - `penitent-mock-admin.sql`, for a DBA: `ENABLE EDITIONS FOR PACKAGE`, limited to packages so that the schema's
+     tables and object types are left as they are, and `CREATE ANY EDITION` and `DROP ANY EDITION`;
    - `penitent-mock-schema.sql`, for the schema owner: the table `PENITENT_MOCK_CALLS` and the package `PENITENT_MOCK`,
      static, with an autonomous `record` and a `version`.
 
-   The library never runs them by itself. It checks them, the version included, before the first test, and fails with
-   a message that says what is missing. `PlsqlMocks.prepare(adminDataSource, schema)` runs the same scripts, as a
-   convenience for a disposable database such as Testcontainers.
+   The library never runs them by itself. It checks them, the version included, when a test begins, and fails with
+   a message that lists everything missing and names the scripts. The schema reads its own state, without a DBA:
+   `USER_EDITIONED_TYPES` for the editions, `SESSION_PRIVS` for the privileges. `PlsqlMocks.prepare(admin, owner,
+   schema)` runs the same scripts, the first through a DBA's `DataSource` and the second as the schema, as a
+   convenience for a disposable database such as Testcontainers; running it again is harmless.
 7. **Support for JUnit 5 and Spring Test,** with the Spring support ordered before Spring's transaction listener.
 
 ### First version
