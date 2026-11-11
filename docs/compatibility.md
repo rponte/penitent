@@ -402,11 +402,14 @@ Where the PL/SQL guarantees the value is never `null`, driver 23 works as it is.
 | Starter: `penitent.bind`, `DEFAULT` refused at startup; `PlsqlSettingsCustomizer` in `@Order` | Validated |
 | Starter: a `PlsqlSettings` bean of the application wins, with a warning if `penitent.bind` is set | Validated |
 | Starter: `penitent.validation.enabled` off by default, and covering the interfaces of an `@EnablePlsqlPackages` | Validated |
+| Spring's method validation on an interface: constraints on parameters refused before the call takes a connection, `@Valid` into a record's fields, and on the return value after the call, as `ConstraintViolationException` | Validated |
+| Resilience4j on Spring Boot, on an interface's methods: `@Retry` calls again up to the attempts configured; `@CircuitBreaker` opens after the failures configured and refuses without calling | Validated |
 
 ## Not measured
 
-- Oracle before 23ai. Native `BOOLEAN` depends on 23ai.
+- Oracle 18c and older, such as 12c.
 - Drivers 18.x and older.
+- Resilience4j's `@Retry` on a `@Transactional` method, `@Bulkhead` and `@RateLimiter`.
 - A Jakarta EE container's `DataSource` inside a JTA transaction, with `create` or with `PlsqlPackages.using`.
 - `XMLTYPE`, `JSON`, `LONG`, `REF` and nested cursors.
 - Synonyms with a `db link`, which are currently ignored during resolution.

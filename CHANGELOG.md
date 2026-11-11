@@ -6,6 +6,13 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- The Spring page shows Bean Validation and Resilience4j on interfaces, both measured: constraints on parameters are
+  checked before the call reaches the database, `@Valid` cascades into records, and constraints on the return value
+  are checked after the call; `@Retry` and `@CircuitBreaker` work as on any bean, with advice on what to retry and
+  where, inside a transaction.
+
 ## [0.27.0]
 
 One transaction model per application. In a Spring application, `PlsqlTransactions` and Spring's transactions

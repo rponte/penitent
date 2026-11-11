@@ -55,6 +55,17 @@
 			<artifactId>logback-classic</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<!-- method validation, to prove constraints on what a routine returns are checked after the call -->
+		<dependency>
+			<groupId>org.hibernate.validator</groupId>
+			<artifactId>hibernate-validator</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.tomcat.embed</groupId>
+			<artifactId>tomcat-embed-el</artifactId>
+			<scope>test</scope>
+		</dependency>
 		<dependency>
 			<groupId>org.testcontainers</groupId>
 			<artifactId>testcontainers-oracle-free</artifactId>

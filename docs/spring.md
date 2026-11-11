@@ -95,6 +95,75 @@ above. It is a singleton, with a single dictionary cache.
   or create that interface by hand outside the scanned packages: if it is also scanned, there are two beans of the
   same type, and injecting it is ambiguous.
 
+## Validation and resilience
+
+An interface registered as a bean is a Spring bean like any other, so what Spring applies around beans applies to it
+as well. Two are measured, with their usual setup and nothing specific to Penitent.
+
+### Bean Validation
+
+Put `@Validated` on the interface and the constraints on its parameters and return values. Spring Boot sets up method
+validation with `spring-boot-starter-validation`; without Boot, declare a `MethodValidationPostProcessor` bean.
+
+<!-- snippet: untested -->
+```java
+@PlsqlPackage("CUSTOMERS")
+@Validated
+public interface Customers {
+
+    void rename(@Positive long id, @NotBlank @Size(max = 60) String name);
+
+    void register(@Valid Customer customer);     // checks the record's own constraints
+
+    @PositiveOrZero
+    int countCustomers();
+}
+```
+
+- **An invalid argument never reaches the database:** a `ConstraintViolationException` arrives before the call takes
+  a connection, naming each parameter that failed, such as `rename.name`.
+- **`@Valid` checks a record's fields,** with their own constraints, such as `register.customer.name`.
+- **A constraint on the return value is checked after the call,** on the value the database sent back: the routine
+  has run, and the `ConstraintViolationException` is a runtime exception, so a `@Transactional` method it leaves
+  rolls back.
+
+### Resilience4j
+
+With `resilience4j-spring-boot4` and `spring-boot-starter-aspectj`, Resilience4j's annotations work on the
+interface's methods, configured by name as usual:
+
+<!-- snippet: untested -->
+```java
+@PlsqlPackage("PAYMENTS")
+public interface Payments {
+
+    @Retry(name = "payments")
+    void pay(long id);
+
+    @CircuitBreaker(name = "payments")
+    void refund(long id);
+}
+```
+
+- **`@Retry` makes the call again,** up to the attempts configured, and then lets the last failure through. Each
+  attempt is a whole call, with a connection of its own.
+- **`@CircuitBreaker` opens after the failures configured,** and then refuses with `CallNotPermittedException`,
+  without calling the database.
+- **Retry what is transient, and nothing else.** An error raised by the routine, a `PlsqlRoutineRaisedException`, is
+  the routine's answer, and a retry gets the same one. Failures that may pass, such as a deadlock or a busy resource,
+  arrive as Spring's `TransientDataAccessException`, so that is the class to list:
+
+  <!-- snippet: untested -->
+  ```properties
+  resilience4j.retry.instances.payments.retry-exceptions=org.springframework.dao.TransientDataAccessException
+  ```
+- **Inside a transaction, retry the transaction, not the call.** After a deadlock, Oracle rolls back the statement,
+  but the transaction around it still holds its earlier work and locks. Put `@Retry` on the method that starts the
+  transaction instead, so that each attempt is a new one.
+- **`@TimeLimiter` needs an asynchronous method,** one that returns a `CompletionStage`, and the interfaces' methods
+  are synchronous today: see [Asynchronous calls](roadmap.md#asynchronous-calls). For a time limit on a call, use the
+  driver's or the pool's timeouts.
+
 ## Spring Boot starter
 
 With Spring Boot, the dependency is all you need. It registers the interfaces of the application's packages, as

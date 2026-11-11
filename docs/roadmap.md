@@ -7,8 +7,6 @@ The items below are in three groups: what comes next, what waits for a real use 
 
 ## Next
 
-In this order.
-
 ### Mocking PL/SQL in tests
 
 Tests of an application that calls PL/SQL often need a routine to return a fixed value, or to fail, without touching
@@ -18,26 +16,18 @@ redefinition, only for the duration of the test, and generated from the dictiona
 
 Still open: whether it becomes a module of this project or a project of its own.
 
-### Supported versions
-
-Today everything is measured on Oracle 23ai, Oracle 21c and Oracle 19c, on Java 17 and 21, with the `ojdbc17`, `ojdbc11` and `ojdbc8` artifacts
-of driver 23.x, the `ojdbc11` and `ojdbc8` artifacts of driver 21.x, and the `ojdbc10` and `ojdbc8` artifacts of
-driver 19.x. Drivers 21 and 19 differed from 23 in the `java.time` conversions, the native `BOOLEAN`, the addressing
-of `%ROWTYPE` and, in 19, the two types with a time zone; the library works around each, as
-[Driver versions](compatibility.md#driver-versions) lists, so that a single code path serves every version. Only a
-`BOOLEAN` column in a cursor was beyond reach, because the driver fails before the library sees the data. Oracle 21c
-and 19c needed no change in the library: they have `BOOLEAN` only in PL/SQL, which is where the library binds it, and
-the one gap is in driver 23, which reads a `null` `BOOLEAN` that comes back from them as `true` or `false`, as
-[Database versions](compatibility.md#database-versions) explains. Oracle 19c, the long-term release most projects
-run, is measured on Oracle's Autonomous Database Free, the 19c image Oracle publishes for anyone to pull.
-
-That covers every release Oracle still supports. Older ones, such as Oracle 12c and drivers 18 and before, are out of
-Oracle's support, and wait for a real use case, as the items below do.
-
 ## On demand
 
 These wait for a real use case: until one shows up, the current behavior stays, and a rejection says so with a clear
 error.
+
+### Older Oracle versions
+
+Every release Oracle still supports is covered: Oracle 23ai, 21c and 19c, with every driver from 19 to 23, on Java 17
+and 21, as [Driver versions](compatibility.md#driver-versions) and [Database versions](compatibility.md#database-versions)
+detail. Oracle 19c, the long-term release most projects run, is measured on Oracle's Autonomous Database Free. Older
+releases, such as Oracle 12c, and drivers 18 and before are out of Oracle's support: they would need an image to test
+against and a case that justifies keeping them working.
 
 ### Metadata cache
 
@@ -201,20 +191,6 @@ Each call is a natural span: routine, interface and method, time spent in the di
 outcome, including the Oracle error code. The cleanest path is the public listener in
 [Call logging](#call-logging), with an OpenTelemetry module built on it, outside the core, as Spring is. Until then,
 the call log and the instrumentation of the driver or the pool already cover the essentials.
-
-### Bean Validation on interface methods
-
-An interface is a plain Java interface, so Bean Validation should already work where a framework validates method
-calls, such as Spring's `@Validated` on a bean, with constraints like `@NotNull` or `@Size` on the parameters. To
-measure and document: constraints on parameters and return values, cascading into records with `@Valid`, and the
-exception that reaches the caller before any call to the database.
-
-### Resilience4j on interface methods
-
-For the same reason, Resilience4j's annotations, such as `@Retry`, `@CircuitBreaker` and `@TimeLimiter`, should
-already work on an interface registered as a Spring bean. To measure and document: which exceptions are worth a
-retry, such as a lost connection, a deadlock or a lock timeout, and which never are, such as an error raised by the
-routine; and how a retry behaves inside a transaction, where it should not run on its own.
 
 ### Asynchronous calls
 
