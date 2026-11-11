@@ -9,12 +9,12 @@ The items below are in three groups: what comes next, what waits for a real use 
 
 ### Mocking PL/SQL in tests
 
-Tests of an application that calls PL/SQL often need a routine to return a fixed value, or to fail, without touching
-the real package. The plan is a typed Java API to declare what each routine returns or raises, and to verify how it
-was called. Behind it, the package's body would be replaced in a separate edition, through Oracle's edition-based
-redefinition, only for the duration of the test, and generated from the dictionary as the library already reads it.
-
-Still open: whether it becomes a module of this project or a project of its own.
+Tests of an application that calls PL/SQL often need a routine to return a fixed value, or to fail, while the rest
+runs for real against the database. A new module, `penitent-test`, does that in the style of Mockito, from the
+interface the application already has: `when(orders.calculateFreight("SP", "CE")).thenReturn(...)` rewrites only that
+routine, in an edition of the test's own, so that Java and other PL/SQL calling it both see the mock, and everything
+else in the package stays real. [Architecture decision 0001](adr/0001-mocking-plsql-with-editions.md) has the design,
+what a spike measured on Oracle 23ai, and what the first version covers.
 
 ## On demand
 
