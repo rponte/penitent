@@ -12,7 +12,8 @@ public interface PlsqlTransaction {
 	 * A view of {@code proxy} that runs its calls in this transaction, as
 	 * {@link PlsqlPackages#using} does, sharing the proxy's cache and settings.
 	 *
-	 * @throws IllegalArgumentException if {@code proxy} was not created by this library
+	 * @throws IllegalArgumentException if {@code proxy} is neither a proxy created by this library nor
+	 *         one wrapped by a framework, such as Spring for {@code @Validated}
 	 */
 	<T> T using(T proxy);
 

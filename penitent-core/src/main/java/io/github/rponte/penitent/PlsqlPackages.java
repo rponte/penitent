@@ -119,11 +119,16 @@ public final class PlsqlPackages {
 	 * which the view never closes, commits or rolls back, nor changes its auto-commit: the connection,
 	 * and its transaction, stay the application's.
 	 *
+	 * <p>{@code proxy} may be one a framework wrapped, such as a Spring bean with {@code @Validated}: with
+	 * {@code penitent-spring}, the view keeps every layer around it, except Spring's transaction, since the
+	 * view runs in the transaction of {@code connection}.
+	 *
 	 * <p>A view is cheap, and meant to live as long as the transaction: one per transaction is the
 	 * intended use, and an unreferenced view is collected while the proxy lives on. Like the
 	 * connection, a view should not be used by two threads at once; the proxy it came from still can.
 	 *
-	 * @throws IllegalArgumentException if {@code proxy} was not created by this library
+	 * @throws IllegalArgumentException if {@code proxy} is neither a proxy created by this library nor
+	 *         one wrapped by a framework, such as Spring for {@code @Validated}
 	 */
 	public static <T> T using(T proxy, Connection connection) {
 		Objects.requireNonNull(proxy, "proxy");
@@ -144,7 +149,8 @@ public final class PlsqlPackages {
 	 * its placeholders are checked against the method.
 	 *
 	 * @throws PlsqlMappingException with every method that does not match, one per line
-	 * @throws IllegalArgumentException if {@code proxy} was not created by this library
+	 * @throws IllegalArgumentException if {@code proxy} is neither a proxy created by this library nor
+	 *         one wrapped by a framework, such as Spring for {@code @Validated}
 	 */
 	public static void validate(Object proxy) {
 		Objects.requireNonNull(proxy, "proxy");
