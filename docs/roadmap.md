@@ -20,20 +20,19 @@ Still open: whether it becomes a module of this project or a project of its own.
 
 ### Supported versions
 
-Today everything is measured on Oracle 23ai, on Java 17 and 21, with the `ojdbc17`, `ojdbc11` and `ojdbc8` artifacts
+Today everything is measured on Oracle 23ai and Oracle 21c, on Java 17 and 21, with the `ojdbc17`, `ojdbc11` and `ojdbc8` artifacts
 of driver 23.x, the `ojdbc11` and `ojdbc8` artifacts of driver 21.x, and the `ojdbc10` and `ojdbc8` artifacts of
 driver 19.x. Drivers 21 and 19 differed from 23 in the `java.time` conversions, the native `BOOLEAN`, the addressing
 of `%ROWTYPE` and, in 19, the two types with a time zone; the library works around each, as
 [Driver versions](compatibility.md#driver-versions) lists, so that a single code path serves every version. Only a
-`BOOLEAN` column in a cursor was beyond reach, because the driver fails before the library sees the data.
+`BOOLEAN` column in a cursor was beyond reach, because the driver fails before the library sees the data. Oracle 21c
+needed no change in the library: it has `BOOLEAN` only in PL/SQL, which is where the library binds it, and the one
+gap is in driver 23, which reads a `null` `BOOLEAN` that comes back from it as `true` or `false`, as
+[Database versions](compatibility.md#database-versions) explains.
 
-Widening it further is planned from the easiest to the hardest, each step validated before the next:
+Widening it further is the next step:
 
-1. **Oracle 21c,** before 23ai, with its free image. There is no SQL `BOOLEAN`, so the native boolean has to degrade
-   to a clear error, and the fixtures split into what needs 23ai and what does not. The dictionary views the library
-   reads (`ALL_ARGUMENTS`, `ALL_PLSQL_TYPES`, `ALL_PLSQL_COLL_TYPES` and the others) exist since 12c, but their details
-   need checking.
-2. **Oracle 19c,** the long-term release most projects still run. What applies to 21c applies here, and 19c has no
+1. **Oracle 19c,** the long-term release most projects still run. What applies to 21c probably applies here, and 19c has no
    free edition: its image comes from Oracle's container registry, after a login, and is large and slow to start, so
    it may run in a separate, less frequent workflow.
 

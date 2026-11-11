@@ -108,3 +108,7 @@ drivers before it leave the link out.
   is meant for development, staging and tests: in a log aggregator, one call becomes several records.
 - **No forged lines:** a line break inside a value is logged as `\n`, so no value can create a line that looks like
   it came from Penitent.
+- **One warning:** `io.github.rponte.penitent.call` also logs at `WARN`, once per method, when driver 23 runs against a
+  database before 23ai and the method gets a `BOOLEAN` back, whose `null` that driver reads as `true` or `false`.
+  [Database versions](compatibility.md#a-null-boolean-from-driver-23-before-23ai) shows the ways around it. The
+  warning shows at the usual levels, `INFO` or `WARN`, without turning the call log on.

@@ -109,6 +109,21 @@ public final class CallLog {
 		}
 	}
 
+	/**
+	 * At warn, unlike the rest of this log: a value the driver will read wrong, in silence. The call
+	 * itself goes on, since true and false still read right. See {@code NullBooleanOutputs}.
+	 *
+	 * @param what the routine or block and how the BOOLEAN comes back, as in
+	 *        {@code "PKG.F returns a BOOLEAN"}
+	 */
+	public static void nullBooleanOutputMisread(String what, String driverVersion, int databaseVersion) {
+		CALLS.warn("{}, and with Oracle driver {} against Oracle Database {}, a null BOOLEAN that comes back reads as"
+				+ " true or false: driver 23 misreads it from a database before 23ai. Use the driver of the database's"
+				+ " version, such as 21 or 19, or have the PL/SQL hand the value back as VARCHAR2 or NUMBER, as in"
+				+ " CASE WHEN flag THEN 'Y' WHEN NOT flag THEN 'N' END, and declare Boolean. See the compatibility page"
+				+ " of the documentation", what, driverVersion, databaseVersion);
+	}
+
 	public void sent(String name, Object value) {
 		if (sent != null) {
 			sent.add(new String[] { name, format(value) });
@@ -196,7 +211,8 @@ public final class CallLog {
 		return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
 	}
 
-	private static String javaName(Method method) {
+	/** The interface and the method, as in {@code Orders.place}. */
+	public static String javaName(Method method) {
 		return method.getDeclaringClass().getSimpleName() + "." + method.getName();
 	}
 

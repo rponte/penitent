@@ -17,50 +17,48 @@ jobs:
   build:
     # compiled for Java 17, the minimum, and tested on it and on Java 21, with the ojdbc17 artifact of the driver;
     # then each other artifact of the same driver version on Java 21, and drivers 21 and 19 in each of their
-    # artifacts (neither has ojdbc17), one axis at a time. Without jdbc-version, the driver is the Spring Boot BOM's
+    # artifacts (neither has ojdbc17), one axis at a time. Without version, the driver is the Spring Boot BOM's.
+    # Each of them against Oracle 23ai, the tests' default, and against Oracle 21c
     strategy:
       fail-fast: false
       matrix:
-        java: ['21', '17']
-        jdbc-artifact: ['ojdbc17']
+        database: ['23ai', '21c']
+        driver:
+          - { java: '21', artifact: 'ojdbc17' }
+          - { java: '17', artifact: 'ojdbc17' }
+          - { java: '21', artifact: 'ojdbc11' }
+          - { java: '21', artifact: 'ojdbc8' }
+          - { java: '21', artifact: 'ojdbc11', version: '21.24.0.0' }
+          - { java: '21', artifact: 'ojdbc8', version: '21.24.0.0' }
+          - { java: '21', artifact: 'ojdbc10', version: '19.33.0.0' }
+          - { java: '21', artifact: 'ojdbc8', version: '19.33.0.0' }
         include:
-          - java: '21'
-            jdbc-artifact: 'ojdbc11'
-          - java: '21'
-            jdbc-artifact: 'ojdbc8'
-          - java: '21'
-            jdbc-artifact: 'ojdbc11'
-            jdbc-version: '21.24.0.0'
-          - java: '21'
-            jdbc-artifact: 'ojdbc8'
-            jdbc-version: '21.24.0.0'
-          - java: '21'
-            jdbc-artifact: 'ojdbc10'
-            jdbc-version: '19.33.0.0'
-          - java: '21'
-            jdbc-artifact: 'ojdbc8'
-            jdbc-version: '19.33.0.0'
-    name: build (Java ${{ matrix.java }}, ${{ matrix.jdbc-artifact }}${{ matrix.jdbc-version && format(' {0}', matrix.jdbc-version) || '' }})
+          - database: '21c'
+            image: 'gvenzl/oracle-xe:21-slim-faststart'
+    # the jobs against 23ai keep the names they had before the database axis
+    name: >-
+      build (Java ${{ matrix.driver.java }}, ${{ matrix.driver.artifact }}${{ matrix.driver.version && format(' {0}', matrix.driver.version) || '' }}${{ matrix.image && format(', Oracle {0}', matrix.database) || '' }})
     runs-on: ubuntu-latest
-    # the tests start their own Oracle through Testcontainers; most of the time is pulling its image
-    timeout-minutes: 20
+    # the tests start their own Oracle through Testcontainers; most of the time is pulling its image, and 21c's is larger
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
 
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
-          java-version: ${{ matrix.java }}
+          java-version: ${{ matrix.driver.java }}
           cache: maven
 
       # the same command as on a developer's machine: the build pins its own locale and time zone
       - run: >-
-          ./mvnw -B verify -Doracle.jdbc.artifact=${{ matrix.jdbc-artifact }}
-          ${{ matrix.jdbc-version && format('-Doracle.jdbc.version={0}', matrix.jdbc-version) || '' }}
+          ./mvnw -B verify -Doracle.jdbc.artifact=${{ matrix.driver.artifact }}
+          ${{ matrix.driver.version && format('-Doracle.jdbc.version={0}', matrix.driver.version) || '' }}
+          ${{ matrix.image && format('-Doracle.database.image={0}', matrix.image) || '' }}
 
       - if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: test-reports-java-${{ matrix.java }}-${{ matrix.jdbc-artifact }}${{ matrix.jdbc-version && format('-{0}', matrix.jdbc-version) || '' }}
+          name: test-reports-java-${{ matrix.driver.java }}-${{ matrix.driver.artifact }}${{ matrix.driver.version && format('-{0}', matrix.driver.version) || '' }}-${{ matrix.database }}
           path: '**/target/surefire-reports/'
           retention-days: 7

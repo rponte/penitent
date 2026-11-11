@@ -26,6 +26,8 @@ final class Jdbc {
 	 * while {@code PLSQL_BOOLEAN} exists since driver 12.2 and binds the same on 21 and 23, in both
 	 * directions, null included. One SQL type for every version means one path, which the build tests on
 	 * each driver. A null that comes back needs {@code wasNull()} on driver 21: see {@code ScalarCodec.read}.
+	 * The one exception is driver 23 or later against a database before 23ai, which reads a null that
+	 * comes back as true or false: see {@link NullBooleanOutputs}.
 	 *
 	 * <p>The other ways do not hold on every version. Driver 21 sends {@code setBoolean} as a
 	 * {@code NUMBER}, which a PL/SQL {@code BOOLEAN} refuses with {@code ORA-06550}, as it refuses

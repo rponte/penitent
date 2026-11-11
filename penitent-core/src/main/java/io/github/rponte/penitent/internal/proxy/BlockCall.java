@@ -152,7 +152,13 @@ final class BlockCall {
 			return;
 		}
 		if (metadata.resultType().isBlank()) {
-			statement.registerOutParameter(position, resultSqlType(method), "");
+			int sqlType = resultSqlType(method);
+			if (sqlType == Jdbc.ORACLE_PLSQL_BOOLEAN) {
+				// some versions read a null BOOLEAN wrong: see NullBooleanOutputs
+				NullBooleanOutputs.warnIfMisread(method, CallLog.javaName(method) + " returns a BOOLEAN",
+						statement.getConnection());
+			}
+			statement.registerOutParameter(position, sqlType, "");
 			return;
 		}
 		BlockMetadata.DeclaredType declared = sessionTypes.of(metadata.resultType());

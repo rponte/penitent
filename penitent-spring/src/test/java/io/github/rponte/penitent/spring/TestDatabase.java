@@ -5,6 +5,7 @@ import javax.sql.DataSource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.oracle.OracleContainer;
+import org.testcontainers.utility.DockerImageName;
 
 /**
  * One Oracle for all the test classes of this module, started on first use, with the
@@ -12,7 +13,21 @@ import org.testcontainers.oracle.OracleContainer;
  */
 final class TestDatabase {
 
-	private static final OracleContainer ORACLE = new OracleContainer("gvenzl/oracle-free:23.26.3-slim-faststart")
+	/**
+	 * Oracle 23ai by default, or another image given by the {@code oracle.database.image} property, as in
+	 * penitent-core's {@code OracleIntegrationTest}.
+	 */
+	private static final String IMAGE = System.getProperty("oracle.database.image",
+			"gvenzl/oracle-free:23.26.3-slim-faststart");
+
+	private static final OracleContainer ORACLE = new OracleContainer(
+			DockerImageName.parse(IMAGE).asCompatibleSubstituteFor("gvenzl/oracle-free")) {
+		// the Testcontainers module is for Oracle Free, whose database is FREEPDB1; Oracle XE, as 21c, calls it XEPDB1
+		@Override
+		public String getDatabaseName() {
+			return IMAGE.contains("oracle-xe") ? "XEPDB1" : super.getDatabaseName();
+		}
+	}
 			.withUsername("plsql_test")
 			.withPassword("plsql_test");
 

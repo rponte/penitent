@@ -163,7 +163,18 @@ final class RoutineCall {
 			validation.requireNestingToAgree(method, dictionary);
 		}
 		CallLog.described(routine.qualifiedName(), start);
+		warnIfNullBooleanMisread(routine, method, connection);
 		return routine;
+	}
+
+	/** A BOOLEAN that comes back, which some versions read wrong when null: see {@link NullBooleanOutputs}. */
+	private static void warnIfNullBooleanMisread(RoutineMetadata routine, Method method, Connection connection) {
+		if (routine.returnValue().filter(Argument::isBoolean).isPresent()) {
+			NullBooleanOutputs.warnIfMisread(method, routine.qualifiedName() + " returns a BOOLEAN", connection);
+		} else if (routine.parameters().stream().anyMatch(p -> p.isOut() && p.isBoolean())) {
+			NullBooleanOutputs.warnIfMisread(method, routine.qualifiedName() + " has a BOOLEAN that comes back",
+					connection);
+		}
 	}
 
 	private Object call(RoutineMetadata routine, Method method, Object[] args, boolean expectsResult,

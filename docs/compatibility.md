@@ -2,7 +2,8 @@
 
 Status of version `0.24.0`, measured on Java 17 and 21, with Oracle 23ai
 (`gvenzl/oracle-free:23.26.3`) and `ojdbc17`; the whole suite also runs with `ojdbc11` and `ojdbc8`, version
-23.26.3, and with drivers 21.24.0.0 and 19.33.0.0, as [Driver versions](#driver-versions) details. Versions up to `0.22.0` need
+23.26.3, and with drivers 21.24.0.0 and 19.33.0.0, as [Driver versions](#driver-versions) details, and against
+Oracle 21c with every one of those drivers, as [Database versions](#database-versions) details. Versions up to `0.22.0` need
 Java 21.
 
 | Status | Meaning |
@@ -52,6 +53,62 @@ driver 23 does, and builds them where driver 19 gets them wrong:
 | has no `toZonedDateTime()` for a `TIMESTAMP WITH TIME ZONE`, only methods that give an `OffsetDateTime` and lose the region | Reads the instant and the time zone from the bytes, and the region's name from the driver's `ZONEIDMAP`, the same table on every version | Validated |
 | has no `zonedDateTimeValue` for a `TIMESTAMP WITH LOCAL TIME ZONE`, and converts it through `java.util.Calendar`, with a fixed offset of the session | Reads the database's local time from the bytes, and moves it to the session's time zone | Validated |
 | stores a `TIMESTAMP WITH LOCAL TIME ZONE` attribute of an OBJECT, or element of a collection, at the value's local time without its offset: 10:30-03:00 became 10:30 UTC, three hours off, without any error | Builds the bytes itself, at the value's local time in the database's time zone. A parameter does not have the problem | Validated |
+
+## Database versions
+
+Penitent reads the same dictionary views and binds the same way on every database version, so nothing changes in your
+code from one to another. The whole suite runs against each database below, with every driver above:
+
+| Database | Image | Status |
+|---|---|---|
+| Oracle 23ai | `gvenzl/oracle-free:23.26.3-slim-faststart` | Validated: the whole suite |
+| Oracle 21c | `gvenzl/oracle-xe:21-slim-faststart` (21.3) | Validated: the whole suite, with the differences below |
+| Oracle 19c | | Not measured |
+
+Before 23ai, `BOOLEAN` exists only in PL/SQL. In PL/SQL it works as on 23ai: a parameter, a return value, an `OUT`,
+the field of a RECORD and a block's `:result`, with `true`, `false` and `null`.
+
+| Before Oracle 23ai… | What the library does | Status |
+|---|---|---|
+| the database has no SQL `BOOLEAN`: no `BOOLEAN` attribute of an OBJECT, no `BOOLEAN` column, no `select true` | Nothing to do: the database refuses the DDL or the query. Map the attribute or the column as `VARCHAR2` or `NUMBER`, which the library reads into a `Boolean`, by `Y`/`N` or `1`/`0` | Not supported by the database |
+| with driver 23 or later, a `null` `BOOLEAN` that comes back, as a return value, an `OUT`, an `IN OUT` or a block's `:result`, reads as `true` or `false`. `true` and `false` themselves read right, and so does a `BOOLEAN` that goes in, `null` included | Warns, once per method, in the `io.github.rponte.penitent.call` log, at `WARN`. It cannot read the value right: see [below](#a-null-boolean-from-driver-23-before-23ai) | Not supported by the driver, with a warning |
+
+### A null BOOLEAN from driver 23 before 23ai
+
+Driver 23 talks to a database before 23ai in a format of its own for a `null` `BOOLEAN`, and then reads the answer
+by its length alone, without the null indicator the database sends: the `null` arrives as `true` or `false`, with
+nothing to tell it apart, and `wasNull()` says it was not null. Drivers 21 and 19 read the same answer right. It
+happens in versions 23.26.3 and 23.26.4, whatever the connection properties, and nothing on the JDBC side avoids it.
+A test in the build pins the driver's behavior, so a fixed driver will show up there.
+
+Any of these keeps the `null`:
+
+1. **Use the driver of your database's version**, such as 21 or 19 against Oracle 21c: the whole suite passes with
+   them, `null` included, and nothing else changes.
+2. **Hand the value back as `VARCHAR2` or `NUMBER`.** Penitent reads both into a `Boolean`, `Y`/`N` and `1`/`0`
+   by default, or the literals of `@PlsqlBoolean`, and keeps the `null`, so the Java method stays the same. A
+   function of its own leaves the original one as it is for the PL/SQL that calls it:
+
+   <!-- snippet: fixture -->
+   ```sql
+   FUNCTION is_active_yn(p_id NUMBER) RETURN VARCHAR2 IS
+     l_active BOOLEAN := is_active(p_id);
+   BEGIN
+     RETURN CASE WHEN l_active THEN 'Y' WHEN NOT l_active THEN 'N' END;
+   END;
+   ```
+
+   <!-- snippet: compatibility/boolean-as-text -->
+   ```java
+   @PlsqlRoutine("IS_ACTIVE_YN")
+   Boolean isActive(long id); // null stays null
+   ```
+
+   Keep both `WHEN`s: with `ELSE 'N'`, a `null` would become `false`. Declare `Boolean`, not `boolean`, where the
+   value can be `null`.
+3. **Move to Oracle 23ai**, where driver 23 reads the native `BOOLEAN` right.
+
+Where the PL/SQL guarantees the value is never `null`, driver 23 works as it is.
 
 ## Scalar types as parameters and return values
 
