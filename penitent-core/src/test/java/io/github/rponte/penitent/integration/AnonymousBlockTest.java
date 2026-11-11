@@ -376,6 +376,7 @@ class AnonymousBlockTest extends OracleIntegrationTest {
 		assertThat(shapes.describe(true)).isEqualTo("yes");
 		assertThat(shapes.describe(false)).isEqualTo("no");
 		assertThat(shapes.describe(null)).isEqualTo("none");
+		assumeNullBooleanOutputReadable();
 		assertThat(shapes.echoBooleanOrNull(null)).isNull();
 	}
 

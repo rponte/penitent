@@ -287,6 +287,7 @@ class CursorTest extends OracleIntegrationTest {
 	@Test
 	@DisplayName("a BOOLEAN column, alone or in a row, with true, false and null")
 	void boolean_column() {
+		assumeSqlBoolean();
 		assumeTrue(new OracleDriver().getMajorVersion() >= 23, "driver 21 cannot read the column: see the next test");
 		BooleanColumns columns = PlsqlPackages.create(BooleanColumns.class, DATA_SOURCE);
 
@@ -297,6 +298,7 @@ class CursorTest extends OracleIntegrationTest {
 	@Test
 	@DisplayName("before driver 23, a BOOLEAN column fails clearly, and the connection does not go back to the pool")
 	void boolean_column_before_driver_23() {
+		assumeSqlBoolean();
 		assumeTrue(new OracleDriver().getMajorVersion() < 23, "only drivers before 23 cannot read the column");
 		// One connection: the call after the failure can only work if the pool replaced it.
 		try (HikariDataSource pool = newPool()) {
@@ -319,6 +321,7 @@ class CursorTest extends OracleIntegrationTest {
 	@Test
 	@DisplayName("a BOOLEAN column turned into Y/N in the query reads on every driver, null included")
 	void boolean_column_as_text() {
+		assumeSqlBoolean();
 		assertThat(PlsqlPackages.create(BooleanColumns.class, DATA_SOURCE).flagsAsText()).containsExactly(true, false, null);
 	}
 }

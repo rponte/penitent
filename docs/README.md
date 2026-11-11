@@ -100,14 +100,16 @@ Java 17 and 21, and these combinations of Oracle JDBC driver and database, teste
 
 | Oracle JDBC driver | Oracle Database 23ai | 21c | 19c |
 |---|:---:|:---:|:---:|
-| **23.x**: `ojdbc17`, `ojdbc11`, `ojdbc8` | ✅ | ❔ | ❔ |
-| **21.x**: `ojdbc11`, `ojdbc8` | ✅ ¹ | ❔ | ❔ |
-| **19.x**: `ojdbc10`, `ojdbc8` | ✅ ¹ | ❔ | ❔ |
+| **23.x**: `ojdbc17`, `ojdbc11`, `ojdbc8` | ✅ | ✅ ² | ❔ |
+| **21.x**: `ojdbc11`, `ojdbc8` | ✅ ¹ | ✅ | ❔ |
+| **19.x**: `ojdbc10`, `ojdbc8` | ✅ ¹ | ✅ | ❔ |
 | **18.x** and older | ❔ | ❔ | ❔ |
 
 ✅ every build runs the whole suite with it · ❔ not measured yet, on the [roadmap](roadmap.md)<br>
 ¹ except a `BOOLEAN` column in a cursor, which drivers before 23 cannot read: see
-[Driver versions](compatibility.md#driver-versions).
+[Driver versions](compatibility.md#driver-versions).<br>
+² except a `null` `BOOLEAN` that comes back, which driver 23 reads as `true` or `false` before 23ai: Penitent warns, and
+[Database versions](compatibility.md#database-versions) shows the ways around it.
 
 ## Start here
 

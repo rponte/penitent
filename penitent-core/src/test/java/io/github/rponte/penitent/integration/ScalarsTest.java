@@ -256,6 +256,7 @@ class ScalarsTest extends OracleIntegrationTest {
 	void boolean_wrapper_in_parameter() {
 		assertThat(scalars.negateWrapper(true)).isFalse();
 		assertThat(scalars.negateWrapper(Boolean.FALSE)).isTrue();
+		assumeNullBooleanOutputReadable();
 		assertThat(scalars.negateWrapper(null)).isNull();
 	}
 

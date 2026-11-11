@@ -66,8 +66,6 @@ class CompositeAttributesTest extends OracleIntegrationTest {
 
 		WithBytes echoBlob(WithBytes value);
 
-		WithBoolean echoBoolean(WithBoolean value);
-
 		BooleanRecord echoBooleanRecord(BooleanRecord value);
 
 		BooleanRecord aBooleanRecord(int value);
@@ -77,6 +75,12 @@ class CompositeAttributesTest extends OracleIntegrationTest {
 
 		@PlsqlRoutine("A_BOOLEAN_RECORD")
 		RecordBooleanWithLiterals aRecordWithLiterals(int value);
+	}
+
+	/** A package of its own because it exists only on Oracle 23ai: see {@link #assumeSqlBoolean()}. */
+	@PlsqlPackage("FIXTURE_SQL_BOOLEAN")
+	interface SqlBooleanAttributes {
+		WithBoolean echoBoolean(WithBoolean value);
 	}
 
 	private final Attributes attributes = pkg(Attributes.class);
@@ -148,14 +152,24 @@ class CompositeAttributesTest extends OracleIntegrationTest {
 	@Test
 	@DisplayName("BOOLEAN in an OBJECT, without @PlsqlBoolean, in both directions")
 	void boolean_in_object() {
-		assertThat(attributes.echoBoolean(new WithBoolean(true)).v()).isTrue();
-		assertThat(attributes.echoBoolean(new WithBoolean(false)).v()).isFalse();
+		assumeSqlBoolean();
+		SqlBooleanAttributes sqlBoolean = pkg(SqlBooleanAttributes.class);
+
+		assertThat(sqlBoolean.echoBoolean(new WithBoolean(true)).v()).isTrue();
+		assertThat(sqlBoolean.echoBoolean(new WithBoolean(false)).v()).isFalse();
 	}
 
 	@Test
-	@DisplayName("a null BOOLEAN in an OBJECT and in a RECORD stays null")
+	@DisplayName("a null BOOLEAN in an OBJECT stays null")
 	void null_boolean_attribute() {
-		assertThat(attributes.echoBoolean(new WithBoolean(null)).v()).isNull();
+		assumeSqlBoolean();
+
+		assertThat(pkg(SqlBooleanAttributes.class).echoBoolean(new WithBoolean(null)).v()).isNull();
+	}
+
+	@Test
+	@DisplayName("a null BOOLEAN in a RECORD stays null")
+	void null_boolean_in_record() {
 		assertThat(attributes.echoBooleanRecord(new BooleanRecord(BigDecimal.ONE, null)).flag()).isNull();
 	}
 

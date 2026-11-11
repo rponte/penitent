@@ -20,7 +20,7 @@ not depend on where it runs. The hostile cases are covered on purpose, by tests,
 
 ### Another JDBC driver
 
-The Oracle JDBC driver is `provided`: the application chooses it, so the build runs against more than one. Three
+The Oracle JDBC driver is `provided`: the application chooses it, so the build runs against more than one. Two
 properties pick it, and they are about different things:
 
 | Property | What it chooses | Default |
@@ -34,7 +34,7 @@ properties pick it, and they are about different things:
 ./mvnw verify -Doracle.jdbc.artifact=ojdbc8 -Doracle.jdbc.version=19.33.0.0   # the oldest one the build tests
 ```
 
-Neither changes the database the tests connect to, which is always Oracle 23ai. Each driver version comes in its own
+Neither changes the database the tests connect to: see the next section. Each driver version comes in its own
 artifacts: 23 in `ojdbc17`, `ojdbc11` and `ojdbc8`, 21 in `ojdbc11` and `ojdbc8`, and 19 in `ojdbc10` and `ojdbc8`.
 
 Where an older driver behaves differently, the library takes one code path for every version, usually by reading or
@@ -42,6 +42,21 @@ building the bytes of Oracle's types itself, as the `*Codec` classes in `interna
 which driver needs it and why. A test named `same_as_driver_23` compares each codec with driver 23, the reference,
 through `Driver23` in the tests, which calls driver 23 by reflection so that the tests still compile on older drivers,
 where they skip themselves.
+
+### Another database
+
+The tests start Oracle 23ai by default. The `oracle.database.image` property starts another image instead, with any
+driver:
+
+```
+./mvnw verify -Doracle.database.image=gvenzl/oracle-xe:21-slim-faststart                             # Oracle 21c
+./mvnw verify -Doracle.database.image=gvenzl/oracle-xe:21-slim-faststart -Doracle.jdbc.artifact=ojdbc11 -Doracle.jdbc.version=21.24.0.0
+```
+
+The 21c image is only for `amd64`: on an Apple Silicon machine it runs emulated, slower but fine. A fixture or a test
+that needs what only 23ai has, such as SQL `BOOLEAN`, checks the database's version: the fixture with
+`DBMS_DB_VERSION.VERSION`, as `V3__additional_types.sql` does, and the test with `assumeSqlBoolean()`, so that it
+skips itself on an older database.
 
 ### The documentation site
 

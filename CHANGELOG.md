@@ -6,6 +6,14 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Oracle 21c is supported: every build also runs the whole suite against it, with every driver from 19 to 23. Before
+  23ai, `BOOLEAN` exists only in PL/SQL, where it works as on 23ai. Driver 23 reads a `null` `BOOLEAN` that comes back
+  from such a database as `true` or `false`; Penitent cannot read it right, so it logs a warning, once per method, and
+  the compatibility page lists the ways around it, such as the driver of the database's version or the value handed
+  back as `VARCHAR2`, which still reads into a `Boolean`.
+
 ## [0.24.0]
 
 Driver 19. Every Oracle JDBC driver from 19 to 23 now gives the same results against Oracle 23ai: where driver 19
