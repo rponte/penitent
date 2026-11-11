@@ -6,6 +6,12 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.28.0]
+
+Interfaces Spring wraps. An interface with `@Transactional`, `@Validated`, Resilience4j or advice of the application
+now works with validation at startup, `validate` and the views of `using`, and the Spring page shows Bean Validation,
+Resilience4j and `@Transactional` on interfaces, all measured.
+
 ### Fixed
 
 - An interface that Spring wraps in a proxy of its own, for `@Transactional`, `@Validated`, Resilience4j or advice of
@@ -18,7 +24,6 @@ All notable changes to this project are listed here. The format follows
 
 - The Spring page shows `@Transactional` on an interface's methods, measured: alone, inside another transaction,
   with `REQUIRES_NEW`, and refused inside a `PlsqlTransactions` block.
-
 - The Spring page shows Bean Validation and Resilience4j on interfaces, both measured: constraints on parameters are
   checked before the call reaches the database, `@Valid` cascades into records, and constraints on the return value
   are checked after the call; `@Retry` and `@CircuitBreaker` work as on any bean, with advice on what to retry and
@@ -167,7 +172,8 @@ driven by the database dictionary: see the [README](https://github.com/rponte/pe
 
 - Spring Boot 4.1.2 for the versions the library is built and tested with.
 
-[Unreleased]: https://github.com/rponte/penitent/compare/v0.27.0...HEAD
+[Unreleased]: https://github.com/rponte/penitent/compare/v0.28.0...HEAD
+[0.28.0]: https://github.com/rponte/penitent/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/rponte/penitent/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/rponte/penitent/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/rponte/penitent/compare/v0.24.0...v0.25.0
