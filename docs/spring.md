@@ -164,6 +164,40 @@ public interface Payments {
   are synchronous today: see [Asynchronous calls](roadmap.md#asynchronous-calls). For a time limit on a call, use the
   driver's or the pool's timeouts.
 
+### `@Transactional` on an interface
+
+An interface's methods take `@Transactional` as any bean's do, with every attribute Spring gives it:
+
+<!-- snippet: untested -->
+```java
+@PlsqlPackage("PAYMENTS")
+public interface Payments {
+
+    @Transactional
+    void pay(long id);                    // a transaction of its own, or the caller's
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    void audit(long id);                  // always a transaction of its own
+}
+```
+
+- **Alone, the call runs in a transaction of its own,** committed when it returns.
+- **Inside another transaction, it takes part in it,** and that transaction's rollback undoes it.
+- **With `REQUIRES_NEW`,** it commits on its own, even when the transaction around it rolls back.
+- **Inside a `PlsqlTransactions` block, it is refused,** as any Spring transaction there is: see
+  [`PlsqlTransactions` in a Spring application](transactions.md#plsqltransactions-in-a-spring-application).
+
+### Interfaces Spring wraps
+
+For `@Transactional`, `@Validated`, Resilience4j or advice of the application, Spring wraps the interface's bean in a
+proxy of its own. That proxy is still the library's interface, all the way through:
+
+- **Validation at startup** and `PlsqlPackages.validate` reach the interface inside Spring's proxy.
+- **A view, from `tx.using` or `PlsqlPackages.using`,** keeps every layer Spring put around the bean, in the same
+  order, so validation, retries and the application's advice apply to the view as well. The one layer it leaves out
+  is Spring's transaction: a view runs in the transaction of its connection, the block's or yours, so a
+  `@Transactional` on the interface does not apply to it.
+
 ## Spring Boot starter
 
 With Spring Boot, the dependency is all you need. It registers the interfaces of the application's packages, as

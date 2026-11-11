@@ -255,7 +255,7 @@ class ConnectionBoundViewTest extends OracleIntegrationTest {
 					.isInstanceOf(NullPointerException.class).hasMessage("connection");
 			assertThatThrownBy(() -> PlsqlPackages.using("not a proxy", connection))
 					.isInstanceOf(IllegalArgumentException.class)
-					.hasMessage("java.lang.String is not a proxy created by PlsqlPackages");
+					.hasMessage("java.lang.String is not a proxy created by PlsqlPackages, nor a wrapper of one");
 		}
 	}
 

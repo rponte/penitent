@@ -6,7 +6,17 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- An interface that Spring wraps in a proxy of its own, for `@Transactional`, `@Validated`, Resilience4j or advice of
+  the application, no longer breaks validation at startup, `PlsqlPackages.validate`, `tx.using` or
+  `PlsqlPackages.using` with "is not a proxy created by PlsqlPackages". A view keeps every layer Spring put around the
+  bean, except Spring's transaction: it runs in the transaction of its connection.
+
 ### Added
+
+- The Spring page shows `@Transactional` on an interface's methods, measured: alone, inside another transaction,
+  with `REQUIRES_NEW`, and refused inside a `PlsqlTransactions` block.
 
 - The Spring page shows Bean Validation and Resilience4j on interfaces, both measured: constraints on parameters are
   checked before the call reaches the database, `@Valid` cascades into records, and constraints on the return value

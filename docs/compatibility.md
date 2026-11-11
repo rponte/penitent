@@ -404,6 +404,8 @@ Where the PL/SQL guarantees the value is never `null`, driver 23 works as it is.
 | Starter: `penitent.validation.enabled` off by default, and covering the interfaces of an `@EnablePlsqlPackages` | Validated |
 | Spring's method validation on an interface: constraints on parameters refused before the call takes a connection, `@Valid` into a record's fields, and on the return value after the call, as `ConstraintViolationException` | Validated |
 | Resilience4j on Spring Boot, on an interface's methods: `@Retry` calls again up to the attempts configured; `@CircuitBreaker` opens after the failures configured and refuses without calling | Validated |
+| `@Transactional` on an interface's methods: alone, a transaction of its own, committed on return; inside another, part of it; `REQUIRES_NEW` commits on its own; inside a `PlsqlTransactions` block, refused | Validated |
+| An interface Spring wraps (`@Transactional`, `@Validated`, the application's advice, one or more layers): `validateOnStartup` and `PlsqlPackages.validate` reach it; a view of `tx.using` or `PlsqlPackages.using` keeps every layer but Spring's transaction, runs on its connection and stops with the block | Validated |
 
 ## Not measured
 
