@@ -30,7 +30,7 @@ BigDecimal freight = orders.calculateFreight("SP", "CE");   // 25.5
 - **No framework required.** `penitent-core` depends only on the JDK, SLF4J and the Oracle driver. Spring and Spring
   Boot support live in their own modules.
 
-The version is `0.24.0`. Every feature in the [compatibility table](docs/compatibility.md) has a test against a real
+The version is `0.25.0`. Every feature in the [compatibility table](docs/compatibility.md) has a test against a real
 Oracle, but the library is in `0.x`, so the public API may still change between minor versions. The documentation is
 at [rponte.github.io/penitent](https://rponte.github.io/penitent/).
 
@@ -49,7 +49,7 @@ it:
 <dependency>
     <groupId>io.github.rponte</groupId>
     <artifactId>penitent-spring-boot-starter</artifactId>
-    <version>0.24.0</version>
+    <version>0.25.0</version>
 </dependency>
 <dependency>
     <groupId>com.oracle.database.jdbc</groupId>
