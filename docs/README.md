@@ -85,7 +85,7 @@ Spring Boot, and add the Oracle driver your application uses:
 <dependency>
     <groupId>io.github.rponte</groupId>
     <artifactId>penitent-core</artifactId>
-    <version>0.25.0</version>
+    <version>0.26.0</version>
 </dependency>
 <dependency>
     <groupId>com.oracle.database.jdbc</groupId>

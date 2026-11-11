@@ -68,7 +68,7 @@ END orders_pkg;
 <dependency>
     <groupId>io.github.rponte</groupId>
     <artifactId>penitent-core</artifactId>
-    <version>0.25.0</version>
+    <version>0.26.0</version>
 </dependency>
 <dependency>
     <groupId>com.oracle.database.jdbc</groupId>
@@ -193,7 +193,7 @@ Use the starter instead of `penitent-core`:
 <dependency>
     <groupId>io.github.rponte</groupId>
     <artifactId>penitent-spring-boot-starter</artifactId>
-    <version>0.25.0</version>
+    <version>0.26.0</version>
 </dependency>
 <dependency>
     <groupId>com.oracle.database.jdbc</groupId>

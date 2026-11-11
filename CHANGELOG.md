@@ -6,6 +6,11 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.26.0]
+
+Oracle 19c. The whole suite runs against Oracle 19c as well as 21c and 23ai, with every driver from 19 to 23,
+covering every Oracle Database release Oracle still supports.
+
 ### Changed
 
 - Oracle 19c is supported: every build also runs the whole suite against it, with every driver from 19 to 23, on
@@ -131,7 +136,8 @@ driven by the database dictionary: see the [README](https://github.com/rponte/pe
 
 - Spring Boot 4.1.2 for the versions the library is built and tested with.
 
-[Unreleased]: https://github.com/rponte/penitent/compare/v0.25.0...HEAD
+[Unreleased]: https://github.com/rponte/penitent/compare/v0.26.0...HEAD
+[0.26.0]: https://github.com/rponte/penitent/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/rponte/penitent/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/rponte/penitent/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/rponte/penitent/compare/v0.22.0...v0.23.0
