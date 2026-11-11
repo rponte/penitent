@@ -44,6 +44,12 @@
 			<scope>provided</scope>
 		</dependency>
 
+		<!-- the transaction manager Spring Boot creates, to prove the refusal reaches it -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-jdbc</artifactId>
+			<scope>test</scope>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-test</artifactId>

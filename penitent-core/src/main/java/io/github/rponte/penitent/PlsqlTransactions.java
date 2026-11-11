@@ -35,7 +35,10 @@ import io.github.rponte.penitent.internal.transaction.LocalTransactions;
  * auto-commit as it found it.
  *
  * <p>It is deliberately small: one connection, one thread, no nesting, no propagation. For more,
- * use Spring or a Jakarta EE container, which the interfaces already take part in.
+ * use Spring or a Jakarta EE container, which the interfaces already take part in. In a Spring
+ * application, Spring owns the transactions: with {@code penitent-spring} on the classpath, a block
+ * inside a Spring transaction, or a Spring transaction inside a block, is refused with an
+ * {@link IllegalStateException}, instead of splitting the work into two transactions.
  */
 public interface PlsqlTransactions {
 

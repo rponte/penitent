@@ -61,11 +61,11 @@ bound connection. Still open:
 - **A public connection provider,** to hand out and give back connections in ways a `DataSource` makes awkward, such
   as preparing the session before each call (`CLIENT_IDENTIFIER`, an application context for VPD). It needs the
   contract the provider already follows: one connection per call, given back exactly once, and never a commit.
-- **`PlsqlTransactions` with Spring:** an implementation in `penitent-spring` backed by Spring's transaction manager,
-  so that code written against `PlsqlTransactions` keeps working when an application adopts Spring. It would refuse
-  to join an existing `@Transactional`, as the core refuses a nested block; one contract test suite would run against
-  both implementations; and the core would refuse a block while a Spring transaction is active on the thread, which
-  today would silently become two transactions.
+- **`PlsqlTransactions` backed by Spring:** an implementation in `penitent-spring` on top of Spring's transaction
+  manager, so that the same block would run with or without Spring. Today an application has one transaction model:
+  in a Spring application, Spring's, and `penitent-spring` refuses a block inside a Spring transaction and a Spring
+  transaction inside a block. A bridge between the two models would bring back the questions that rule settles, so it
+  waits for a concrete case, such as a module that has to run both with and without Spring.
 - **Noticing a routine that ends the caller's transaction,** by comparing the transaction before and after the call,
   for instance through `DBMS_TRANSACTION.LOCAL_TRANSACTION_ID`, to warn or to fail.
 

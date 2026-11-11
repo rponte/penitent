@@ -6,6 +6,14 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- In a Spring application, `PlsqlTransactions` and Spring's transactions no longer split the work in two without a
+  word. With `penitent-spring`, a block inside a Spring transaction, a Spring transaction inside a block, and an
+  interface of `penitent-spring` called inside a block without `tx.using` each fail with an `IllegalStateException`
+  that says what to do, before anything runs. A block outside Spring's transactions keeps working as before. The
+  transactions page shows how to move from `PlsqlTransactions` to Spring's transactions, one construct at a time.
+
 ## [0.26.0]
 
 Oracle 19c. The whole suite runs against Oracle 19c as well as 21c and 23ai, with every driver from 19 to 23,
