@@ -33,6 +33,10 @@ nav = [
     { "Troubleshooting" = "troubleshooting.md" },
     { "Compatibility" = "compatibility.md" },
     { "Roadmap" = "roadmap.md" },
+    { "Architecture decisions" = [
+      { "Overview" = "adr/README.md" },
+      { "0001. Mocking PL/SQL with editions" = "adr/0001-mocking-plsql-with-editions.md" },
+    ] },
     { "Javadoc" = "api/index.html" },
   ] },
 ]
