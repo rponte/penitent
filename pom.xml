@@ -38,6 +38,7 @@
 		<module>penitent-core</module>
 		<module>penitent-spring</module>
 		<module>penitent-spring-boot-starter</module>
+		<module>penitent-test</module>
 	</modules>
 
 	<properties>

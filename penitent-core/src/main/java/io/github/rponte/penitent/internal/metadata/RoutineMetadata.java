@@ -378,7 +378,8 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 	}
 
 	/** The Oracle name: the one from {@link PlsqlParam}, or the Java name in SNAKE_CASE, like the method's. */
-	private static String oracleNameOf(Method method, Parameter parameter) {
+	/** The Oracle name a Java parameter binds to, by name: its {@code @PlsqlParam}, or its Java name in Oracle's style. */
+	public static String oracleNameOf(Method method, Parameter parameter) {
 		String name = BlockMetadata.nameOf(method, parameter);
 		return parameter.isAnnotationPresent(PlsqlParam.class) ? normalize(name) : toRoutineName(name);
 	}
