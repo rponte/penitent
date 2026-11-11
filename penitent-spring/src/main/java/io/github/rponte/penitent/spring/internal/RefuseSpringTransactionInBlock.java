@@ -16,9 +16,10 @@ public final class RefuseSpringTransactionInBlock implements TransactionExecutio
 	@Override
 	public void beforeBegin(TransactionExecution transaction) {
 		if (TransactionScope.isOpen()) {
-			throw new IllegalStateException("a PlsqlTransaction is open on this thread, and a Spring transaction"
-					+ " would commit apart from it: in a Spring application, Spring owns the transactions, so do the"
-					+ " whole work in one Spring transaction, with @Transactional or TransactionTemplate, or begin it"
+			throw new IllegalStateException("a PlsqlTransaction is open on this thread, and a Spring transaction,"
+					+ " such as a @Transactional method called inside the block, directly or through tx.using, would"
+					+ " commit apart from it: in a Spring application, Spring owns the transactions, so do the whole"
+					+ " work in one Spring transaction, with @Transactional or TransactionTemplate, or begin it"
 					+ " outside the block");
 		}
 	}

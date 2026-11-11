@@ -17,5 +17,8 @@ public interface WrappedItems {
 	@PlsqlRoutine("INSERT_ITEM")
 	void insert(@Positive int id);
 
+	@PlsqlRoutine("INSERT_ITEM")
+	void insertWithoutTransactional(@Positive int id);
+
 	int sessionId();
 }
