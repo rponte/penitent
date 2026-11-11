@@ -6,6 +6,13 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Oracle 19c is supported: every build also runs the whole suite against it, with every driver from 19 to 23, on
+  Oracle's Autonomous Database Free, the 19c image Oracle publishes for anyone to pull. It behaves as Oracle 21c, with
+  no change in the library: `BOOLEAN` exists only in PL/SQL, and driver 23 reads a `null` `BOOLEAN` that comes back as
+  `true` or `false`, with the same warning and the same ways around it.
+
 ## [0.25.0]
 
 Oracle 21c. The whole suite runs against Oracle 21c as well as 23ai, with every driver from 19 to 23, and the

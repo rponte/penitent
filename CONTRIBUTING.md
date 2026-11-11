@@ -51,9 +51,13 @@ driver:
 ```
 ./mvnw verify -Doracle.database.image=gvenzl/oracle-xe:21-slim-faststart                             # Oracle 21c
 ./mvnw verify -Doracle.database.image=gvenzl/oracle-xe:21-slim-faststart -Doracle.jdbc.artifact=ojdbc11 -Doracle.jdbc.version=21.24.0.0
+./mvnw verify -Doracle.database.image=ghcr.io/oracle/adb-free:latest                                 # Oracle 19c
 ```
 
-The 21c image is only for `amd64`: on an Apple Silicon machine it runs emulated, slower but fine. A fixture or a test
+The 21c and 19c images are only for `amd64`: on an Apple Silicon machine they run emulated, slower but fine. The 19c
+image is Oracle's Autonomous Database Free: it asks for 4 CPUs and 8 GB of memory, so give Docker at least that, and
+it takes about a minute and a half to start, each time a module's tests begin. `OracleUnderTest`, in the tests, starts
+either kind of image and creates on the Autonomous Database the user that the other images create themselves. A fixture or a test
 that needs what only 23ai has, such as SQL `BOOLEAN`, checks the database's version: the fixture with
 `DBMS_DB_VERSION.VERSION`, as `V3__additional_types.sql` does, and the test with `assumeSqlBoolean()`, so that it
 skips itself on an older database.

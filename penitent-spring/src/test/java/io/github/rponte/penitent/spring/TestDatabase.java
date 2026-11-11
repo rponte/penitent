@@ -4,8 +4,6 @@ import javax.sql.DataSource;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.testcontainers.oracle.OracleContainer;
-import org.testcontainers.utility.DockerImageName;
 
 /**
  * One Oracle for all the test classes of this module, started on first use, with the
@@ -13,23 +11,8 @@ import org.testcontainers.utility.DockerImageName;
  */
 final class TestDatabase {
 
-	/**
-	 * Oracle 23ai by default, or another image given by the {@code oracle.database.image} property, as in
-	 * penitent-core's {@code OracleIntegrationTest}.
-	 */
-	private static final String IMAGE = System.getProperty("oracle.database.image",
-			"gvenzl/oracle-free:23.26.3-slim-faststart");
-
-	private static final OracleContainer ORACLE = new OracleContainer(
-			DockerImageName.parse(IMAGE).asCompatibleSubstituteFor("gvenzl/oracle-free")) {
-		// the Testcontainers module is for Oracle Free, whose database is FREEPDB1; Oracle XE, as 21c, calls it XEPDB1
-		@Override
-		public String getDatabaseName() {
-			return IMAGE.contains("oracle-xe") ? "XEPDB1" : super.getDatabaseName();
-		}
-	}
-			.withUsername("plsql_test")
-			.withPassword("plsql_test");
+	/** Started on first use, as in penitent-core's {@code OracleIntegrationTest}: see {@link OracleUnderTest}. */
+	private static OracleUnderTest oracle;
 
 	private static DataSource dataSource;
 
@@ -38,7 +21,8 @@ final class TestDatabase {
 
 	static synchronized DataSource dataSource() {
 		if (dataSource == null) {
-			ORACLE.start();
+			oracle = OracleUnderTest.start(System.getProperty("oracle.database.image",
+					"gvenzl/oracle-free:23.26.3-slim-faststart"));
 			DataSource started = newDataSource();
 			createFixtures(new JdbcTemplate(started));
 			dataSource = started;
@@ -48,7 +32,7 @@ final class TestDatabase {
 
 	/** Another DataSource for the same database, for tests that need two of them. */
 	static DataSource newDataSource() {
-		return new DriverManagerDataSource(ORACLE.getJdbcUrl(), ORACLE.getUsername(), ORACLE.getPassword());
+		return new DriverManagerDataSource(oracle.jdbcUrl(), OracleUnderTest.USER, OracleUnderTest.PASSWORD);
 	}
 
 	static void delete(int itemId) {
