@@ -201,6 +201,36 @@ proxy of its own. That proxy is still the library's interface, all the way throu
   - **with `PlsqlPackages.using`,** outside a block, Spring begins its transaction on a connection of its own, while
     the call still runs on the connection you gave, in that connection's transaction.
 
+For example, with the `Customers` interface of [Bean Validation](#bean-validation), a view inside a block validates
+each call as the bean does, and a refused call rolls the whole block back:
+
+<!-- snippet: untested -->
+```java
+transactions.run(tx -> {
+    Customers inBlock = tx.using(customers);   // the bean, with Spring's validation around it
+
+    inBlock.rename(42, "Ana");                 // validated, then run in the block's transaction
+    inBlock.rename(43, " ");                   // ConstraintViolationException, before the call:
+});                                            // the block rolls back, and customer 42 keeps its name
+```
+
+A `@Retry` on the interface works on a view too, but inside a block it makes only the call again, in the same
+transaction, which [Resilience4j](#resilience4j) advises against. Retry the whole block instead, from a method of a
+Spring bean of yours, so that each attempt is a new block, with a new transaction:
+
+<!-- snippet: untested -->
+```java
+@Retry(name = "payments")                       // each attempt runs the block again, from the start
+public void pay(long id) {
+    transactions.run(tx -> {
+        tx.using(payments).pay(id);
+        tx.using(ledger).record(id);
+    });
+}
+```
+
+The same holds for `PlsqlPackages.using`, on a connection whose transaction is yours.
+
 ## Spring Boot starter
 
 With Spring Boot, the dependency is all you need. It registers the interfaces of the application's packages, as
