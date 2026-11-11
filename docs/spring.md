@@ -194,9 +194,12 @@ proxy of its own. That proxy is still the library's interface, all the way throu
 
 - **Validation at startup** and `PlsqlPackages.validate` reach the interface inside Spring's proxy.
 - **A view, from `tx.using` or `PlsqlPackages.using`,** keeps every layer Spring put around the bean, in the same
-  order, so validation, retries and the application's advice apply to the view as well. The one layer it leaves out
-  is Spring's transaction: a view runs in the transaction of its connection, the block's or yours, so a
-  `@Transactional` on the interface does not apply to it.
+  order, so validation, retries and the application's advice apply to the view as well. Spring's transaction is one
+  of those layers, and a view behaves as the bean does:
+  - **inside a `PlsqlTransactions` block,** a `@Transactional` method of the view is refused, as any Spring
+    transaction there is. Call it outside the block, or leave `@Transactional` off the methods the block uses;
+  - **with `PlsqlPackages.using`,** outside a block, Spring begins its transaction on a connection of its own, while
+    the call still runs on the connection you gave, in that connection's transaction.
 
 ## Spring Boot starter
 

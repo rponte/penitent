@@ -357,9 +357,10 @@ The view implements the same interface, and:
   errors as `PlsqlRoutineRaisedException`;
 - **runs on its connection even inside a Spring transaction:** the connection you gave wins over the transaction's,
   so a view inside a `@Transactional` method is not part of that transaction.
-- **keeps what Spring put around the bean:** a view of a bean that Spring wrapped, for `@Validated`, Resilience4j or
-  advice of your own, applies the same behavior, in the same order, except a `@Transactional` on the interface: the
-  view runs in the transaction of its connection. The same goes for `tx.using`.
+- **keeps what Spring put around the bean:** a view of a bean that Spring wrapped, for `@Validated`, Resilience4j,
+  `@Transactional` or advice of your own, applies the same behavior, in the same order. The call itself always runs
+  on the view's connection; see [Interfaces Spring wraps](spring.md#interfaces-spring-wraps). The same goes for
+  `tx.using`, where a `@Transactional` method is refused, as any Spring transaction inside a block.
 
 Inside the transaction, calls and plain JDBC see each other's work, and no other session sees any of it until the
 commit; `OUT` parameters and cursors read what the transaction has not committed yet; and every call runs in the

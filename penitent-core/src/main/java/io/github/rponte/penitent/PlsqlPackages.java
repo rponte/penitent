@@ -120,8 +120,8 @@ public final class PlsqlPackages {
 	 * and its transaction, stay the application's.
 	 *
 	 * <p>{@code proxy} may be one a framework wrapped, such as a Spring bean with {@code @Validated}: with
-	 * {@code penitent-spring}, the view keeps every layer around it, except Spring's transaction, since the
-	 * view runs in the transaction of {@code connection}.
+	 * {@code penitent-spring}, the view keeps every layer around it, in the same order, and its calls still
+	 * run on {@code connection}.
 	 *
 	 * <p>A view is cheap, and meant to live as long as the transaction: one per transaction is the
 	 * intended use, and an unreferenced view is collected while the proxy lives on. Like the

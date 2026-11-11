@@ -18,10 +18,7 @@ public interface ProxyIntegration {
 	/** The object {@code proxy} wraps, when it is a wrapper of this framework; otherwise {@code null}. */
 	Object unwrap(Object proxy);
 
-	/**
-	 * {@code view} wrapped as {@code wrapper} wraps its target, with the same behavior around it, except a
-	 * transaction of the framework's own: a view runs in the transaction of its connection.
-	 */
+	/** {@code view} wrapped as {@code wrapper} wraps its target, with the same behavior around it. */
 	Object rewrap(Object wrapper, Object view);
 
 	/** The implementations on the classpath, found once. */

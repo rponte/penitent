@@ -1,9 +1,7 @@
 package io.github.rponte.penitent.spring.internal;
 
-import org.springframework.aop.Advisor;
 import org.springframework.aop.framework.Advised;
 import org.springframework.aop.framework.ProxyFactory;
-import org.springframework.transaction.interceptor.TransactionInterceptor;
 
 import io.github.rponte.penitent.internal.proxy.ProxyIntegration;
 
@@ -29,9 +27,9 @@ public final class SpringProxyIntegration implements ProxyIntegration {
 	}
 
 	/**
-	 * Every advisor of {@code wrapper}, in the same order, around the view, except Spring's transaction:
-	 * the view runs in the transaction of its connection, the block's or the application's, and a Spring
-	 * transaction there would take another connection, or be refused inside a block.
+	 * Every advisor of {@code wrapper}, in the same order, around the view, Spring's transaction included:
+	 * a view behaves as the bean does, so inside a block a {@code @Transactional} method is refused, as any
+	 * Spring transaction there is, instead of losing its annotation without a word.
 	 */
 	@Override
 	public Object rewrap(Object wrapper, Object view) {
@@ -39,11 +37,7 @@ public final class SpringProxyIntegration implements ProxyIntegration {
 		ProxyFactory factory = new ProxyFactory();
 		factory.setInterfaces(advised.getProxiedInterfaces());
 		factory.setExposeProxy(advised.isExposeProxy());
-		for (Advisor advisor : advised.getAdvisors()) {
-			if (!(advisor.getAdvice() instanceof TransactionInterceptor)) {
-				factory.addAdvisor(advisor);
-			}
-		}
+		factory.addAdvisors(advised.getAdvisors());
 		factory.setTarget(view);
 		return factory.getProxy(view.getClass().getClassLoader());
 	}
