@@ -34,9 +34,9 @@ import io.github.rponte.penitent.spring.scanwrapped.WrappedItems;
 /**
  * An interface Spring wraps in its own proxy, for {@code @Transactional}, {@code @Validated} or advice of
  * the application, is still the library's: {@code validate} and the views of {@code tx.using} and
- * {@code PlsqlPackages.using} see through Spring's layers. A view keeps every layer, so validation and the
- * application's advice still apply, except Spring's transaction: on a view, the transaction belongs to
- * the block, or to whoever owns the connection.
+ * {@code PlsqlPackages.using} see through Spring's layers. A view keeps every layer, Spring's transaction
+ * included: inside a block, a {@code @Transactional} method of a view is refused, as any Spring
+ * transaction there is.
  */
 class SpringWrappedInterfacesTest {
 
@@ -118,7 +118,7 @@ class SpringWrappedInterfacesTest {
 	}
 
 	@Test
-	@DisplayName("tx.using: the view runs in the block, without Spring's transaction, and the block's rollback undoes it")
+	@DisplayName("tx.using: the view runs in the block, and the block's rollback undoes it")
 	void view_in_block() {
 		try (var context = new AnnotationConfigApplicationContext(Application.class)) {
 			WrappedItems bean = context.getBean(WrappedItems.class);
@@ -127,7 +127,7 @@ class SpringWrappedInterfacesTest {
 
 			assertThatThrownBy(() -> PlsqlTransactions.of(dataSource).run(tx -> {
 				WrappedItems view = tx.using(bean);
-				view.insert(5000);
+				view.insertWithoutTransactional(5000);
 				blockSession.set(sessionOf(tx.connection()));
 				viewSession.set(view.sessionId());
 				throw new IllegalStateException("block fails");
@@ -144,7 +144,7 @@ class SpringWrappedInterfacesTest {
 		try (var context = new AnnotationConfigApplicationContext(Application.class)) {
 			WrappedItems bean = context.getBean(WrappedItems.class);
 
-			assertThatThrownBy(() -> PlsqlTransactions.of(dataSource).run(tx -> tx.using(bean).insert(-1)))
+			assertThatThrownBy(() -> PlsqlTransactions.of(dataSource).run(tx -> tx.using(bean).insertWithoutTransactional(-1)))
 					.isInstanceOf(ConstraintViolationException.class);
 		}
 	}
@@ -155,10 +155,25 @@ class SpringWrappedInterfacesTest {
 		try (var context = new AnnotationConfigApplicationContext(Application.class)) {
 			WrappedItems advised = advised(context.getBean(WrappedItems.class));
 
-			PlsqlTransactions.of(dataSource).run(tx -> tx.using(advised).insert(5010));
+			PlsqlTransactions.of(dataSource).run(tx -> tx.using(advised).insertWithoutTransactional(5010));
 
 			assertThat(ADVISED_CALLS).hasValue(1);
 			assertThat(exists(5010)).isTrue();
+		}
+	}
+
+	@Test
+	@DisplayName("tx.using: a @Transactional method of the view is refused, as any Spring transaction inside a block")
+	void view_keeps_spring_transaction() {
+		try (var context = new AnnotationConfigApplicationContext(Application.class)) {
+			WrappedItems bean = context.getBean(WrappedItems.class);
+
+			assertThatThrownBy(() -> PlsqlTransactions.of(dataSource).run(tx -> tx.using(bean).insert(5030)))
+					.isInstanceOf(IllegalStateException.class)
+					.hasMessageContaining("a PlsqlTransaction is open on this thread")
+					.hasMessageContaining("through tx.using");
+
+			assertThat(exists(5030)).isFalse();
 		}
 	}
 
@@ -176,7 +191,7 @@ class SpringWrappedInterfacesTest {
 	}
 
 	@Test
-	@DisplayName("PlsqlPackages.using: the view runs on the connection given, in its transaction, not in Spring's")
+	@DisplayName("PlsqlPackages.using: a @Transactional method of the view still runs on the connection given, in its transaction")
 	void view_on_connection() throws Exception {
 		try (var context = new AnnotationConfigApplicationContext(Application.class);
 				Connection connection = dataSource.getConnection()) {
