@@ -19,6 +19,8 @@
 
 	<properties>
 		<automatic-module-name>io.github.rponte.penitent.boot</automatic-module-name>
+		<!-- tests only: not in the Spring Boot BOM -->
+		<resilience4j.version>2.4.0</resilience4j.version>
 	</properties>
 
 	<dependencies>
@@ -44,6 +46,26 @@
 			<scope>provided</scope>
 		</dependency>
 
+		<!--
+			What an application adds around the interfaces, to prove it works on them as on any bean: method
+			validation, and Resilience4j's annotations, which need AspectJ's proxies.
+		-->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-validation</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-aspectj</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>io.github.resilience4j</groupId>
+			<artifactId>resilience4j-spring-boot4</artifactId>
+			<version>${resilience4j.version}</version>
+			<scope>test</scope>
+		</dependency>
 		<!-- the transaction manager Spring Boot creates, to prove the refusal reaches it -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
