@@ -6,6 +6,11 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.27.0]
+
+One transaction model per application. In a Spring application, `PlsqlTransactions` and Spring's transactions
+refuse to overlap, instead of splitting the work in two, and the transactions page shows how to move to Spring's.
+
 ### Changed
 
 - In a Spring application, `PlsqlTransactions` and Spring's transactions no longer split the work in two without a
@@ -144,7 +149,8 @@ driven by the database dictionary: see the [README](https://github.com/rponte/pe
 
 - Spring Boot 4.1.2 for the versions the library is built and tested with.
 
-[Unreleased]: https://github.com/rponte/penitent/compare/v0.26.0...HEAD
+[Unreleased]: https://github.com/rponte/penitent/compare/v0.27.0...HEAD
+[0.27.0]: https://github.com/rponte/penitent/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/rponte/penitent/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/rponte/penitent/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/rponte/penitent/compare/v0.23.0...v0.24.0
