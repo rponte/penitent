@@ -3,7 +3,7 @@
 Status of version `0.25.0`, measured on Java 17 and 21, with Oracle 23ai
 (`gvenzl/oracle-free:23.26.3`) and `ojdbc17`; the whole suite also runs with `ojdbc11` and `ojdbc8`, version
 23.26.3, and with drivers 21.24.0.0 and 19.33.0.0, as [Driver versions](#driver-versions) details, and against
-Oracle 21c with every one of those drivers, as [Database versions](#database-versions) details. Versions up to `0.22.0` need
+Oracle 21c and Oracle 19c with every one of those drivers, as [Database versions](#database-versions) details. Versions up to `0.22.0` need
 Java 21.
 
 | Status | Meaning |
@@ -63,7 +63,12 @@ code from one to another. The whole suite runs against each database below, with
 |---|---|---|
 | Oracle 23ai | `gvenzl/oracle-free:23.26.3-slim-faststart` | Validated: the whole suite |
 | Oracle 21c | `gvenzl/oracle-xe:21-slim-faststart` (21.3) | Validated: the whole suite, with the differences below |
-| Oracle 19c | | Not measured |
+| Oracle 19c | `ghcr.io/oracle/adb-free:latest` (19.33) | Validated: the whole suite, with the differences below |
+
+Oracle 19c is measured on Oracle's Autonomous Database Free, the 19c image Oracle publishes for anyone to pull. It is
+Enterprise Edition with a recent release update and the same PL/SQL as any other 19c. The tests run as a regular
+user with the usual grants, and none of them depends on a feature of the Autonomous Database. Oracle 19c and 21c
+behave the same in every test.
 
 Before 23ai, `BOOLEAN` exists only in PL/SQL. In PL/SQL it works as on 23ai: a parameter, a return value, an `OUT`,
 the field of a RECORD and a block's `:result`, with `true`, `false` and `null`.
@@ -83,8 +88,8 @@ A test in the build pins the driver's behavior, so a fixed driver will show up t
 
 Any of these keeps the `null`:
 
-1. **Use the driver of your database's version**, such as 21 or 19 against Oracle 21c: the whole suite passes with
-   them, `null` included, and nothing else changes.
+1. **Use the driver of your database's version**, such as 21 against Oracle 21c or 19 against Oracle 19c: the whole
+   suite passes with them, `null` included, and nothing else changes.
 2. **Hand the value back as `VARCHAR2` or `NUMBER`.** Penitent reads both into a `Boolean`, `Y`/`N` and `1`/`0`
    by default, or the literals of `@PlsqlBoolean`, and keeps the `null`, so the Java method stays the same. A
    function of its own leaves the original one as it is for the PL/SQL that calls it:

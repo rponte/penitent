@@ -20,24 +20,19 @@ Still open: whether it becomes a module of this project or a project of its own.
 
 ### Supported versions
 
-Today everything is measured on Oracle 23ai and Oracle 21c, on Java 17 and 21, with the `ojdbc17`, `ojdbc11` and `ojdbc8` artifacts
+Today everything is measured on Oracle 23ai, Oracle 21c and Oracle 19c, on Java 17 and 21, with the `ojdbc17`, `ojdbc11` and `ojdbc8` artifacts
 of driver 23.x, the `ojdbc11` and `ojdbc8` artifacts of driver 21.x, and the `ojdbc10` and `ojdbc8` artifacts of
 driver 19.x. Drivers 21 and 19 differed from 23 in the `java.time` conversions, the native `BOOLEAN`, the addressing
 of `%ROWTYPE` and, in 19, the two types with a time zone; the library works around each, as
 [Driver versions](compatibility.md#driver-versions) lists, so that a single code path serves every version. Only a
 `BOOLEAN` column in a cursor was beyond reach, because the driver fails before the library sees the data. Oracle 21c
-needed no change in the library: it has `BOOLEAN` only in PL/SQL, which is where the library binds it, and the one
-gap is in driver 23, which reads a `null` `BOOLEAN` that comes back from it as `true` or `false`, as
-[Database versions](compatibility.md#database-versions) explains.
+and 19c needed no change in the library: they have `BOOLEAN` only in PL/SQL, which is where the library binds it, and
+the one gap is in driver 23, which reads a `null` `BOOLEAN` that comes back from them as `true` or `false`, as
+[Database versions](compatibility.md#database-versions) explains. Oracle 19c, the long-term release most projects
+run, is measured on Oracle's Autonomous Database Free, the 19c image Oracle publishes for anyone to pull.
 
-Widening it further is the next step:
-
-1. **Oracle 19c,** the long-term release most projects still run. What applies to 21c probably applies here, and 19c has no
-   free edition: its image comes from Oracle's container registry, after a login, and is large and slow to start, so
-   it may run in a separate, less frequent workflow.
-
-The goal is a test matrix in CI that states which combinations are validated, as the [compatibility table](compatibility.md) does
-today for the combinations above.
+That covers every release Oracle still supports. Older ones, such as Oracle 12c and drivers 18 and before, are out of
+Oracle's support, and wait for a real use case, as the items below do.
 
 ## On demand
 

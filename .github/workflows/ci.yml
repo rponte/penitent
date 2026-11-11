@@ -18,11 +18,12 @@ jobs:
     # compiled for Java 17, the minimum, and tested on it and on Java 21, with the ojdbc17 artifact of the driver;
     # then each other artifact of the same driver version on Java 21, and drivers 21 and 19 in each of their
     # artifacts (neither has ojdbc17), one axis at a time. Without version, the driver is the Spring Boot BOM's.
-    # Each of them against Oracle 23ai, the tests' default, and against Oracle 21c
+    # Each of them against Oracle 23ai, the tests' default, against Oracle 21c and against Oracle 19c, which is
+    # Oracle's Autonomous Database Free
     strategy:
       fail-fast: false
       matrix:
-        database: ['23ai', '21c']
+        database: ['23ai', '21c', '19c']
         driver:
           - { java: '21', artifact: 'ojdbc17' }
           - { java: '17', artifact: 'ojdbc17' }
@@ -35,11 +36,14 @@ jobs:
         include:
           - database: '21c'
             image: 'gvenzl/oracle-xe:21-slim-faststart'
+          - database: '19c'
+            image: 'ghcr.io/oracle/adb-free:latest'
     # the jobs against 23ai keep the names they had before the database axis
     name: >-
       build (Java ${{ matrix.driver.java }}, ${{ matrix.driver.artifact }}${{ matrix.driver.version && format(' {0}', matrix.driver.version) || '' }}${{ matrix.image && format(', Oracle {0}', matrix.database) || '' }})
     runs-on: ubuntu-latest
-    # the tests start their own Oracle through Testcontainers; most of the time is pulling its image, and 21c's is larger
+    # the tests start their own Oracle through Testcontainers; most of the time is pulling its image, and 21c's and
+    # 19c's are larger
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7

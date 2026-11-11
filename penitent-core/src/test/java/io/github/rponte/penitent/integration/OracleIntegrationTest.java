@@ -4,14 +4,11 @@ import static org.junit.jupiter.api.Assumptions.assumeFalse;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.SQLException;
-import java.sql.Statement;
 
 import javax.sql.DataSource;
 
 import org.flywaydb.core.Flyway;
-import org.testcontainers.oracle.OracleContainer;
 
 import com.zaxxer.hikari.HikariDataSource;
 
@@ -32,23 +29,8 @@ import io.github.rponte.penitent.PlsqlPackages;
  */
 abstract class OracleIntegrationTest {
 
-	/**
-	 * The database the tests run against: Oracle 23ai by default, or another image given by the
-	 * {@code oracle.database.image} property, such as {@code gvenzl/oracle-xe:21-slim-faststart} for Oracle 21c.
-	 */
-	private static final String IMAGE = System.getProperty("oracle.database.image",
-			"gvenzl/oracle-free:23.26.3-slim-faststart");
-
-	private static final OracleContainer ORACLE = new OracleContainer(
-			org.testcontainers.utility.DockerImageName.parse(IMAGE).asCompatibleSubstituteFor("gvenzl/oracle-free")) {
-		// the Testcontainers module is for Oracle Free, whose database is FREEPDB1; Oracle XE, as 21c, calls it XEPDB1
-		@Override
-		public String getDatabaseName() {
-			return IMAGE.contains("oracle-xe") ? "XEPDB1" : super.getDatabaseName();
-		}
-	}
-			.withUsername("plsql_test")
-			.withPassword("plsql_test");
+	private static final OracleUnderTest ORACLE = OracleUnderTest.start(System.getProperty("oracle.database.image",
+			"gvenzl/oracle-free:23.26.3-slim-faststart"));
 
 	protected static final DataSource DATA_SOURCE;
 
@@ -56,22 +38,19 @@ abstract class OracleIntegrationTest {
 	protected static final int DATABASE_MAJOR_VERSION;
 
 	static {
-		// no stop: Testcontainers tears the container down when the JVM exits
-		ORACLE.start();
-
 		createOwnerSchema();
 
 		Flyway.configure()
-				.dataSource(ORACLE.getJdbcUrl(), "plsql_owner", ORACLE.getPassword())
+				.dataSource(ORACLE.jdbcUrl(), "plsql_owner", OracleUnderTest.PASSWORD)
 				.locations("classpath:db/owner")
 				.placeholderReplacement(false)
 				.load()
 				.migrate();
 
-		executeAsSystem("CREATE PUBLIC SYNONYM FIXTURE_OWNER_PUBLIC FOR plsql_owner.FIXTURE_OF_OWNER");
+		ORACLE.executeAsAdmin("CREATE PUBLIC SYNONYM FIXTURE_OWNER_PUBLIC FOR plsql_owner.FIXTURE_OF_OWNER");
 
 		Flyway.configure()
-				.dataSource(ORACLE.getJdbcUrl(), ORACLE.getUsername(), ORACLE.getPassword())
+				.dataSource(ORACLE.jdbcUrl(), OracleUnderTest.USER, OracleUnderTest.PASSWORD)
 				.locations("classpath:db/fixtures")
 				.placeholderReplacement(false)
 				.load()
@@ -111,27 +90,17 @@ abstract class OracleIntegrationTest {
 
 	/** The owner of {@code db/owner}: its packages are only visible through grants, as in production. */
 	private static void createOwnerSchema() {
-		executeAsSystem(
-				"CREATE USER plsql_owner IDENTIFIED BY \"" + ORACLE.getPassword() + "\" QUOTA UNLIMITED ON USERS",
+		ORACLE.executeAsAdmin(
+				"CREATE USER plsql_owner IDENTIFIED BY \"" + OracleUnderTest.PASSWORD + "\" QUOTA UNLIMITED ON "
+						+ ORACLE.defaultTablespace(),
 				"GRANT CREATE SESSION, CREATE TABLE, CREATE PROCEDURE, CREATE TYPE TO plsql_owner");
-	}
-
-	private static void executeAsSystem(String... commands) {
-		try (Connection connection = DriverManager.getConnection(ORACLE.getJdbcUrl(), "system", ORACLE.getPassword());
-				Statement statement = connection.createStatement()) {
-			for (String command : commands) {
-				statement.execute(command);
-			}
-		} catch (SQLException e) {
-			throw new IllegalStateException("failed to prepare the test database", e);
-		}
 	}
 
 	protected static HikariDataSource newPool() {
 		HikariDataSource dataSource = new HikariDataSource();
-		dataSource.setJdbcUrl(ORACLE.getJdbcUrl());
-		dataSource.setUsername(ORACLE.getUsername());
-		dataSource.setPassword(ORACLE.getPassword());
+		dataSource.setJdbcUrl(ORACLE.jdbcUrl());
+		dataSource.setUsername(OracleUnderTest.USER);
+		dataSource.setPassword(OracleUnderTest.PASSWORD);
 		dataSource.setMaximumPoolSize(5);
 		return dataSource;
 	}

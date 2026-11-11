@@ -155,9 +155,9 @@ Which Oracle JDBC driver works with which Oracle Database, as the build tests th
 
 | Oracle JDBC driver | Oracle Database 23ai | 21c | 19c |
 |---|:---:|:---:|:---:|
-| **23.x**: `ojdbc17`, `ojdbc11`, `ojdbc8` | ✅ | ✅ ² | ❔ |
-| **21.x**: `ojdbc11`, `ojdbc8` | ✅ ¹ | ✅ | ❔ |
-| **19.x**: `ojdbc10`, `ojdbc8` | ✅ ¹ | ✅ | ❔ |
+| **23.x**: `ojdbc17`, `ojdbc11`, `ojdbc8` | ✅ | ✅ ² | ✅ ² |
+| **21.x**: `ojdbc11`, `ojdbc8` | ✅ ¹ | ✅ | ✅ |
+| **19.x**: `ojdbc10`, `ojdbc8` | ✅ ¹ | ✅ | ✅ |
 | **18.x** and older | ❔ | ❔ | ❔ |
 
 ✅ every build runs the whole suite with it · ❔ not measured yet, on the [roadmap](docs/roadmap.md)<br>
