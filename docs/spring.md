@@ -23,6 +23,10 @@ Orders orders = SpringPlsqlPackages.create(Orders.class, dataSource);
 - **Transactions:** inside a `@Transactional` method, the call uses the transaction's connection. It sees the data
   the transaction has written, and its own changes are committed or rolled back with the rest. See
   [Transactions and connections](transactions.md) for what happens when a call fails inside one.
+- **One transaction model:** Spring's. A `PlsqlTransactions` block keeps working outside Spring's transactions, and
+  mixing the two, a block inside a Spring transaction or one inside a block, fails with a clear message instead of
+  splitting the work in two. See [`PlsqlTransactions` in a Spring application](transactions.md#plsqltransactions-in-a-spring-application)
+  and [how to move to Spring's transactions](transactions.md#moving-from-plsqltransactions-to-spring).
 - **Exceptions:** infrastructure failures arrive as `DataAccessException`, with the same classes a `JdbcTemplate`
   would throw. A deadlock, for example, is a `PessimisticLockingFailureException`.
 - **Routine errors stay as they are:** an error raised by the routine arrives as `PlsqlRoutineRaisedException`, the

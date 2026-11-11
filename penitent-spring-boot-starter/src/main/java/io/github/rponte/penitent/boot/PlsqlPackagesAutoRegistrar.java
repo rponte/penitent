@@ -13,11 +13,15 @@ import org.springframework.core.type.AnnotationMetadata;
 
 import io.github.rponte.penitent.spring.EnablePlsqlPackages;
 import io.github.rponte.penitent.spring.PlsqlPackagesScanner;
+import io.github.rponte.penitent.spring.internal.RefuseSpringTransactionInBlockRegistrar;
 
 /**
  * Scans the application's packages, the ones Spring Data also uses: the package of the
  * {@code @SpringBootApplication} class, and any added with {@code @AutoConfigurationPackage}. It does
  * nothing when the application declares {@link EnablePlsqlPackages}: the explicit packages win.
+ *
+ * <p>Either way, it makes the context's transaction managers refuse a Spring transaction inside a
+ * {@code PlsqlTransaction}: see {@link RefuseSpringTransactionInBlockRegistrar}.
  */
 class PlsqlPackagesAutoRegistrar implements ImportBeanDefinitionRegistrar, BeanFactoryAware, ResourceLoaderAware,
 		EnvironmentAware {
@@ -43,6 +47,7 @@ class PlsqlPackagesAutoRegistrar implements ImportBeanDefinitionRegistrar, BeanF
 
 	@Override
 	public void registerBeanDefinitions(AnnotationMetadata metadata, BeanDefinitionRegistry registry) {
+		RefuseSpringTransactionInBlockRegistrar.registerIn(registry);
 		if (!AutoConfigurationPackages.has(beanFactory) || PlsqlPackagesScanner.scannedByAnnotation(registry)) {
 			return;
 		}

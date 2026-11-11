@@ -11,13 +11,16 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.jdbc.autoconfigure.DataSourceTransactionManagerAutoConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.springframework.boot.transaction.autoconfigure.TransactionManagerCustomizationAutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.core.annotation.Order;
+import org.springframework.transaction.ConfigurableTransactionManager;
 
 import io.github.rponte.penitent.PlsqlBind;
 import io.github.rponte.penitent.PlsqlSettings;
@@ -51,6 +54,17 @@ class PlsqlAutoConfigurationTest {
 			assertThat(context).doesNotHaveBean(Orders.Nested.class).doesNotHaveBean(Invoices.class);
 			assertThat(context.getBeanNamesForType(Orders.class)).containsExactly(Orders.class.getName());
 		});
+	}
+
+	@Test
+	@DisplayName("the transaction manager Spring Boot creates refuses, once, a Spring transaction inside a PlsqlTransaction")
+	void refusal_on_boot_transaction_manager() {
+		runner.withConfiguration(AutoConfigurations.of(TransactionManagerCustomizationAutoConfiguration.class,
+				DataSourceTransactionManagerAutoConfiguration.class))
+				.run(context -> assertThat(context.getBean(ConfigurableTransactionManager.class)
+						.getTransactionExecutionListeners())
+						.filteredOn(listener -> listener.getClass().getName().startsWith("io.github.rponte.penitent."))
+						.hasSize(1));
 	}
 
 	@Test

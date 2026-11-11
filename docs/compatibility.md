@@ -369,6 +369,10 @@ Where the PL/SQL guarantees the value is never `null`, driver 23 works as it is.
 | `PlsqlTransactions`: `tx.connection()` refuses `commit`, `rollback()`, `setAutoCommit`, `close` and `abort`, allows savepoints and `unwrap` | Validated |
 | `PlsqlTransactions`: refuses a proxy of the same `DataSource` without `tx.using`, a view or the connection after the block or from another thread, and a nested block; a proxy of another `DataSource`, or of a wrapper of the same one, runs on its own, since the `DataSource` is compared by identity | Validated |
 | `PlsqlTransactions`: a routine's own `COMMIT` commits the block's work so far | Validated |
+| `PlsqlTransactions` with `penitent-spring`: a block inside a Spring transaction is refused before it takes a connection, and Spring's rollback still undoes the rest; a block outside any Spring transaction runs side by side with them | Validated |
+| `PlsqlTransactions` with `penitent-spring`: a Spring transaction that begins inside a block is refused before it takes a connection, and the block rolls back; `@EnablePlsqlPackages` and the starter add the refusal once to each transaction manager in the context, the one Spring Boot creates included, also when both are present | Validated |
+| `PlsqlTransactions` with the starter: a `@Transactional` method, through the proxy Spring Boot creates, is refused inside a block before it takes a connection, and a block inside one is refused before it takes its own | Validated |
+| `PlsqlTransactions` with `penitent-spring`: an interface of `SpringPlsqlPackages` of the block's `DataSource` is refused without `tx.using`, and runs in the block's session through it; one of another `DataSource` runs on its own | Validated |
 
 ## Interface behavior
 

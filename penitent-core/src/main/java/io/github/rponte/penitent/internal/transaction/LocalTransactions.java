@@ -19,6 +19,9 @@ import io.github.rponte.penitent.internal.proxy.TransactionScope;
  * <p>The block's own failure always wins: a failure to roll back, restore auto-commit or close is
  * suppressed into it. Only when the block succeeded does a failure of the commit, or of the cleanup,
  * reach the caller, translated with the {@code TRANSACTION} phase.
+ *
+ * <p>Before taking a connection, each {@link TransactionIntegration} may refuse the block, as
+ * {@code penitent-spring} does inside a Spring transaction.
  */
 public final class LocalTransactions implements PlsqlTransactions {
 
@@ -44,6 +47,7 @@ public final class LocalTransactions implements PlsqlTransactions {
 			throw new IllegalStateException("a PlsqlTransaction is already open on this thread; nested blocks are not"
 					+ " supported: pass the PlsqlTransaction you have instead of opening another");
 		}
+		TransactionIntegration.all().forEach(TransactionIntegration::refuseBlock);
 		Connection connection = begin();
 		boolean autoCommit;
 		try {
