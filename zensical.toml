@@ -27,6 +27,7 @@ nav = [
     { "Settings" = "settings.md" },
     { "Validation" = "validation.md" },
     { "Spring and Spring Boot" = "spring.md" },
+    { "Mocking PL/SQL in tests" = "testing.md" },
     { "Logging" = "logging.md" },
   ] },
   { "Reference" = [

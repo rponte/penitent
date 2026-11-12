@@ -180,6 +180,11 @@ first:
 
 ## Alternatives considered
 
+- **A repository of its own, named Placebo.** It would give the module an identity and releases of its own, but the
+  module relies on Penitent's internals (how a method resolves to a routine, the views of an interface), which would
+  have to become public and stable API, and every change across both would take a release of each. While the module
+  grows, it stays in this repository as `penitent-test`; it can be split out, under that name, when it outgrows it.
+
 - **Mocks in Java only, with Mockito on the interface.** It already works, needs nothing in the database and suits a
   unit test. It cannot reach a routine that PL/SQL calls, nor exercise the SQL around the call, which is what this
   module is for.

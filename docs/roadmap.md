@@ -1,7 +1,7 @@
 # Roadmap
 
 The library is in `0.x`: it works and is tested, but the public API may still change between minor versions. The
-packages under `io.github.rponte.penitent.internal` are never part of the API.
+packages named `internal`, such as `io.github.rponte.penitent.internal`, are never part of the API.
 
 The items below are in three groups: what comes next, what waits for a real use case, and what is left out on purpose.
 
@@ -9,12 +9,17 @@ The items below are in three groups: what comes next, what waits for a real use 
 
 ### Mocking PL/SQL in tests
 
-Tests of an application that calls PL/SQL often need a routine to return a fixed value, or to fail, while the rest
-runs for real against the database. A new module, `penitent-test`, does that in the style of Mockito, from the
-interface the application already has: `when(orders.calculateFreight("SP", "CE")).thenReturn(...)` rewrites only that
-routine, in an edition of the test's own, so that Java and other PL/SQL calling it both see the mock, and everything
-else in the package stays real. [Architecture decision 0001](adr/0001-mocking-plsql-with-editions.md) has the design,
-what a spike measured on Oracle 23ai, and what the first version covers.
+`penitent-test` stubs a routine of a package in an integration test, in the style of Mockito, from the interface the
+application already has, as [Mocking PL/SQL in tests](testing.md) shows, measured on Oracle 23ai. Still open, as
+[architecture decision 0001](adr/0001-mocking-plsql-with-editions.md) details:
+
+- **Oracle 21c and 19c,** including whether the Autonomous Database image used for 19c lets editions be enabled.
+- **A stub made after the test used the package,** which now fails the next call once: retrying it in tests, or a
+  body that reads its stubs from a table and needs no recompilation.
+- **More than packages:** views, standalone routines, synonyms, triggers and object types, which legacy PL/SQL is often
+  coupled to; and values beyond scalars: object types, collections and cursors.
+- **Spy mode,** running the real code when no stub matches, and **several pools of the same database** sharing the
+  mocks.
 
 ## On demand
 
