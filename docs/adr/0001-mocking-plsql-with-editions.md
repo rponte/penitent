@@ -242,7 +242,10 @@ FUNCTION calculate(p_origin freight_item.uf%TYPE, p_destination VARCHAR2 DEFAULT
 - **The arguments are recorded first,** as a JSON array of the `IN` parameters, with the routine and its parameter
   names, which tell overloads apart.
 - **Each stub is an `IF`,** the last stub made first, so that the last one that matches wins. A matcher such as
-  `any()` adds no condition; `isNull()` adds `IS NULL`.
+  `any()` adds no condition; `isNull()` adds `IS NULL`. A second stub of the routine, for the same arguments or for
+  others, adds an `IF` before this one and recompiles the body: stubs of different arguments answer each their own,
+  and a later stub of the same arguments wins over an earlier one, since it is checked first (measured). A second
+  answer given on the same stub, such as `thenThrow` after `thenReturn`, replaces the first one's `IF`.
 - **No stub that matches** raises `ORA-20999`, with the arguments, so a missing stub never passes unnoticed.
 - **The routine's real code is gone,** in this edition: what it called, it no longer calls. Every other routine of
   the body stays as written.

@@ -254,6 +254,18 @@ when(freights.calculate(eq("SP"), any())).thenReturn(new BigDecimal("10.00"));
 when(freights.calculate(eq("SP"), isNull())).thenReturn(new BigDecimal("15.00"));
 ```
 
+**Stub a routine more than once.** Each `when(...)` adds a stub, and a test can make as many as it needs:
+
+| Stubs of the same routine | What a call gets |
+|---|---|
+| for different arguments, such as `("SP", "CE")` and `("RJ", "BA")` | each one answers its own arguments |
+| for the same arguments, made twice | the last one: a later stub replaces an earlier one, as in Mockito |
+| a general one, such as `(eq("SP"), any())`, and a specific one, such as `(eq("SP"), isNull())` | the last one that matches: make the general ones first |
+
+Each stub recompiles the package, in about ten milliseconds, so make them all before the code under test runs, as
+[Things to keep in mind](#things-to-keep-in-mind) explains. Unlike Mockito, `thenReturn` does not chain, so one stub
+cannot answer differently on the first call and on the second, yet.
+
 ### Verifying calls
 
 `verify` checks how many times the stubbed routine was called in this test, whether from Java or from other PL/SQL:
