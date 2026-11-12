@@ -122,9 +122,9 @@
 				<configuration>
 					<!-- the examples of docs/testing.md, run by DocsTestingTest through JUnit's test kit -->
 					<excludes>
-						<exclude>**/FreightCalculationTest.java</exclude>
-						<exclude>**/FreightServiceTest.java</exclude>
-						<exclude>**/FreightReportTest.java</exclude>
+						<exclude>**/docs/CheckoutServiceTest.java</exclude>
+						<exclude>**/docs/CheckoutTest.java</exclude>
+						<exclude>**/docs/FreightReportTest.java</exclude>
 					</excludes>
 				</configuration>
 				<executions>
