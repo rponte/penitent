@@ -203,6 +203,50 @@ class EnablePlsqlMocksTest {
 		TestKit.run(NotAnnotatedSample.class).assertStatistics(stats -> stats.started(1).succeeded(1));
 	}
 
+	/** The contexts the samples below ran in, to compare them. */
+	static final java.util.Map<String, org.springframework.context.ApplicationContext> CONTEXTS =
+			new java.util.concurrent.ConcurrentHashMap<>();
+
+	@ExtendWith(TestKit.OnlyThroughTheTestKit.class)
+	@SpringJUnitConfig(Application.class)
+	@EnablePlsqlMocks
+	static class FirstAnnotatedSample {
+		@Test
+		void records(@Autowired org.springframework.context.ApplicationContext context) {
+			CONTEXTS.put("first", context);
+		}
+	}
+
+	@ExtendWith(TestKit.OnlyThroughTheTestKit.class)
+	@SpringJUnitConfig(Application.class)
+	@EnablePlsqlMocks
+	static class SecondAnnotatedSample {
+		@Test
+		void records(@Autowired org.springframework.context.ApplicationContext context) {
+			CONTEXTS.put("second", context);
+		}
+	}
+
+	@ExtendWith(TestKit.OnlyThroughTheTestKit.class)
+	@SpringJUnitConfig(Application.class)
+	static class NotAnnotatedContextSample {
+		@Test
+		void records(@Autowired org.springframework.context.ApplicationContext context) {
+			CONTEXTS.put("not annotated", context);
+		}
+	}
+
+	@Test
+	@DisplayName("classes annotated alike share one cached context, which a class without the annotation does not use")
+	void context_cache() {
+		TestKit.run(FirstAnnotatedSample.class).assertStatistics(stats -> stats.succeeded(1));
+		TestKit.run(SecondAnnotatedSample.class).assertStatistics(stats -> stats.succeeded(1));
+		TestKit.run(NotAnnotatedContextSample.class).assertStatistics(stats -> stats.succeeded(1));
+
+		assertThat(CONTEXTS.get("second")).isSameAs(CONTEXTS.get("first"));
+		assertThat(CONTEXTS.get("not annotated")).isNotSameAs(CONTEXTS.get("first"));
+	}
+
 	/** Two DataSources, none primary. */
 	@Configuration
 	static class TwoDataSources {

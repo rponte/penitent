@@ -166,6 +166,30 @@ class PlsqlMocksLifecycleTest {
 	}
 
 	@Test
+	@DisplayName("mocks that begin on another pool of the same database, while others are on, are refused, and the"
+			+ " edition in use is left alone")
+	void second_mocks_on_the_same_database() {
+		Freights freights = PlsqlPackages.create(Freights.class, dataSource);
+		com.zaxxer.hikari.HikariDataSource otherPool = TestDatabase.newPool(OracleUnderTest.USER);
+		try (PlsqlMocks first = PlsqlMocks.on(dataSource)) {
+			first.begin();
+			when(first.mock(Freights.class).calculate("SP", "CE")).thenReturn(new BigDecimal("24.90"));
+
+			PlsqlMocks second = PlsqlMocks.on(PlsqlMocks.wrap(otherPool));
+			assertThatThrownBy(second::begin)
+					.isInstanceOf(IllegalStateException.class)
+					.hasMessageContaining("have not ended")
+					.hasMessageContaining("one at a time");
+
+			assertThat(freights.calculate("SP", "CE")).as("the first edition, still in use").isEqualByComparingTo("24.90");
+		} finally {
+			otherPool.close();
+		}
+		assertThat(count(pool, "SELECT COUNT(*) FROM ALL_EDITIONS WHERE EDITION_NAME LIKE 'PENITENT\\_MOCK\\_%' ESCAPE '\\'"))
+				.isZero();
+	}
+
+	@Test
 	@DisplayName("begin twice without end is refused")
 	void begin_twice() {
 		try (PlsqlMocks mocks = PlsqlMocks.on(dataSource)) {

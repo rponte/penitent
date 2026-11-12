@@ -33,6 +33,12 @@ public final class MockSession {
 
 	private static final String PREFIX = "PENITENT_MOCK_";
 
+	/**
+	 * The editions of the mocks that began in this JVM and have not ended. One found in the database and not here was
+	 * left by a run that died, and is dropped; one found here belongs to mocks still on, and is left alone.
+	 */
+	private static final java.util.Set<String> ACTIVE = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
 	private final EditionDataSource dataSource;
 	private final DataSource base;
 	private final Map<Class<?>, Object> describers = new HashMap<>();
@@ -59,6 +65,7 @@ public final class MockSession {
 			dropLeftovers(connection);
 			String created = PREFIX + UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase(Locale.ROOT);
 			EditionDataSource.execute(connection, "CREATE EDITION " + created + " AS CHILD OF " + defaultEdition);
+			ACTIVE.add(created);
 			edition = created;
 		} catch (SQLException e) {
 			throw new IllegalStateException("failed to create the test's edition: " + e.getMessage(), e);
@@ -75,6 +82,8 @@ public final class MockSession {
 		edition = null;
 		stubsByPackage.clear();
 		bodies.clear();
+		// ended either way: an edition that cannot be dropped now is a leftover, for the next begin to drop
+		ACTIVE.remove(ending);
 		try (Connection connection = connection()) {
 			drop(connection, ending);
 		} catch (SQLException e) {
@@ -83,11 +92,21 @@ public final class MockSession {
 		}
 	}
 
-	/** Editions left by a run that died: there can be only one child of the default edition. */
+	/**
+	 * Editions left by a run that died: there can be only one child of the default edition. One of mocks still on in
+	 * this JVM is not a leftover: these mocks are refused instead, since only one test mocks a database at a time.
+	 */
 	private static void dropLeftovers(Connection connection) throws SQLException {
-		List<String> leftovers = strings(connection,
+		List<String> found = strings(connection,
 				"SELECT EDITION_NAME FROM ALL_EDITIONS WHERE EDITION_NAME LIKE 'PENITENT\\_MOCK\\_%' ESCAPE '\\'");
-		for (String leftover : leftovers) {
+		for (String edition : found) {
+			if (ACTIVE.contains(edition)) {
+				throw new IllegalStateException("other mocks began on this database, in edition " + edition + ", and have"
+						+ " not ended: tests that mock a database run one at a time, since an edition can have only one"
+						+ " child, and two pools of the same database cannot share mocks yet");
+			}
+		}
+		for (String leftover : found) {
 			drop(connection, leftover);
 		}
 	}

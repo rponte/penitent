@@ -95,6 +95,9 @@ verify(pkg).calculaFrete("SP", "CE");
      transaction takes its connection, which then enters the edition as Oracle requires, and ends it after the
      transaction gave the connection back, so the edition can be dropped. Stubs compile on a connection of their own,
      so they never commit the test transaction.
+   - The context is not refreshed for each test: the `DataSource` is wrapped once, when the context starts, and Spring
+     caches the context as usual. Each test only creates and drops its edition. Classes annotated alike share one
+     context; a class without the annotation gets another, since the annotation changes the context.
    - Spring is an optional dependency of the module.
 
 ### First version
@@ -132,6 +135,11 @@ And what it cannot do, in the first version:
   that case cannot go wrong; but another pool of the same database, wrapped apart, does not follow the test's edition.
   Keeping the edition in one place for the whole JVM would lift this, since only one test mocks at a time, but it
   would also send a pool of another database into an edition that does not exist there: it waits for a real case.
+- **One mocks on a database at a time.** Mocks that begin while others, in the same JVM, are on in the same database,
+  such as through a second pool of it, are refused with a clear message, and the edition in use is left alone. An
+  edition that the database has and this JVM does not, left by a run that died, is dropped by the next `begin()`.
+  With Spring, the `PlsqlMocks` bean works on one `DataSource`: the others of the context are wrapped too, but their
+  connections do not enter the test's edition.
 - **Only the connections of the wrapped `DataSource` enter the edition,** and only those taken after `begin()`. A
   connection taken before, and kept, stays where it was, and keeps seeing the real routines.
 - **A connection taken in the test and still open at `end()`** keeps the edition in use, and dropping it fails, with a
@@ -205,6 +213,12 @@ first:
 - **IslandSQL and the ANTLR runtime** become dependencies of `penitent-test` only. The core stays free of them.
 
 ## Open questions
+
+- **Several pools of the same database sharing the mocks.** One edition, followed by every pool the test declares:
+  `@EnablePlsqlMocks(dataSource = {"main", "reports"})`, or `mocks.include(reportsDataSource)` inside a test. The
+  library would check that they reach the same database, by its `DB_UNIQUE_NAME` and `CON_NAME`, and a pool of
+  another user of that database would need `GRANT USE ON EDITION`, since the edition belongs to the user who created
+  it. Pools of different databases need no sharing: each database has mocks and an edition of its own.
 
 - **A stub after the package was used,** which now fails the next call once with `ORA-04068`, as recorded above. Two
   options, either of which may be adopted, documented with it:
