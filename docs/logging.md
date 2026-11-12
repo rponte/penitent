@@ -2,12 +2,13 @@
 
 When a call does not do what you expected, the first thing to see is what was actually sent. Penitent logs each
 call through SLF4J: the routine, the SQL, the values in and out, the time it took and the failure, if any. It uses
-two loggers, so you can see the SQL without exposing the data:
+two loggers for the calls, so you can see the SQL without exposing the data, and one more for the mocks of tests:
 
 | Logger | Level | What it logs |
 |---|---|---|
 | `io.github.rponte.penitent.call` | `DEBUG` | The routine and the Java method, the SQL as sent to the driver or the block text, the elapsed time, the failure and the dictionary lookup |
 | `io.github.rponte.penitent.bind` | `TRACE` | The values sent, the return value and the `OUT` values |
+| `io.github.rponte.penitent.mock` | `DEBUG` | With `penitent-test`: the edition of each test, each stub and each `verify`; at `TRACE`, the PL/SQL generated for each stub. See [Testing](testing.md#seeing-what-the-mocks-do) |
 
 <!-- snippet: untested -->
 ```yaml

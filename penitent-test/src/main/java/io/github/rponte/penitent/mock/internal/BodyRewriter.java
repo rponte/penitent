@@ -36,6 +36,12 @@ final class BodyRewriter {
 	}
 
 	static String rewrite(String qualifiedPackage, String body, List<Subprogram> subprograms) {
+		return rewrite(qualifiedPackage, body, subprograms, new LinkedHashMap<>());
+	}
+
+	/** As {@link #rewrite}, also putting each generated subprogram, whole, under its {@link #callKey}. */
+	static String rewrite(String qualifiedPackage, String body, List<Subprogram> subprograms,
+			Map<String, String> generatedByCall) {
 		IslandSqlDocument document = IslandSqlDocument.parse(body);
 		if (!document.getSyntaxErrors().isEmpty()) {
 			throw new IllegalStateException("the body of " + qualifiedPackage + " could not be parsed, so it cannot be"
@@ -56,8 +62,10 @@ final class BodyRewriter {
 			int stop = bodyOf(definition).getStop().getStopIndex() + 1;
 			String generated = generate(found.get(definition), nameOf(definition));
 			// the body of a subprogram, in IslandSQL, ends with its semicolon
-			text.replace(start, stop, body.substring(start, stop).stripTrailing().endsWith(";") ? generated + ";"
-					: generated);
+			String replacement = body.substring(start, stop).stripTrailing().endsWith(";") ? generated + ";" : generated;
+			text.replace(start, stop, replacement);
+			generatedByCall.put(callKey(found.get(definition).routine()),
+					body.substring(definition.getStart().getStartIndex(), start) + replacement);
 		}
 		return text.toString();
 	}

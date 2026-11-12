@@ -341,6 +341,40 @@ try (PlsqlMocks mocks = PlsqlMocks.on(dataSource)) {
 - **What can be stubbed, so far:** routines declared in a package spec, in the test user's schema, with scalar values.
   A private routine has no method to stub it through, and a wrapped body cannot be read.
 
+## Seeing what the mocks do
+
+The mocks log what they do through SLF4J, under `io.github.rponte.penitent.mock`, so a test that does not behave as
+expected can be followed step by step. Turn it on in the tests' configuration:
+
+<!-- snippet: untested -->
+```yaml
+# src/test/resources/application.yaml
+logging:
+  level:
+    io.github.rponte.penitent.mock: debug
+    io.github.rponte.penitent.call: debug   # the calls too, to see the stubbed routine being called
+```
+
+The first mock above then logs its test from beginning to end:
+
+<!-- snippet: untested -->
+```text
+DEBUG Began mocks         : edition PENITENT_MOCK_5F2A91C3D4E6 in 18 ms
+DEBUG Stubbed routine     : PLSQL_TEST.FREIGHTS.CALCULATE('SP', 'CE') -> RETURN 24.90 in 11 ms
+DEBUG Calling routine     : PLSQL_TEST.FREIGHTS.CALCULATE <- Freights.calculate
+DEBUG -> SQL              : {? = call PLSQL_TEST.FREIGHTS.CALCULATE(?, ?)}
+DEBUG <- completed        : 3 ms
+DEBUG Ended mocks         : edition PENITENT_MOCK_5F2A91C3D4E6 dropped in 15 ms
+```
+
+- **At `DEBUG`:** the edition of each test, each stub, with what it answers and to which arguments, and each `verify`
+  that passed.
+- **At `TRACE`:** also the PL/SQL generated for each stub, the first thing to read when a stub does not answer as
+  expected.
+- **At `WARN`:** only what is out of the ordinary, such as an edition left by a run that died, dropped when the next
+  test begins.
+- **At `INFO`,** the usual default, nothing: the tests stay quiet.
+
 ## How it works
 
 The stub is not a Java trick: it is PL/SQL, compiled into the database, where only the test can see it.

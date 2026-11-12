@@ -13,6 +13,7 @@ All notable changes to this project are listed here. The format follows
   test's own, so Java and other PL/SQL calling the routine see it, while the rest of the package stays real. It works
   with JUnit 5 (`PlsqlMockExtension`), with Spring (`@EnablePlsqlMocks`) and on its own. Measured on Oracle 23ai; the new Testing page
   shows how to test code that calls PL/SQL, with and without mocks, and architecture decision 0001 has the design.
+  The mocks log what they do under `io.github.rponte.penitent.mock`.
 
 ## [0.28.0]
 
