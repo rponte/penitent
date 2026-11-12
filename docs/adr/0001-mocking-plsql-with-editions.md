@@ -99,6 +99,12 @@ And what it cannot do, in the first version:
 - **A private routine, declared only in the body, cannot be stubbed.** A stub starts from a method of the interface,
   and a private routine has none. It stays real, and a stubbed routine that called it no longer does.
 - **A wrapped body cannot be parsed,** so nothing in that package can be stubbed; the library refuses it.
+- **The application and the mocks share one wrapped `DataSource`.** The test's edition is kept in the wrapped
+  object, so the code under test, whatever it uses (Penitent's interfaces, a `JdbcTemplate`, JPA), has to take its
+  connections from the same object given to `PlsqlMocks.on`. Wrapping the same pool again gives the same object, so
+  that case cannot go wrong; but another pool of the same database, wrapped apart, does not follow the test's edition.
+  Keeping the edition in one place for the whole JVM would lift this, since only one test mocks at a time, but it
+  would also send a pool of another database into an edition that does not exist there: it waits for a real case.
 - **Only the connections of the wrapped `DataSource` enter the edition,** and only those taken after `begin()`. A
   connection taken before, and kept, stays where it was, and keeps seeing the real routines.
 - **A connection taken in the test and still open at `end()`** keeps the edition in use, and dropping it fails, with a
@@ -136,6 +142,13 @@ first:
   place of the real body.
 - **A mock schema, switched with `CURRENT_SCHEMA`.** PL/SQL in the real schema keeps calling the real package, and
   everything else referenced without a schema has to exist in the mock one.
+- **Putting the connections in the edition without wrapping the `DataSource`.** An edition is per session, and a
+  pool reuses its sessions from test to test, so each connection has to enter the test's edition when it is handed
+  out, and leave it when it is given back, or the edition could not be dropped (`ORA-38805`) and the next test would
+  find the session in the previous one. The connection property `oracle.jdbc.editionName` applies only when a
+  connection is opened, as do a logon trigger and an edition per service; `ALTER DATABASE DEFAULT EDITION` needs a DBA
+  and changes the whole database; switching only the test transaction's connection leaves out every call made on
+  another connection. Wrapping costs one `ALTER SESSION` per connection handed out, and only in tests.
 - **A data-driven body, compiled once and reading its stubs from a table.** It avoids recompiling per stub, but every
   value then has to round-trip through a table with its type. Recompiling costs about 10 ms, so it is not needed now.
 
