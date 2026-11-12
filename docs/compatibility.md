@@ -426,6 +426,7 @@ With `penitent-test`, measured on Oracle 23ai only, as [Testing](testing.md#mock
 | JUnit 5: `PlsqlMockExtension`, stubs in `@BeforeEach`, `PlsqlMocks` as a parameter | Validated |
 | Spring: `@EnablePlsqlMocks` in a transactional test, rolled back as usual, the stub never committing it; without a transaction; several `DataSource`s; the context cached; Spring Boot's `DataSource` | Validated |
 | The core and the JUnit 5 extension without Spring on the classpath | Validated |
+| The log of the mocks, under `io.github.rponte.penitent.mock`: the edition, stubs and verifies at `DEBUG`, the generated PL/SQL at `TRACE`, a leftover edition at `WARN`, nothing at `INFO` | Validated |
 
 ## Not measured
 

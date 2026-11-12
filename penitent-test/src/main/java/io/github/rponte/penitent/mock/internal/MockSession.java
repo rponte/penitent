@@ -58,6 +58,7 @@ public final class MockSession {
 		if (edition != null) {
 			throw new IllegalStateException("the mocks already began, in edition " + edition + ": end them first");
 		}
+		long start = System.nanoTime();
 		try (Connection connection = connection()) {
 			Prerequisites.require(connection, SCHEMA_VERSION);
 			defaultEdition = single(connection,
@@ -67,6 +68,7 @@ public final class MockSession {
 			EditionDataSource.execute(connection, "CREATE EDITION " + created + " AS CHILD OF " + defaultEdition);
 			ACTIVE.add(created);
 			edition = created;
+			MockLog.began(created, start);
 		} catch (SQLException e) {
 			throw new IllegalStateException("failed to create the test's edition: " + e.getMessage(), e);
 		}
@@ -84,8 +86,10 @@ public final class MockSession {
 		bodies.clear();
 		// ended either way: an edition that cannot be dropped now is a leftover, for the next begin to drop
 		ACTIVE.remove(ending);
+		long start = System.nanoTime();
 		try (Connection connection = connection()) {
 			drop(connection, ending);
+			MockLog.ended(ending, start);
 		} catch (SQLException e) {
 			throw new IllegalStateException("failed to drop the test's edition " + ending + " (a connection taken in the"
 					+ " test may still be open, and in it): " + e.getMessage(), e);
@@ -108,6 +112,7 @@ public final class MockSession {
 		}
 		for (String leftover : found) {
 			drop(connection, leftover);
+			MockLog.leftover(leftover);
 		}
 	}
 
@@ -135,6 +140,7 @@ public final class MockSession {
 	/** Adds {@code stub}, or replaces it when it is the same object, and compiles its package again. */
 	public void stub(Stub stub, Stub replaced) {
 		requireBegun();
+		long start = System.nanoTime();
 		RoutineMetadata routine = routineOf(stub.invocation());
 		String pkg = packageOf(routine);
 		List<Stub> stubs = stubsByPackage.computeIfAbsent(pkg, k -> new ArrayList<>());
@@ -144,15 +150,19 @@ public final class MockSession {
 		} else {
 			stubs.add(stub);
 		}
+		String generated;
 		try {
-			compile(pkg, routine);
+			generated = compile(pkg, routine);
 		} catch (RuntimeException e) {
 			stubs.remove(stub);
 			throw e;
 		}
+		MockLog.stubbed(MockLog.call(routine.qualifiedName(), stub.invocation().matchers()), stub.action(), start);
+		MockLog.generated(generated);
 	}
 
-	private void compile(String pkg, RoutineMetadata any) {
+	/** Compiles the package's body with its stubs, and gives the PL/SQL generated for {@code any}'s routine. */
+	private String compile(String pkg, RoutineMetadata any) {
 		String body = bodies.computeIfAbsent(pkg, k -> source(any));
 		Map<String, BodyRewriter.Subprogram> subprograms = new LinkedHashMap<>();
 		for (Stub stub : stubsByPackage.get(pkg)) {
@@ -161,7 +171,8 @@ public final class MockSession {
 					k -> new BodyRewriter.Subprogram(routine, new ArrayList<>()))
 					.stubs().add(new BodyRewriter.StubbedCall(byParameter(routine, stub.invocation()), stub.action()));
 		}
-		String mocked = BodyRewriter.rewrite(pkg, body, List.copyOf(subprograms.values()));
+		Map<String, String> generated = new LinkedHashMap<>();
+		String mocked = BodyRewriter.rewrite(pkg, body, List.copyOf(subprograms.values()), generated);
 		try (Connection connection = connection()) {
 			try {
 				EditionDataSource.execute(connection, "ALTER SESSION SET EDITION = " + edition);
@@ -179,6 +190,7 @@ public final class MockSession {
 		} catch (SQLException e) {
 			throw new IllegalStateException("failed to compile the mocked body of " + pkg + ": " + e.getMessage(), e);
 		}
+		return generated.get(BodyRewriter.callKey(any));
 	}
 
 	/** The body as the database has it, in the default edition. */
@@ -242,11 +254,13 @@ public final class MockSession {
 			throw new IllegalStateException("failed to read the calls of " + routine.qualifiedName() + ": "
 					+ e.getMessage(), e);
 		}
-		if (calls != times) {
-			throw new AssertionError(routine.qualifiedName() + invocation.matchers().toString().replace('[', '(')
-					.replace(']', ')') + " was expected " + timesOf(times) + " in this test, and was called "
-					+ timesOf(calls));
+		if (calls == times) {
+			MockLog.verified(MockLog.call(routine.qualifiedName(), invocation.matchers()), times);
+			return;
 		}
+		throw new AssertionError(routine.qualifiedName() + invocation.matchers().toString().replace('[', '(')
+				.replace(']', ')') + " was expected " + timesOf(times) + " in this test, and was called "
+				+ timesOf(calls));
 	}
 
 	/**
