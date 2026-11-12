@@ -124,6 +124,12 @@ first:
 
 ## Open questions
 
+- **Mocking more than packages.** In legacy schemas, PL/SQL is often coupled to other objects through the database:
+  views, standalone functions and procedures, synonyms, triggers, object types. Editions can redefine all of them, so
+  the mocks are meant to grow beyond packages, and `ENABLE EDITIONS FOR PACKAGE` in the admin script will widen with
+  them. Object types need care: enabling editions for a type that a table uses fails (`ORA-38819`), and forcing it
+  leaves the table invalid, as an earlier measurement showed.
+
 - Oracle 21c and 19c, including whether `ADMIN` can enable editions on the Autonomous Database image used for 19c.
 - Spy mode: running the original body, as a nested block, when no stub matches.
 - Packages in another schema, and how much privilege that asks for.
