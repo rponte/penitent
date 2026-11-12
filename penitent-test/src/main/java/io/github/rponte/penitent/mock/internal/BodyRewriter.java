@@ -59,6 +59,10 @@ final class BodyRewriter {
 			ParserRuleContext from = declareSectionOf(definition) != null ? declareSectionOf(definition)
 					: bodyOf(definition);
 			int start = from.getStart().getStartIndex();
+			// from right after IS or AS: the generated code brings its own line breaks and indentation
+			while (start > 0 && Character.isWhitespace(body.charAt(start - 1))) {
+				start--;
+			}
 			int stop = bodyOf(definition).getStop().getStopIndex() + 1;
 			String generated = generate(found.get(definition), nameOf(definition));
 			// the body of a subprogram, in IslandSQL, ends with its semicolon
