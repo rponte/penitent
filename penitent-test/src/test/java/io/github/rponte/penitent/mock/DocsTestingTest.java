@@ -41,6 +41,8 @@ class DocsTestingTest {
 	    BigDecimal calculate(String pOrigin, String pDestination);
 
 	    void quote(String pUf, PlsqlOut<BigDecimal> pValue);
+
+	    int countItems(String pUf);
 	}
 	// end-snippet
 
@@ -179,9 +181,34 @@ class DocsTestingTest {
 		}
 
 		@Bean
+		org.springframework.jdbc.core.JdbcTemplate jdbcTemplate(DataSource dataSource) {
+			return new org.springframework.jdbc.core.JdbcTemplate(dataSource);
+		}
+
+		@Bean
 		Freights freights(DataSource dataSource) {
 			return SpringPlsqlPackages.create(Freights.class, dataSource);
 		}
+	}
+
+	@Test
+	@DisplayName("testing.md: a test without mocks, against the real routine")
+	void real_routine() {
+		DataSource dataSource = pool;
+		// snippet: testing/real-call
+		Freights freights = PlsqlPackages.create(Freights.class, dataSource);
+
+		assertThat(freights.calculate("SP", "CE")).isEqualByComparingTo("75");   // the real PL/SQL ran
+		// end-snippet
+	}
+
+	@Test
+	@DisplayName("testing.md: arrange, act, assert, rolled back by Spring")
+	void arrange_act_assert() {
+		TestKit.run(FreightReportTest.class).assertStatistics(stats -> stats.started(1).succeeded(1));
+		assertThat(new org.springframework.jdbc.core.JdbcTemplate(pool)
+				.queryForObject("SELECT COUNT(*) FROM FREIGHT_ITEM WHERE ID IN (7001, 7002)", Integer.class))
+				.as("rolled back").isZero();
 	}
 
 	@Test

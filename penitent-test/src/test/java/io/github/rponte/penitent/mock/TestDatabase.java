@@ -77,6 +77,7 @@ final class TestDatabase {
 				  FUNCTION real_one RETURN VARCHAR2;
 				  FUNCTION calls RETURN PLS_INTEGER;
 				  FUNCTION total(p_origin VARCHAR2, p_destination VARCHAR2) RETURN NUMBER;
+				  FUNCTION count_items(p_uf VARCHAR2) RETURN NUMBER;
 				END FREIGHTS;""",
 				"""
 				CREATE OR REPLACE PACKAGE BODY FREIGHTS AS
@@ -121,6 +122,14 @@ final class TestDatabase {
 				  BEGIN
 				    RETURN 100 + calculate(p_origin, p_destination);
 				  END total;
+
+				  -- reads the schema's data, as most routines do
+				  FUNCTION count_items(p_uf VARCHAR2) RETURN NUMBER IS
+				    l_count NUMBER;
+				  BEGIN
+				    SELECT COUNT(*) INTO l_count FROM freight_item WHERE uf = p_uf;
+				    RETURN l_count;
+				  END count_items;
 				END FREIGHTS;""",
 				"""
 				CREATE OR REPLACE PACKAGE CHECKOUT AS

@@ -1,79 +1,25 @@
-# Mocking PL/SQL in tests
+# Testing
 
-A test of code that calls PL/SQL often needs a routine to answer in a certain way: a freight calculation that returns
-a fixed value, a call to an external system that fails, an error that is hard to provoke for real. With
-`penitent-test`, you stub that one routine, in the style of Mockito, from the same interface the application calls it
-through, while the test still runs against your real Oracle, with the real schema and the real SQL and PL/SQL around
-the call.
+Code that calls PL/SQL is best tested against a real Oracle: the routine, the SQL inside it and the data it reads are
+where most of the behavior lives. Penitent's interfaces are plain Java, so a test calls them as the application does,
+and checks what comes back. This page starts there, and then shows how to stub a single routine, for the cases where
+the real one is out of your hands.
 
-<!-- snippet: testing/without-extension -->
-```java
-DataSource dataSource = PlsqlMocks.wrap(pool);                        // what the application uses in tests
-Freights freights = PlsqlPackages.create(Freights.class, dataSource);
+## Testing code that calls PL/SQL
 
-try (PlsqlMocks mocks = PlsqlMocks.on(dataSource)) {
-    mocks.begin();                                                    // the test's edition
+### Call the real routine
 
-    Freights mock = mocks.mock(Freights.class);
-    when(mock.calculate("SP", "CE")).thenReturn(new BigDecimal("24.90"));
-
-    assertThat(freights.calculate("SP", "CE")).isEqualByComparingTo("24.90");
-    verify(mock).calculate("SP", "CE");
-}                                                                     // end(): the edition is dropped
-```
-
-The stub is real PL/SQL. The library reads the package body your database has, rewrites only the stubbed routine, and
-compiles it into an [edition](https://docs.oracle.com/en/database/oracle/oracle-database/23/adfns/editions.html) of
-the test's own. So the code under test sees the mock wherever it calls the routine from, Java or other PL/SQL, while
-every other routine of the package stays real, and every session outside the test keeps seeing the real one.
-[Architecture decision 0001](adr/0001-mocking-plsql-with-editions.md) has the design and what was measured to back it.
-
-> **Measured on Oracle 23ai.** Oracle 21c and 19c are not measured yet; on them, the module's own tests are skipped.
-
-## Setting up
-
-### The dependency
-
-`penitent-test` is for tests only: declare it with the `test` scope, never in production code.
+A test needs an Oracle to talk to. [Testcontainers](https://java.testcontainers.org/modules/databases/oraclefree/)
+starts one for the tests and throws it away after them, so every developer and every build gets the same database:
 
 <!-- snippet: untested -->
-```xml
-<dependency>
-    <groupId>io.github.rponte</groupId>
-    <artifactId>penitent-test</artifactId>
-    <version>0.29.0-SNAPSHOT</version>
-    <scope>test</scope>
-</dependency>
-```
-
-JUnit 5 and Spring are optional dependencies of the module: it uses the versions your project already has, and a
-project without them never needs them.
-
-### The prerequisites
-
-The test database needs two scripts, applied once. Both come in the jar, under `io/github/rponte/penitent/mock/`, so a
-migration, a Flyway callback or a container init script can apply them as they are:
-
-| Script | Run by | What it does |
-|---|---|---|
-| `penitent-mock-admin.sql` | a DBA | enables editions for the schema's packages, and grants `CREATE ANY EDITION` and `DROP ANY EDITION` |
-| `penitent-mock-schema.sql` | the schema that owns the packages | creates the table `PENITENT_MOCK_CALLS` and the package `PENITENT_MOCK`, which record the calls for `verify` |
-
-> **Only on a test database.** `ENABLE EDITIONS` cannot be undone. The admin script limits it to packages, so tables
-> and object types are left as they are, but it is still a change for good to the schema.
-
-The library never applies them by itself. When a test begins, it checks them and, if something is missing, fails with
-a message that lists everything missing and names the scripts. On a disposable database, such as a Testcontainers one,
-`prepare` applies both, and running it again is harmless:
-
-<!-- snippet: testing/prepare -->
 ```java
-PlsqlMocks.prepare(admin, pool, "PLSQL_TEST");   // admin: a DBA's DataSource; pool: the schema's own
+@Container
+static OracleContainer oracle = new OracleContainer("gvenzl/oracle-free:23-slim-faststart");
 ```
 
-## Stubbing and verifying
-
-The examples use an interface like any other of Penitent:
+With your schema in it, applied by your migrations as in production, a test creates the interface as the application
+does, calls it, and checks the result of the real PL/SQL:
 
 <!-- snippet: testing/interface -->
 ```java
@@ -82,81 +28,61 @@ interface Freights {
     BigDecimal calculate(String pOrigin, String pDestination);
 
     void quote(String pUf, PlsqlOut<BigDecimal> pValue);
+
+    int countItems(String pUf);
 }
 ```
 
-`mock` gives an object whose calls are only recorded; `when` turns the recorded call into a stub, compiled at once.
-From then on, the routine answers as stubbed, to Java and to PL/SQL alike.
-
-**Values.** `thenReturn` returns a value. Numbers, text, `LocalDate` and `null` are measured; booleans and
-`LocalDateTime` are written as PL/SQL too, but not measured yet, and any other type is refused with a clear message.
-
-**Errors.** `thenThrow` raises an application error, as `RAISE_APPLICATION_ERROR` does, and `thenRaise` one of
-Oracle's predefined exceptions, by name. Both arrive as `PlsqlRoutineRaisedException`, as a real error would:
-
-<!-- snippet: testing/errors -->
+<!-- snippet: testing/real-call -->
 ```java
-when(mock.calculate("SP", "XX")).thenThrow(-20200, "Cannot calculate freight to XX");
-when(mock.calculate("SP", "AM")).thenRaise("NO_DATA_FOUND");
+Freights freights = PlsqlPackages.create(Freights.class, dataSource);
+
+assertThat(freights.calculate("SP", "CE")).isEqualByComparingTo("75");   // the real PL/SQL ran
 ```
 
-**Procedures and `OUT` parameters.** A call that returns nothing goes in a lambda, and `out(value)` stands for the
-`PlsqlOut` argument, with the value the stub sets it to:
+### Arrange, act, assert
 
-<!-- snippet: testing/procedure -->
+Most routines read and write the schema's data, so a test arranges the rows it needs, calls the routine, and asserts
+on what it returns or on the rows it changed. With Spring, a `@Transactional` test is rolled back at its end, so each
+test starts from the same data, and no test cleans up after another:
+
+<!-- snippet: testing/arrange-act-assert -->
 ```java
-when(() -> mock.quote(eq("CE"), out(new BigDecimal("99.99"))));
-```
+@SpringJUnitConfig(Application.class)   // or @SpringBootTest
+@Transactional                          // each test is rolled back at its end
+class FreightReportTest {
 
-**Matchers.** A plain value matches itself; `eq`, `any` and `isNull` work as in Mockito, and a call uses matchers for
-all of its arguments or for none. When several stubs match a call, the last one wins, so write the general ones first:
+    @Autowired JdbcTemplate jdbc;
+    @Autowired Freights freights;
 
-<!-- snippet: testing/matchers -->
-```java
-when(mock.calculate(eq("SP"), any())).thenReturn(new BigDecimal("10.00"));
-when(mock.calculate(eq("SP"), isNull())).thenReturn(new BigDecimal("15.00"));   // the last that matches wins
-```
+    @Test
+    void counts_the_items_of_a_state() {
+        jdbc.update("INSERT INTO FREIGHT_ITEM (ID, UF) VALUES (7001, 'CE')");   // arrange
+        jdbc.update("INSERT INTO FREIGHT_ITEM (ID, UF) VALUES (7002, 'CE')");
 
-**Strict.** A call that no stub matches is an error, `ORA-20999`, that names the routine and shows the arguments, so a
-missing stub never passes unnoticed.
+        int items = freights.countItems("CE");                                    // act
 
-**Verify.** `verify` counts the calls the stubbed routine received in this test, made from Java or from PL/SQL:
-
-<!-- snippet: testing/verify -->
-```java
-verify(mock).calculate("SP", "CE");
-verify(mock, times(2)).calculate(eq("SP"), any());
-verify(mock, never()).calculate("RJ", "BA");
-```
-
-Only a stubbed routine records its calls: a `verify` of one with no stub in the test is refused, since it would always
-count zero.
-
-## With JUnit 5
-
-`PlsqlMockExtension` gives each test an edition of its own. It begins before the test's `@BeforeEach` methods, so a
-stub can be made there, and ends after its `@AfterEach` ones, whether the test passed or failed. Register it with the
-`DataSource` from `PlsqlMocks.wrap`, the one the application uses in tests:
-
-<!-- snippet: testing/junit -->
-```java
-@RegisterExtension
-static PlsqlMockExtension mocks = PlsqlMockExtension.on(() -> dataSource);   // from PlsqlMocks.wrap
-
-@Test
-void calculates_freight() {
-    Freights mock = mocks.mock(Freights.class);
-    when(mock.calculate("SP", "CE")).thenReturn(new BigDecimal("24.90"));
-
-    assertThat(freights.calculate("SP", "CE")).isEqualByComparingTo("24.90");
+        assertThat(items).isEqualTo(2);                                           // assert
+    }
 }
 ```
 
-A test can also take its `PlsqlMocks` as a parameter.
+The interface takes part in the test's transaction, as in the application, so the routine sees the rows the test
+inserted. [Transactions and connections](transactions.md) has the details, with Spring and without it.
 
-## With Spring
+### When a routine depends on what you cannot control
 
-`@EnablePlsqlMocks` on the test class is all it takes:
+Sometimes the real routine is the problem, not the thing to test. A package that calls a web service through
+`UTL_HTTP`, reads another system over a database link, or belongs to a team whose test data you cannot shape; an
+error that is hard to provoke for real, such as a timeout or a rule deep inside another package. For those, stub that
+one routine, and keep everything else real.
+
+## Mocking a routine
+
+### A first mock
+
+With `penitent-test`, a routine of a package is stubbed in the style of Mockito, from the same interface the
+application calls it through. In a Spring test, it takes one annotation:
 
 <!-- snippet: testing/spring -->
 ```java
@@ -177,48 +103,189 @@ class FreightServiceTest {
 }
 ```
 
-- **The context's `DataSource` is wrapped,** so every connection the application takes from it, through Penitent's
-  interfaces, a `JdbcTemplate` or anything else, enters the test's edition. With several `DataSource` beans and none primary,
-  name the one to use: `@EnablePlsqlMocks(dataSource = "...")`.
-- **The edition begins before Spring's test transaction, and ends after it.** The stubs compile on a connection of
-  their own, so they never commit the test transaction, and its rollback works as usual.
-- **The context is not refreshed for each test:** it is wrapped once, and cached as usual. Classes with the
-  annotation share one context, apart from the classes without it.
+The application calls `freights.calculate` as always, and gets `24.90`. Everything else in the package stays real, and
+so does every other test: the stub lives only while this test runs. It is real PL/SQL, too, so the code under test
+sees it wherever it calls the routine from, Java or other PL/SQL.
 
-## Without JUnit 5
+### Getting started
 
-The example at the top of the page uses `PlsqlMocks` directly, which works with any test framework, such as JUnit 4,
-TestNG or Spock: wrap the application's `DataSource`, call `begin()` before each test and `end()` after it, or use a
-`try` block, as there.
+Add the module with the `test` scope:
 
-## How a mock behaves
+<!-- snippet: untested -->
+```xml
+<dependency>
+    <groupId>io.github.rponte</groupId>
+    <artifactId>penitent-test</artifactId>
+    <version>0.29.0-SNAPSHOT</version>
+    <scope>test</scope>
+</dependency>
+```
 
-| Case | Behavior |
-|---|---|
-| The other routines of the package, public and private, and the other overloads | stay real |
-| A real routine that calls the stubbed one, in the same package or another | gets the mock |
-| The stubbed routine itself | runs none of its real code: what that code called is no longer called by it |
-| A session outside the test's edition | sees the real routine |
+The test database needs two scripts, applied once. On a disposable database, such as a Testcontainers one, one call
+right after it starts applies both:
 
-## Limits
+<!-- snippet: testing/prepare -->
+```java
+PlsqlMocks.prepare(admin, pool, "PLSQL_TEST");   // admin: a DBA's DataSource; pool: the schema's own
+```
 
-- **Stub a package before the test uses it.** Each stub recompiles the package body, which discards the package's
-  state in every session that already ran it: the next call there fails once with `ORA-04068`, and the one after it
-  sees the stub. Making the stubs first, then acting, never meets it.
-- **One test mocks a database at a time.** An edition can have only one child, so tests that mock run one after the
-  other, and mocks that begin while others are on in the same database are refused.
-- **The application and the mocks share one wrapped `DataSource`,** since the test's edition is kept in it. Wrapping
-  the same pool again gives the same object; another pool of the same database does not follow the test's edition.
-- **The pool needs a connection to spare,** for the mocks' own work, besides those the test holds at once.
-- **In Spring, the `DataSource` bean is no longer of the pool's type,** such as `HikariDataSource`: inject
-  `DataSource`, or use `unwrap`.
-- **A private routine cannot be stubbed,** since no method of the interface stands for it, and **a wrapped body cannot
-  be parsed,** so it is refused.
-- **Packages of the test user's schema only,** and scalar values. Other objects, such as views or standalone routines,
-  object types, collections and cursors are not supported yet.
+On a database shared by your team or your CI, apply the scripts as your migrations, as
+[Preparing a shared test database](#preparing-a-shared-test-database) shows. If anything is missing when a test
+begins, it fails with a message that says what, and how to fix it.
+
+> **Measured on Oracle 23ai.** Oracle 21c and 19c are not measured yet.
+
+### Stubbing a routine
+
+The examples stub routines of this interface, through `mock`, which records the calls made on it:
+
+<!-- snippet: untested -->
+```java
+Freights mock = mocks.mock(Freights.class);
+```
+
+**Return a value.** `when(...).thenReturn(...)`, as in the first mock. Numbers, text, `LocalDate` and `null` are
+measured; booleans and `LocalDateTime` are written as PL/SQL too, but not measured yet.
+
+**Raise an error.** `thenThrow` raises an application error, as `RAISE_APPLICATION_ERROR` does, and `thenRaise` one of
+Oracle's predefined exceptions, by name. Both reach the code under test as a real error would, a
+`PlsqlRoutineRaisedException`:
+
+<!-- snippet: testing/errors -->
+```java
+when(mock.calculate("SP", "XX")).thenThrow(-20200, "Cannot calculate freight to XX");
+when(mock.calculate("SP", "AM")).thenRaise("NO_DATA_FOUND");
+```
+
+**Set `OUT` parameters.** A procedure returns nothing, so its call goes in a lambda, and `out(value)` stands for the
+`PlsqlOut` argument, with the value the stub sets:
+
+<!-- snippet: testing/procedure -->
+```java
+when(() -> mock.quote(eq("CE"), out(new BigDecimal("99.99"))));
+```
+
+**Match arguments.** A plain value matches itself; `eq`, `any` and `isNull` work as in Mockito. When several stubs
+match a call, the last one wins, so write the general ones first:
+
+<!-- snippet: testing/matchers -->
+```java
+when(mock.calculate(eq("SP"), any())).thenReturn(new BigDecimal("10.00"));
+when(mock.calculate(eq("SP"), isNull())).thenReturn(new BigDecimal("15.00"));   // the last that matches wins
+```
+
+### Verifying calls
+
+`verify` checks how many times the stubbed routine was called in this test, whether from Java or from other PL/SQL:
+
+<!-- snippet: testing/verify -->
+```java
+verify(mock).calculate("SP", "CE");
+verify(mock, times(2)).calculate(eq("SP"), any());
+verify(mock, never()).calculate("RJ", "BA");
+```
+
+### With JUnit 5, without Spring
+
+`PlsqlMockExtension` does what `@EnablePlsqlMocks` does, for a test without Spring. Give it the `DataSource` the
+application uses in tests, wrapped by `PlsqlMocks.wrap`:
+
+<!-- snippet: testing/junit -->
+```java
+@RegisterExtension
+static PlsqlMockExtension mocks = PlsqlMockExtension.on(() -> dataSource);   // from PlsqlMocks.wrap
+
+@Test
+void calculates_freight() {
+    Freights mock = mocks.mock(Freights.class);
+    when(mock.calculate("SP", "CE")).thenReturn(new BigDecimal("24.90"));
+
+    assertThat(freights.calculate("SP", "CE")).isEqualByComparingTo("24.90");
+}
+```
+
+A test can also take its `PlsqlMocks` as a parameter.
+
+### With any other test framework
+
+`PlsqlMocks` works on its own, so JUnit 4, TestNG or Spock use it directly: call `begin()` before each test and
+`end()` after it, or use a `try` block:
+
+<!-- snippet: testing/without-extension -->
+```java
+DataSource dataSource = PlsqlMocks.wrap(pool);                        // what the application uses in tests
+Freights freights = PlsqlPackages.create(Freights.class, dataSource);
+
+try (PlsqlMocks mocks = PlsqlMocks.on(dataSource)) {
+    mocks.begin();                                                    // the test's edition
+
+    Freights mock = mocks.mock(Freights.class);
+    when(mock.calculate("SP", "CE")).thenReturn(new BigDecimal("24.90"));
+
+    assertThat(freights.calculate("SP", "CE")).isEqualByComparingTo("24.90");
+    verify(mock).calculate("SP", "CE");
+}                                                                     // end(): the edition is dropped
+```
+
+## Things to keep in mind
+
+- **Stub first, then act.** Make the stubs of a package before the test calls it. A stub made after the package was
+  used fails the next call there once, with `ORA-04068`; see [How it works](#how-it-works).
+- **A call no stub matches fails,** with `ORA-20999`, naming the routine and showing the arguments, so a missing stub
+  never passes unnoticed. Use `any()` for a stub that should answer every call.
+- **A stubbed routine runs none of its real code.** What that code would have called, it no longer calls.
+- **`verify` counts stubbed routines only.** A routine with no stub in the test records nothing, so verifying it is
+  refused.
+- **Tests that mock run one at a time** on a database: two tests cannot mock the same database at once.
+- **The application and the mocks share the wrapped `DataSource`.** In Spring, that is the context's; without Spring,
+  give the application and the extension the same one, from `PlsqlMocks.wrap`.
+- **The pool needs one connection to spare,** for the mocks' own work, besides those the test holds.
+- **In Spring, inject `DataSource`, not the pool's type,** such as `HikariDataSource`: the bean is wrapped. Use
+  `unwrap` to reach the pool.
+- **What can be stubbed, so far:** routines declared in a package spec, in the test user's schema, with scalar values.
+  A private routine has no method to stub it through, and a wrapped body cannot be read.
+
+## How it works
+
+The stub is not a Java trick: it is PL/SQL, compiled into the database, where only the test can see it.
+
+- **An edition per test.** Oracle's
+  [edition-based redefinition](https://docs.oracle.com/en/database/oracle/oracle-database/23/adfns/editions.html)
+  lets a session see its own version of a package body, while every other session keeps seeing the real one. Each
+  test gets an edition of its own, created before it and dropped after it.
+- **Only the stubbed routine is rewritten.** The library reads the package body the database has, parses it, and
+  replaces the stubbed routine's code with generated code that records the call, checks the stubs and answers. Every
+  other routine, and the routine's own declaration, stay as written, and the result is compiled into the test's
+  edition. A stub made after the package was used recompiles it, which is what discards the package's state in the
+  sessions that ran it.
+- **The connections enter the edition through the `DataSource`.** An edition belongs to a session, and a pool reuses
+  its sessions, so the wrapped `DataSource` moves each connection into the test's edition when it hands it out, and
+  back when it is returned. In Spring, the edition begins before the test transaction and ends after it, and the stubs
+  compile on a connection of their own, so they never commit the test transaction.
+- **Calls are recorded in a table,** by a transaction of their own, which `verify` reads.
+
+[Architecture decision 0001](adr/0001-mocking-plsql-with-editions.md) has the design, the alternatives that were left
+aside, and what was measured to back each choice.
+
+## Preparing a shared test database
+
+`PlsqlMocks.prepare` suits a database that exists only for the tests. On one that lives longer, apply the two scripts
+yourself, once. Both come in the jar, under `io/github/rponte/penitent/mock/`, ready for a migration, a Flyway callback
+or a container init script:
+
+| Script | Run by | What it does |
+|---|---|---|
+| `penitent-mock-admin.sql` | a DBA | enables editions for the schema's packages, and grants `CREATE ANY EDITION` and `DROP ANY EDITION` |
+| `penitent-mock-schema.sql` | the schema that owns the packages | creates the table `PENITENT_MOCK_CALLS` and the package `PENITENT_MOCK`, which record the calls |
+
+> **Only on a test database.** `ENABLE EDITIONS` cannot be undone. The admin script limits it to packages, so tables
+> and object types are left as they are, but it is still a change for good to the schema.
+
+The library never applies them by itself: when a test begins, it checks them, and if something is missing, the test
+fails with a message that lists everything missing and names the scripts.
 
 ## See also
 
-- [Architecture decision 0001](adr/0001-mocking-plsql-with-editions.md): the design, the measurements and the open
-  questions.
+- [Transactions and connections](transactions.md): how a test's calls take part in its transaction.
 - [Spring and Spring Boot](spring.md): the interfaces as Spring beans.
+- [Architecture decision 0001](adr/0001-mocking-plsql-with-editions.md): the design behind the mocks.

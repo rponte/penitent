@@ -124,6 +124,7 @@
 					<excludes>
 						<exclude>**/FreightCalculationTest.java</exclude>
 						<exclude>**/FreightServiceTest.java</exclude>
+						<exclude>**/FreightReportTest.java</exclude>
 					</excludes>
 				</configuration>
 				<executions>

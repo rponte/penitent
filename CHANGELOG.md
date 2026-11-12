@@ -11,8 +11,8 @@ All notable changes to this project are listed here. The format follows
 - `penitent-test`, a new module that stubs a routine of a package in an integration test, in the style of Mockito,
   from the same interface the application calls it through: the stub is real PL/SQL, compiled into an edition of the
   test's own, so Java and other PL/SQL calling the routine see it, while the rest of the package stays real. It works
-  with JUnit 5 (`PlsqlMockExtension`), with Spring (`@EnablePlsqlMocks`) and on its own. Measured on Oracle 23ai; see
-  Mocking PL/SQL in tests, and architecture decision 0001 for the design.
+  with JUnit 5 (`PlsqlMockExtension`), with Spring (`@EnablePlsqlMocks`) and on its own. Measured on Oracle 23ai; the new Testing page
+  shows how to test code that calls PL/SQL, with and without mocks, and architecture decision 0001 has the design.
 
 ## [0.28.0]
 
