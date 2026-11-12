@@ -118,6 +118,34 @@
 		<plugins>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<executions>
+					<!--
+						The tests of the core and of the JUnit 5 extension once more, with Spring off the classpath, as
+						in a project without it: Spring is optional, and nothing but the Spring support may need it.
+					-->
+					<execution>
+						<id>without-spring</id>
+						<goals>
+							<goal>test</goal>
+						</goals>
+						<configuration>
+							<includes>
+								<include>**/PlsqlMocksTest.java</include>
+								<include>**/PlsqlMocksLifecycleTest.java</include>
+								<include>**/PlsqlMockExtensionTest.java</include>
+							</includes>
+							<classpathDependencyExcludes>
+								<classpathDependencyExclude>org.springframework:*</classpathDependencyExclude>
+								<classpathDependencyExclude>org.springframework.boot:*</classpathDependencyExclude>
+								<classpathDependencyExclude>io.github.rponte:penitent-spring</classpathDependencyExclude>
+							</classpathDependencyExcludes>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-source-plugin</artifactId>
 				<executions>
 					<execution>

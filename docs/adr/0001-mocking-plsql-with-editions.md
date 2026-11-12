@@ -211,6 +211,10 @@ first:
 - **The schema holds two objects of the library,** the calls table and the `PENITENT_MOCK` package, versioned so that
   an outdated schema is reported before a test fails in an obscure way.
 - **IslandSQL and the ANTLR runtime** become dependencies of `penitent-test` only. The core stays free of them.
+- **JUnit and Spring are optional dependencies of `penitent-test`,** so a project without them does not get them, and
+  never loads the classes that need them: the JUnit 5 extension and the `mock.spring` package. The build runs the
+  tests of the core and of the extension a second time with Spring off the classpath, so that the core cannot come to
+  need it unnoticed.
 
 ## Open questions
 
