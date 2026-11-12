@@ -211,10 +211,21 @@ first:
 - **The schema holds two objects of the library,** the calls table and the `PENITENT_MOCK` package, versioned so that
   an outdated schema is reported before a test fails in an obscure way.
 - **IslandSQL and the ANTLR runtime** become dependencies of `penitent-test` only. The core stays free of them.
+- **`penitent-test` is for tests only,** declared with `<scope>test</scope>`, and never belongs in production code:
+  it needs `ENABLE EDITIONS`, which cannot be undone, and privileges a production schema should not have
+  (`CREATE ANY EDITION`, `DROP ANY EDITION`); it runs DDL while it works, creating editions, compiling bodies and
+  dropping them; and it records each mocked call in a table. Outside automated tests, it fits only a disposable
+  database, such as a development or QA one where a package that reaches an external system is replaced while
+  someone explores the application by hand.
 - **JUnit and Spring are optional dependencies of `penitent-test`,** so a project without them does not get them, and
-  never loads the classes that need them: the JUnit 5 extension and the `mock.spring` package. The build runs the
-  tests of the core and of the extension a second time with Spring off the classpath, so that the core cannot come to
-  need it unnoticed.
+  never loads the classes that need them: the JUnit 5 extension and the `mock.spring` package. Two reasons. Many
+  projects test without JUnit 5's Jupiter, especially around legacy PL/SQL: JUnit 4, TestNG, Spock, Cucumber or
+  Kotest, and they use `PlsqlMocks` directly, with `begin()` and `end()` in their own hooks. And versions have to
+  agree: JUnit's platform and Jupiter must be of the same version, and `spring-test` must match the application's
+  Spring, so a version brought in by this module could break the tests of a project on another one. As optional
+  dependencies, each project uses its own. The cost is that the JUnit 5 extension, used without JUnit 5, fails with
+  `NoClassDefFoundError`, as expected. The build runs the tests of the core and of the extension a second time with
+  Spring off the classpath, so that the core cannot come to need it unnoticed.
 
 ## Open questions
 
