@@ -38,6 +38,18 @@
 			<optional>true</optional>
 		</dependency>
 
+		<!-- @EnablePlsqlMocks: only for those who test with Spring, who have it already -->
+		<dependency>
+			<groupId>org.springframework</groupId>
+			<artifactId>spring-test</artifactId>
+			<optional>true</optional>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework</groupId>
+			<artifactId>spring-context</artifactId>
+			<optional>true</optional>
+		</dependency>
+
 		<dependency>
 			<groupId>com.oracle.database.jdbc</groupId>
 			<artifactId>${oracle.jdbc.artifact}</artifactId>
@@ -47,6 +59,29 @@
 		<dependency>
 			<groupId>org.junit.jupiter</groupId>
 			<artifactId>junit-jupiter</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<!-- interfaces that take part in Spring's transactions, as an application's do -->
+		<dependency>
+			<groupId>io.github.rponte</groupId>
+			<artifactId>penitent-spring</artifactId>
+			<version>${project.version}</version>
+			<scope>test</scope>
+		</dependency>
+		<!-- a Spring Boot test, with the DataSource Spring Boot creates -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-autoconfigure</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-jdbc</artifactId>
 			<scope>test</scope>
 		</dependency>
 		<!-- runs sample test classes through the extension, and checks how each test ended -->
