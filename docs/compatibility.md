@@ -407,9 +407,30 @@ Where the PL/SQL guarantees the value is never `null`, driver 23 works as it is.
 | `@Transactional` on an interface's methods: alone, a transaction of its own, committed on return; inside another, part of it; `REQUIRES_NEW` commits on its own; inside a `PlsqlTransactions` block, refused | Validated |
 | An interface Spring wraps (`@Transactional`, `@Validated`, the application's advice, one or more layers): `validateOnStartup` and `PlsqlPackages.validate` reach it; a view of `tx.using` or `PlsqlPackages.using` keeps every layer, runs on its connection and stops with the block; inside a block, a `@Transactional` method of the view is refused | Validated |
 
+## Mocking PL/SQL in tests
+
+With `penitent-test`, measured on Oracle 23ai only, as [Mocking PL/SQL in tests](testing.md) shows.
+
+| Situation | Status |
+|---|---|
+| A stub of a function returns its value, `null` included; of a date argument, matches it by value | Validated |
+| A stub raises an application error or a predefined exception, which arrives as `PlsqlRoutineRaisedException` | Validated |
+| A stub of a procedure sets its `OUT` value; matchers `eq`, `any` and `isNull`, the last stub that matches winning; a call mixing matchers and values refused | Validated |
+| A call no stub matches fails with `ORA-20999`, naming the routine and showing the arguments | Validated |
+| The rest of the package stays real: other routines, private ones, other overloads; a real routine calling the stubbed one, in the same package or another, gets the mock; outside the test's edition, the routine is real | Validated |
+| `verify` counts the calls of a stubbed routine, from Java and from PL/SQL, with `times` and `never`; refused for a routine with no stub | Validated |
+| A wrapped body refused; prerequisites missing reported all at once, naming the scripts; `prepare` twice harmless | Validated |
+| An edition per test, dropped after it, also after a test that fails or a run that died; a second mocks on the same database refused | Validated |
+| A stub made after the package was used fails the next call once with `ORA-04068`, and the one after sees it | Validated |
+| A pool with no connection to spare: a clear message | Validated |
+| JUnit 5: `PlsqlMockExtension`, stubs in `@BeforeEach`, `PlsqlMocks` as a parameter | Validated |
+| Spring: `@EnablePlsqlMocks` in a transactional test, rolled back as usual, the stub never committing it; without a transaction; several `DataSource`s; the context cached; Spring Boot's `DataSource` | Validated |
+| The core and the JUnit 5 extension without Spring on the classpath | Validated |
+
 ## Not measured
 
 - Oracle 18c and older, such as 12c.
+- `penitent-test` on Oracle 21c and 19c, and stubs of booleans and `LocalDateTime`.
 - Drivers 18.x and older.
 - Resilience4j's `@Retry` on a `@Transactional` method, `@Bulkhead` and `@RateLimiter`.
 - A Jakarta EE container's `DataSource` inside a JTA transaction, with `create` or with `PlsqlPackages.using`.

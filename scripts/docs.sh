@@ -26,9 +26,11 @@ if [[ ! -x "$venv/bin/zensical" ]] || ! cmp -s "$requirements" "$venv/requiremen
 	cp "$requirements" "$venv/requirements-docs.txt"
 fi
 
-# The Javadoc of penitent-core, penitent-spring and penitent-spring-boot-starter, without the internal packages.
+# The Javadoc of every module, without the internal packages. The previous output goes first: javadoc:aggregate adds
+# to it, so a class that moved to an internal package would stay published.
 generate_api() {
 	echo "Generating the Javadoc into docs/api/"
+	rm -rf "$root/target/reports/apidocs"
 	(cd "$root" && ./mvnw -q -B -DskipTests javadoc:aggregate)
 	rm -rf "$api"
 	mkdir -p "$api"

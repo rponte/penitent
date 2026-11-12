@@ -136,10 +136,10 @@
 					<version>3.12.0</version>
 					<configuration>
 						<!--
-							Only the API is documented: internal packages may change in any version.
+							Only the API is documented: internal packages, of every module, may change in any version.
 							Missing @param/@return tags are not errors; everything else is.
 						-->
-						<excludePackageNames>io.github.rponte.penitent.internal:io.github.rponte.penitent.internal.*</excludePackageNames>
+						<excludePackageNames>io.github.rponte.penitent.internal:io.github.rponte.penitent.internal.*:io.github.rponte.penitent.mock.internal:io.github.rponte.penitent.spring.internal</excludePackageNames>
 						<doclint>all,-missing</doclint>
 						<failOnWarnings>true</failOnWarnings>
 					</configuration>

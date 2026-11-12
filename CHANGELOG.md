@@ -6,6 +6,14 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `penitent-test`, a new module that stubs a routine of a package in an integration test, in the style of Mockito,
+  from the same interface the application calls it through: the stub is real PL/SQL, compiled into an edition of the
+  test's own, so Java and other PL/SQL calling the routine see it, while the rest of the package stays real. It works
+  with JUnit 5 (`PlsqlMockExtension`), with Spring (`@EnablePlsqlMocks`) and on its own. Measured on Oracle 23ai; see
+  Mocking PL/SQL in tests, and architecture decision 0001 for the design.
+
 ## [0.28.0]
 
 Interfaces Spring wraps. An interface with `@Transactional`, `@Validated`, Resilience4j or advice of the application

@@ -119,6 +119,13 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<!-- the examples of docs/testing.md, run by DocsTestingTest through JUnit's test kit -->
+					<excludes>
+						<exclude>**/FreightCalculationTest.java</exclude>
+						<exclude>**/FreightServiceTest.java</exclude>
+					</excludes>
+				</configuration>
 				<executions>
 					<!--
 						The tests of the core and of the JUnit 5 extension once more, with Spring off the classpath, as

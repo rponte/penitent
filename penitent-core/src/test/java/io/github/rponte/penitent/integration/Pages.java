@@ -31,7 +31,9 @@ final class Pages {
 
 	static final Path DOCS = Path.of("..", "docs");
 
-	static final Path TESTS = Path.of("src", "test", "java");
+	/** The tests whose regions the pages show: this module's, and those of penitent-test, for its page. */
+	static final List<Path> TESTS = List.of(Path.of("src", "test", "java"),
+			Path.of("..", "penitent-test", "src", "test", "java"));
 
 	static final Path FIXTURES = Path.of("src", "test", "resources", "db", "fixtures");
 
@@ -110,9 +112,9 @@ final class Pages {
 
 	/** Every region of the tests, by name, without their common indentation. */
 	static Map<String, String> regions() {
-		try (Stream<Path> files = Files.walk(TESTS)) {
+		try {
 			Map<String, String> regions = new LinkedHashMap<>();
-			for (Path file : files.filter(p -> p.toString().endsWith(".java")).sorted().toList()) {
+			for (Path file : testFiles()) {
 				List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
 				for (int i = 0; i < lines.size(); i++) {
 					Matcher start = REGION_START.matcher(lines.get(i));
@@ -135,15 +137,25 @@ final class Pages {
 
 	/** The source of every test, to find the page references it makes. */
 	static String testSources() {
-		try (Stream<Path> files = Files.walk(TESTS)) {
+		try {
 			StringBuilder sources = new StringBuilder();
-			for (Path file : files.filter(p -> p.toString().endsWith(".java")).sorted().toList()) {
+			for (Path file : testFiles()) {
 				sources.append(Files.readString(file, StandardCharsets.UTF_8));
 			}
 			return sources.toString();
 		} catch (IOException e) {
 			throw new UncheckedIOException(e);
 		}
+	}
+
+	private static List<Path> testFiles() throws IOException {
+		List<Path> files = new ArrayList<>();
+		for (Path root : TESTS) {
+			try (Stream<Path> walk = Files.walk(root)) {
+				walk.filter(p -> p.toString().endsWith(".java")).sorted().forEach(files::add);
+			}
+		}
+		return files;
 	}
 
 	/** Every line of the fixtures, as {@link #sqlLine} compares them. */
