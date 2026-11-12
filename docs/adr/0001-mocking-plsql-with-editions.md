@@ -13,10 +13,11 @@ that is where most of the behavior lives. A mock that lives only in Java misses 
 routine that other PL/SQL calls.
 
 Oracle's edition-based redefinition (EBR) lets a session see its own version of a package body, while every other
-session keeps seeing the real one. Teams already mock PL/SQL this way, with a disposable edition per test and the mock
-bodies written by hand as SQL scripts. Penitent already knows, for each method of an interface, which routine it
-calls, with its parameters and overload, from the dictionary. So it can do what those scripts do, from the interface
-the application already has.
+session keeps seeing the real one. Oracle designed it to upgrade an application while it is online; using it to mock
+PL/SQL in tests is, as far as we know, not an established practice, and this decision proposes it. A spike measured
+that it works, as [Measured](#measured) shows. Penitent already knows, for each method of an interface, which routine
+it calls, with its parameters and overload, from the dictionary, so the mock can be generated from the interface the
+application already has, instead of written by hand.
 
 ## Decision
 
