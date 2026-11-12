@@ -409,7 +409,7 @@ Where the PL/SQL guarantees the value is never `null`, driver 23 works as it is.
 
 ## Mocking PL/SQL in tests
 
-With `penitent-test`, measured on Oracle 23ai only, as [Mocking PL/SQL in tests](testing.md) shows.
+With `penitent-test`, measured on Oracle 23ai only, as [Testing](testing.md#mocking-a-routine) shows.
 
 | Situation | Status |
 |---|---|

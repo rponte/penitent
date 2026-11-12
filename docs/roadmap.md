@@ -10,7 +10,7 @@ The items below are in three groups: what comes next, what waits for a real use 
 ### Mocking PL/SQL in tests
 
 `penitent-test` stubs a routine of a package in an integration test, in the style of Mockito, from the interface the
-application already has, as [Mocking PL/SQL in tests](testing.md) shows, measured on Oracle 23ai. Still open, as
+application already has, as [Testing](testing.md#mocking-a-routine) shows, measured on Oracle 23ai. Still open, as
 [architecture decision 0001](adr/0001-mocking-plsql-with-editions.md) details:
 
 - **Oracle 21c and 19c,** including whether the Autonomous Database image used for 19c lets editions be enabled.

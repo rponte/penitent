@@ -187,8 +187,8 @@ parent turns on.
   on a connection you manage.
 - [Errors](docs/errors.md), [Validation](docs/validation.md), [Settings](docs/settings.md),
   [Logging](docs/logging.md) and [Spring and Spring Boot](docs/spring.md).
-- [Mocking PL/SQL in tests](docs/testing.md) with `penitent-test`: stub a routine of a package, in the style of
-  Mockito, in a test that runs against your real Oracle.
+- [Testing](docs/testing.md) code that calls PL/SQL against a real Oracle, and stubbing a routine of a package with
+  `penitent-test`, in the style of Mockito.
 
 New to it? [How Penitent works](docs/concepts.md) explains the terms, [Coming from JDBC](docs/coming-from-jdbc.md)
 compares it with `SimpleJdbcCall`, and [Troubleshooting](docs/troubleshooting.md) goes through the common errors.
