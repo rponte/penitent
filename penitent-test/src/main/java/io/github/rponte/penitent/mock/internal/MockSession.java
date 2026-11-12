@@ -193,6 +193,7 @@ public final class MockSession {
 
 	public void verify(Invocation invocation, int times) {
 		RoutineMetadata routine = routineOf(invocation);
+		requireStubbed(routine);
 		Map<String, Matcher> byParameter = byParameter(routine, invocation);
 		StringBuilder sql = new StringBuilder(
 				"SELECT COUNT(*) FROM PENITENT_MOCK_CALLS WHERE EDITION_NAME = ? AND ROUTINE = ?");
@@ -226,6 +227,20 @@ public final class MockSession {
 			throw new AssertionError(routine.qualifiedName() + invocation.matchers().toString().replace('[', '(')
 					.replace(']', ')') + " was expected " + timesOf(times) + " in this test, and was called "
 					+ timesOf(calls));
+		}
+	}
+
+	/**
+	 * Only a stubbed routine records its calls: one that is not runs its real code, which records nothing, so a
+	 * count of its calls would always be zero, and a {@code never()} would pass whatever happened.
+	 */
+	private void requireStubbed(RoutineMetadata routine) {
+		String key = BodyRewriter.callKey(routine);
+		boolean stubbed = stubsByPackage.getOrDefault(packageOf(routine), List.of()).stream()
+				.anyMatch(stub -> BodyRewriter.callKey(routineOf(stub.invocation())).equals(key));
+		if (!stubbed) {
+			throw new IllegalStateException(routine.qualifiedName() + " has no stub in this test, so its calls are not"
+					+ " recorded: only a stubbed routine records them, and verify can only count those");
 		}
 	}
 
