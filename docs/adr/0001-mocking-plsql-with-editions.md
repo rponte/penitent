@@ -109,6 +109,16 @@ And what it cannot do, in the first version:
   connection taken before, and kept, stays where it was, and keeps seeing the real routines.
 - **A connection taken in the test and still open at `end()`** keeps the edition in use, and dropping it fails, with a
   message that says so.
+- **The pool needs a connection to spare.** Creating and dropping the edition, compiling a stub, reading a routine's
+  signature and counting calls each run on a connection of the mocks' own, outside any transaction of the test, since
+  DDL commits. A test that holds every connection of the pool, such as a single-connection pool with a Spring test
+  transaction open, leaves none: the mocks then fail with a message that asks for one connection more than the test
+  uses at once, instead of a bare timeout of the pool.
+- **Stub a package before the test uses it.** Each stub recompiles the package body in the test's edition, and Oracle
+  discards the package's state in every session that had already run it: the next call there fails once with
+  `ORA-04068: existing state of packages has been discarded`, and the call after it sees the new stub (measured). A
+  test that makes its stubs first and then acts, the usual arrange, act and assert, never meets it. A stub made after
+  the package was used, such as a second stub in the middle of a test, does. Two ways around it are open, below.
 
 ## Measured
 
@@ -164,6 +174,21 @@ first:
 - **IslandSQL and the ANTLR runtime** become dependencies of `penitent-test` only. The core stays free of them.
 
 ## Open questions
+
+- **A stub after the package was used,** which now fails the next call once with `ORA-04068`, as recorded above. Two
+  options, either of which may be adopted, documented with it:
+  - **B. Retry the call once, in tests only.** The wrapped `DataSource` wraps the statements of its connections too,
+    and runs a call again once when it fails with `ORA-04068`: Oracle has already reset the package's state, so the
+    second run works. It covers Penitent, a `JdbcTemplate` and any other JDBC, without the test doing anything. The
+    cost is that it hides what happened: the package's state was reset, and a test that relies on that state, such as
+    a counter in a package variable, sees it start over without a word. It would need to say so, at least in a log.
+  - **C. A data-driven body.** The first time a package is mocked in a test, every routine of its spec is rewritten at
+    once to look up its stubs in a table, and, with no stub that matches, to run its real code, kept as a nested
+    block. Every later stub is a row in that table, not a compilation: no `ORA-04068`, no connection of its own for
+    each stub, and no implicit commit. It also gives spy mode almost for free. The cost is the largest of all: the
+    values travel through the table with their types, as JSON read back with `JSON_VALUE ... RETURNING`, and every
+    routine of the package is rewritten, not only the stubbed ones. It is the alternative this decision first set
+    aside as more than the first version needs.
 
 - **Mocking more than packages.** In legacy schemas, PL/SQL is often coupled to other objects through the database:
   views, standalone functions and procedures, synonyms, triggers, object types. Editions can redefine all of them, so
