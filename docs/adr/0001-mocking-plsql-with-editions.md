@@ -159,6 +159,114 @@ And what it cannot do, in the first version:
   test that makes its stubs first and then acts, the usual arrange, act and assert, never meets it. A stub made after
   the package was used, such as a second stub in the middle of a test, does. Two ways around it are open, below.
 
+## How the pieces fit together
+
+### The pieces
+
+| Piece | Where it lives | What it is for |
+|---|---|---|
+| The table `PENITENT_MOCK_CALLS` | the schema, created once by `penitent-mock-schema.sql` | one row per call to a stubbed routine: the edition, the routine and the arguments, as JSON |
+| The package `PENITENT_MOCK` | the schema, created once by the same script | `record` writes a call to the table, in a transaction of its own; `version` tells which version of the script is applied |
+| The test's edition | the database, created before the test and dropped after it | holds the rewritten package bodies, which only sessions in the edition see |
+| The rewritten body | the test's edition | the package's own body, with the stubbed routine replaced by generated code |
+| The wrapped `DataSource` | the application's tests | moves each connection it hands out into the test's edition, and back when it is returned |
+| `PlsqlMocks` | the test | creates and drops the edition, compiles the stubs, and counts the calls for `verify` |
+
+### A test, step by step
+
+The first mock of the Testing page, from the beginning of the test to its end. "Own connection" is one the mocks take
+for themselves, outside any transaction of the test, since DDL commits:
+
+```mermaid
+sequenceDiagram
+    participant T as Test
+    participant M as PlsqlMocks
+    participant D as Wrapped DataSource
+    participant O as Oracle
+
+    T->>M: begin()
+    M->>O: check the prerequisites (own connection)
+    M->>O: CREATE EDITION PENITENT_MOCK_... (own connection)
+    M->>D: from now on, connections enter the edition
+
+    T->>M: when(freights.calculate("SP", "CE")).thenReturn(24.90)
+    M->>O: read the body of FREIGHTS from ALL_SOURCE
+    M->>M: parse it, and rewrite calculate only
+    M->>O: compile the body in the edition (own connection)
+
+    T->>D: the code under test calls freights.calculate("SP", "CE")
+    D->>O: ALTER SESSION SET EDITION = PENITENT_MOCK_...
+    O->>O: the rewritten calculate records the call, and returns 24.90
+
+    T->>M: verify(freights).calculate("SP", "CE")
+    M->>O: count the calls of the edition, routine and arguments
+
+    T->>M: end()
+    D->>O: each connection, as it is returned, goes back to ORA$BASE
+    M->>O: DROP EDITION ... CASCADE, and delete its calls (own connection)
+```
+
+1. **`begin()`** checks the prerequisites, drops an edition a run that died left behind, and creates the test's
+   edition. From then on, the wrapped `DataSource` puts each connection it hands out in it.
+2. **`mock(...)`** gives a proxy that only records the calls made on it, as Mockito's does.
+3. **`when(...).thenReturn(...)`** takes the call just recorded: the method gives the routine, through the same
+   resolution a real call uses, and the arguments give the condition. The library reads the package body from
+   `ALL_SOURCE`, outside the edition, so it is always the real one, rewrites the stubbed routine, and compiles the
+   body in the test's edition. Every stub of the package so far goes into that compilation.
+4. **The code under test** calls the routine as always. Its connection is in the edition, so Oracle runs the
+   rewritten body: the generated code records the call through `PENITENT_MOCK.record`, then answers as stubbed.
+   Other PL/SQL that calls the routine, in a session in the edition, runs the same code.
+5. **`verify(...)`** counts the rows of `PENITENT_MOCK_CALLS` for the test's edition, the routine and the arguments.
+6. **`end()`** drops the edition, with every body compiled in it, and deletes its calls. The connections went back to
+   `ORA$BASE` as they were returned, which is what lets the edition be dropped.
+
+### The PL/SQL generated for a stub
+
+For `when(freights.calculate("SP", "CE")).thenReturn(new BigDecimal("24.90"))`, the routine `calculate` of the body
+becomes this, compiled in the test's edition (shown as generated; a test of the module checks it):
+
+```sql
+FUNCTION calculate(p_origin freight_item.uf%TYPE, p_destination VARCHAR2 DEFAULT 'SP') RETURN money IS
+    l_penitent_args VARCHAR2(4000);
+  BEGIN
+    SELECT JSON_ARRAY(P_ORIGIN, P_DESTINATION NULL ON NULL) INTO l_penitent_args FROM DUAL;
+    PENITENT_MOCK.record('PLSQL_TEST.FREIGHTS.CALCULATE(P_ORIGIN,P_DESTINATION)', l_penitent_args);
+    IF P_ORIGIN = 'SP' AND P_DESTINATION = 'CE' THEN
+      RETURN 24.90;
+    END IF;
+    RAISE_APPLICATION_ERROR(-20999, 'PLSQL_TEST.FREIGHTS.CALCULATE: no stub matches the arguments ' || l_penitent_args);
+  END calculate;
+```
+
+- **The heading is the body's own,** as written, so `%TYPE`, the `SUBTYPE` `money` and the `DEFAULT` are kept.
+- **The arguments are recorded first,** as a JSON array of the `IN` parameters, with the routine and its parameter
+  names, which tell overloads apart.
+- **Each stub is an `IF`,** the last stub made first, so that the last one that matches wins. A matcher such as
+  `any()` adds no condition; `isNull()` adds `IS NULL`.
+- **No stub that matches** raises `ORA-20999`, with the arguments, so a missing stub never passes unnoticed.
+- **The routine's real code is gone,** in this edition: what it called, it no longer calls. Every other routine of
+  the body stays as written.
+
+### What `verify` reads
+
+After the call, the table holds one row for it:
+
+| `EDITION_NAME` | `ROUTINE` | `ARGS` |
+|---|---|---|
+| `PENITENT_MOCK_5F2A91C3D4E6` | `PLSQL_TEST.FREIGHTS.CALCULATE(P_ORIGIN,P_DESTINATION)` | `["SP","CE"]` |
+
+`verify(freights).calculate("SP", "CE")` counts the rows that match, with each argument read back from the JSON with
+the type of its parameter, and fails unless the count is the one expected:
+
+```sql
+SELECT COUNT(*) FROM PENITENT_MOCK_CALLS
+ WHERE EDITION_NAME = ? AND ROUTINE = ?
+   AND JSON_VALUE(ARGS, '$[0]' RETURNING VARCHAR2(4000)) = 'SP'
+   AND JSON_VALUE(ARGS, '$[1]' RETURNING VARCHAR2(4000)) = 'CE'
+```
+
+Only a stubbed routine records its calls, which is why `verify` refuses a routine with no stub in the test.
+
 ## Measured
 
 A spike, on Oracle 23ai (`gvenzl/oracle-free:23.26.3`), with a package whose spec uses `%TYPE`, a `SUBTYPE`, a
