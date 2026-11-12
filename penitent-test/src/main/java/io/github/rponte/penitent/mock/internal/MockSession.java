@@ -52,7 +52,7 @@ public final class MockSession {
 		if (edition != null) {
 			throw new IllegalStateException("the mocks already began, in edition " + edition + ": end them first");
 		}
-		try (Connection connection = base.getConnection()) {
+		try (Connection connection = connection()) {
 			Prerequisites.require(connection, SCHEMA_VERSION);
 			defaultEdition = single(connection,
 					"SELECT PROPERTY_VALUE FROM DATABASE_PROPERTIES WHERE PROPERTY_NAME = 'DEFAULT_EDITION'");
@@ -75,7 +75,7 @@ public final class MockSession {
 		edition = null;
 		stubsByPackage.clear();
 		bodies.clear();
-		try (Connection connection = base.getConnection()) {
+		try (Connection connection = connection()) {
 			drop(connection, ending);
 		} catch (SQLException e) {
 			throw new IllegalStateException("failed to drop the test's edition " + ending + " (a connection taken in the"
@@ -143,7 +143,7 @@ public final class MockSession {
 					.stubs().add(new BodyRewriter.StubbedCall(byParameter(routine, stub.invocation()), stub.action()));
 		}
 		String mocked = BodyRewriter.rewrite(pkg, body, List.copyOf(subprograms.values()));
-		try (Connection connection = base.getConnection()) {
+		try (Connection connection = connection()) {
 			try {
 				EditionDataSource.execute(connection, "ALTER SESSION SET EDITION = " + edition);
 				EditionDataSource.execute(connection, mocked);
@@ -165,7 +165,7 @@ public final class MockSession {
 	/** The body as the database has it, in the default edition. */
 	private String source(RoutineMetadata routine) {
 		String pkg = packageOf(routine);
-		try (Connection connection = base.getConnection();
+		try (Connection connection = connection();
 				PreparedStatement select = connection.prepareStatement("SELECT TEXT FROM ALL_SOURCE WHERE OWNER = ?"
 						+ " AND NAME = ? AND TYPE = 'PACKAGE BODY' ORDER BY LINE")) {
 			select.setString(1, routine.schema());
@@ -211,7 +211,7 @@ public final class MockSession {
 			index++;
 		}
 		int calls;
-		try (Connection connection = base.getConnection();
+		try (Connection connection = connection();
 				PreparedStatement count = connection.prepareStatement(sql.toString())) {
 			count.setString(1, edition);
 			count.setString(2, BodyRewriter.callKey(routine));
@@ -266,7 +266,44 @@ public final class MockSession {
 
 	private RoutineMetadata routineOf(Invocation invocation) {
 		Object describer = describerOf(invocation.mock().type());
-		return Views.handlerOf(describer).describe(invocation.method());
+		try {
+			return Views.handlerOf(describer).describe(invocation.method());
+		} catch (RuntimeException e) {
+			if (noConnectionToSpare(e)) {
+				throw noConnection(e);
+			}
+			throw e;
+		}
+	}
+
+	/**
+	 * A connection of the mocks' own, outside any transaction of the test: DDL commits. The pool has to have one to
+	 * spare besides those the test holds, or the mocks wait for one until the pool gives up.
+	 */
+	private Connection connection() throws SQLException {
+		try {
+			return base.getConnection();
+		} catch (SQLException e) {
+			if (noConnectionToSpare(e)) {
+				throw noConnection(e);
+			}
+			throw e;
+		}
+	}
+
+	private static boolean noConnectionToSpare(Throwable failure) {
+		for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+			if (cause instanceof java.sql.SQLTransientConnectionException) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private static IllegalStateException noConnection(Throwable cause) {
+		return new IllegalStateException("the mocks need a connection of their own, besides those the test holds, and"
+				+ " the pool had none to spare: give the pool at least one connection more than the test uses at once",
+				cause);
 	}
 
 	private Object describerOf(Class<?> type) {

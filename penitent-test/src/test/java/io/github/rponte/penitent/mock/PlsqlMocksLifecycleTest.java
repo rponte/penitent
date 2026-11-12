@@ -111,6 +111,48 @@ class PlsqlMocksLifecycleTest {
 	}
 
 	@Test
+	@DisplayName("a pool with no connection to spare: the stub fails saying the mocks need one of their own")
+	void pool_with_no_connection_to_spare() throws SQLException {
+		com.zaxxer.hikari.HikariDataSource single = TestDatabase.newPool(OracleUnderTest.USER);
+		single.setMaximumPoolSize(1);
+		single.setConnectionTimeout(1000);
+		DataSource wrapped = PlsqlMocks.wrap(single);
+		try (PlsqlMocks mocks = PlsqlMocks.on(wrapped)) {
+			mocks.begin();
+			Freights mock = mocks.mock(Freights.class);
+			try (Connection held = wrapped.getConnection()) {   // as a test transaction holds it
+				assertThatThrownBy(() -> when(mock.calculate("SP", "CE")).thenReturn(BigDecimal.ONE))
+						.isInstanceOf(IllegalStateException.class)
+						.hasMessageContaining("connection of their own")
+						.hasMessageContaining("pool");
+			}
+		} finally {
+			single.close();
+		}
+	}
+
+	@Test
+	@DisplayName("a stub added after the package was used: the next call in a session that kept the package fails"
+			+ " once with ORA-04068, as a recompilation does, and the call after it sees the stub")
+	void stub_after_the_package_was_used() throws SQLException {
+		Freights freights = PlsqlPackages.create(Freights.class, dataSource);
+		try (PlsqlMocks mocks = PlsqlMocks.on(dataSource)) {
+			mocks.begin();
+			try (Connection session = dataSource.getConnection()) {   // after begin: in the edition
+				Freights mock = mocks.mock(Freights.class);
+				when(mock.calculate("SP", "CE")).thenReturn(new BigDecimal("24.90"));
+				Freights inSession = PlsqlPackages.using(freights, session);
+				assertThat(inSession.calculate("SP", "CE")).isEqualByComparingTo("24.90");
+
+				when(mock.calculate("RJ", "BA")).thenReturn(new BigDecimal("31"));
+
+				assertThatThrownBy(() -> inSession.calculate("RJ", "BA")).hasMessageContaining("ORA-04068");
+				assertThat(inSession.calculate("RJ", "BA")).isEqualByComparingTo("31");
+			}
+		}
+	}
+
+	@Test
 	@DisplayName("an edition left by a run that died is dropped by the next begin")
 	void leftover_edition() {
 		TestDatabase.execute(pool, "CREATE EDITION PENITENT_MOCK_LEFTOVER AS CHILD OF ORA$BASE");
