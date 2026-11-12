@@ -1,7 +1,7 @@
 # 0001. Mocking PL/SQL in integration tests with editions
 
-- **Status:** Accepted, 2026-11-11. The core, without JUnit, is implemented and measured on Oracle 23ai; its tests
-  are skipped on other versions until they are measured.
+- **Status:** Accepted, 2026-11-11. The core and the JUnit 5 extension are implemented and measured on Oracle 23ai;
+  the module's tests are skipped on other versions until they are measured. Spring Test is next.
 - **Module:** `penitent-test`.
 
 ## Context
@@ -65,6 +65,10 @@ verify(pkg).calculaFrete("SP", "CE");
    schema)` runs the same scripts, the first through a DBA's `DataSource` and the second as the schema, as a
    convenience for a disposable database such as Testcontainers; running it again is harmless.
 7. **Support for JUnit 5 and Spring Test,** with the Spring support ordered before Spring's transaction listener.
+   For JUnit 5, `PlsqlMockExtension`, registered with `@RegisterExtension` and a supplier of the wrapped
+   `DataSource`, begins the test's edition before its `@BeforeEach` methods, so a stub can be made there, and ends it
+   after its `@AfterEach` ones, whether the test passed or failed. A test can take its `PlsqlMocks` as a parameter.
+   JUnit is an optional dependency of the module.
 
 ### First version
 
