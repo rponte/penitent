@@ -133,6 +133,22 @@ class PlsqlMocksLifecycleTest {
 	}
 
 	@Test
+	@DisplayName("wrap gives the same DataSource for the same pool, so the application and the mocks cannot get apart")
+	void wrap_once_per_pool() {
+		DataSource again = PlsqlMocks.wrap(pool);
+
+		assertThat(again).isSameAs(dataSource);
+		assertThat(PlsqlMocks.wrap(dataSource)).as("wrapping a wrapped one").isSameAs(dataSource);
+		Freights freights = PlsqlPackages.create(Freights.class, dataSource);
+		try (PlsqlMocks mocks = PlsqlMocks.on(again)) {
+			mocks.begin();
+			when(mocks.mock(Freights.class).calculate("SP", "CE")).thenReturn(new BigDecimal("24.90"));
+
+			assertThat(freights.calculate("SP", "CE")).isEqualByComparingTo("24.90");
+		}
+	}
+
+	@Test
 	@DisplayName("a DataSource that is not wrapped is refused, since its connections would never enter the edition")
 	void not_wrapped() {
 		assertThatThrownBy(() -> PlsqlMocks.on(pool))

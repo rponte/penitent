@@ -1,7 +1,10 @@
 package io.github.rponte.penitent.mock;
 
+import java.lang.ref.WeakReference;
 import java.lang.reflect.Proxy;
+import java.util.Map;
 import java.util.Objects;
+import java.util.WeakHashMap;
 
 import javax.sql.DataSource;
 
@@ -40,16 +43,35 @@ import io.github.rponte.penitent.mock.internal.Stub;
  */
 public final class PlsqlMocks implements AutoCloseable {
 
+	/** The wrapped DataSource of each pool; both weak, so that a pool no longer used goes away with its wrapper. */
+	private static final Map<DataSource, WeakReference<EditionDataSource>> WRAPPED = new WeakHashMap<>();
+
 	private final MockSession session;
 
 	private PlsqlMocks(MockSession session) {
 		this.session = session;
 	}
 
-	/** {@code dataSource}, handing out connections in the edition of the test running, if any. */
+	/**
+	 * {@code dataSource}, handing out connections in the edition of the test running, if any. The application and
+	 * {@link #on} have to use the same wrapped object, since the edition is kept in it: so the same pool always
+	 * gives the same wrapped {@code DataSource}, however many times it is wrapped, and a wrapped one is returned as it
+	 * is.
+	 */
 	public static DataSource wrap(DataSource dataSource) {
 		Objects.requireNonNull(dataSource, "dataSource");
-		return dataSource instanceof EditionDataSource ? dataSource : new EditionDataSource(dataSource);
+		if (dataSource instanceof EditionDataSource) {
+			return dataSource;
+		}
+		synchronized (WRAPPED) {
+			WeakReference<EditionDataSource> known = WRAPPED.get(dataSource);
+			EditionDataSource wrapped = known == null ? null : known.get();
+			if (wrapped == null) {
+				wrapped = new EditionDataSource(dataSource);
+				WRAPPED.put(dataSource, new WeakReference<>(wrapped));
+			}
+			return wrapped;
+		}
 	}
 
 	/** Mocks for the database of {@code dataSource}, which must come from {@link #wrap}. */
