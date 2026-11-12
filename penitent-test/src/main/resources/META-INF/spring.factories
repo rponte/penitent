@@ -1,0 +1,5 @@
+org.springframework.test.context.ContextCustomizerFactory=\
+io.github.rponte.penitent.mock.spring.PlsqlMocksContextCustomizerFactory
+
+org.springframework.test.context.TestExecutionListener=\
+io.github.rponte.penitent.mock.spring.PlsqlMocksTestExecutionListener

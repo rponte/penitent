@@ -1,7 +1,7 @@
 # 0001. Mocking PL/SQL in integration tests with editions
 
-- **Status:** Accepted, 2026-11-11. The core and the JUnit 5 extension are implemented and measured on Oracle 23ai;
-  the module's tests are skipped on other versions until they are measured. Spring Test is next.
+- **Status:** Accepted, 2026-11-11. The core, the JUnit 5 extension and the Spring Test support are implemented and
+  measured on Oracle 23ai; the module's tests are skipped on other versions until they are measured.
 - **Module:** `penitent-test`.
 
 ## Context
@@ -70,6 +70,33 @@ verify(pkg).calculaFrete("SP", "CE");
    after its `@AfterEach` ones, whether the test passed or failed. A test can take its `PlsqlMocks` as a parameter.
    JUnit is an optional dependency of the module.
 
+   For Spring, `@EnablePlsqlMocks` on the test class, with nothing else:
+
+   <!-- snippet: untested -->
+   ```java
+   @SpringBootTest
+   @EnablePlsqlMocks
+   class FreightServiceTest {
+
+       @Autowired PlsqlMocks mocks;   // one per context, a new edition per test
+
+       @Test
+       void calculates_freight() {
+           when(mocks.mock(Freights.class).calculate("SP", "CE")).thenReturn(new BigDecimal("24.90"));
+           // ...
+       }
+   }
+   ```
+
+   - A `ContextCustomizer`, found by Spring Test, wraps every `DataSource` bean of the context and adds the
+     `PlsqlMocks` bean, on the `DataSource` that `@EnablePlsqlMocks(dataSource = ...)` names, or the only or primary
+     one. Only the contexts of annotated classes change, so Spring caches them apart from the others.
+   - A `TestExecutionListener` ordered just before Spring's transactional one begins the edition before the test
+     transaction takes its connection, which then enters the edition as Oracle requires, and ends it after the
+     transaction gave the connection back, so the edition can be dropped. Stubs compile on a connection of their own,
+     so they never commit the test transaction.
+   - Spring is an optional dependency of the module.
+
 ### First version
 
 | In | Later |
@@ -109,6 +136,10 @@ And what it cannot do, in the first version:
   connection taken before, and kept, stays where it was, and keeps seeing the real routines.
 - **A connection taken in the test and still open at `end()`** keeps the edition in use, and dropping it fails, with a
   message that says so.
+- **In Spring, the `DataSource` bean is no longer of the pool's type.** Wrapping it changes its class, so a bean that
+  injects the pool by its concrete type, such as `HikariDataSource`, no longer finds it (measured with Spring Boot);
+  injecting `DataSource`, and `unwrap(HikariDataSource.class)`, still work, and so do Spring Boot's `JdbcTemplate`
+  and transaction manager.
 - **The pool needs a connection to spare.** Creating and dropping the edition, compiling a stub, reading a routine's
   signature and counting calls each run on a connection of the mocks' own, outside any transaction of the test, since
   DDL commits. A test that holds every connection of the pool, such as a single-connection pool with a Spring test
