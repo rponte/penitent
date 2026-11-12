@@ -35,7 +35,9 @@ final class Pages {
 	static final List<Path> TESTS = List.of(Path.of("src", "test", "java"),
 			Path.of("..", "penitent-test", "src", "test", "java"));
 
-	static final Path FIXTURES = Path.of("src", "test", "resources", "db", "fixtures");
+	/** The fixtures the pages' SQL comes from: this module's, and those of penitent-test, for its page. */
+	static final List<Path> FIXTURES = List.of(Path.of("src", "test", "resources", "db", "fixtures"),
+			Path.of("..", "penitent-test", "src", "test", "resources", "db", "fixtures"));
 
 	private static final Pattern MARKER = Pattern.compile("^\\s*<!-- snippet: (\\S+) -->\\s*$");
 
@@ -160,10 +162,14 @@ final class Pages {
 
 	/** Every line of the fixtures, as {@link #sqlLine} compares them. */
 	static List<String> fixtureLines() {
-		try (Stream<Path> files = Files.list(FIXTURES)) {
+		try {
 			List<String> lines = new ArrayList<>();
-			for (Path file : files.filter(p -> p.toString().endsWith(".sql")).sorted().toList()) {
-				Files.readAllLines(file, StandardCharsets.UTF_8).stream().map(Pages::sqlLine).forEach(lines::add);
+			for (Path root : FIXTURES) {
+				try (Stream<Path> files = Files.list(root)) {
+					for (Path file : files.filter(p -> p.toString().endsWith(".sql")).sorted().toList()) {
+						Files.readAllLines(file, StandardCharsets.UTF_8).stream().map(Pages::sqlLine).forEach(lines::add);
+					}
+				}
 			}
 			return lines;
 		} catch (IOException e) {

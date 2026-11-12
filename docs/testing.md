@@ -18,13 +18,55 @@ starts one for the tests and throws it away after them, so every developer and e
 static OracleContainer oracle = new OracleContainer("gvenzl/oracle-free:23-slim-faststart");
 ```
 
-With your schema in it, applied by your migrations as in production, a test creates the interface as the application
-does, calls it, and checks the result of the real PL/SQL:
+With your schema in it, applied by your migrations as in production, the tests on this page work with a package that
+calculates freights between two states of Brazil:
+
+<!-- snippet: fixture -->
+```sql
+CREATE OR REPLACE PACKAGE freights AS
+  SUBTYPE money IS NUMBER(10,2);
+
+  FUNCTION calculate(p_origin freight_item.uf%TYPE, p_destination VARCHAR2 DEFAULT 'SP') RETURN money;
+  PROCEDURE quote(p_uf IN VARCHAR2, p_value OUT money);
+  FUNCTION count_items(p_uf VARCHAR2) RETURN NUMBER;
+END freights;
+/
+
+CREATE OR REPLACE PACKAGE BODY freights AS
+  FUNCTION base_rate(p_uf VARCHAR2) RETURN NUMBER IS
+  BEGIN
+    RETURN CASE p_uf WHEN 'CE' THEN 50 ELSE 10 END;
+  END base_rate;
+
+  FUNCTION calculate(p_origin freight_item.uf%TYPE, p_destination VARCHAR2 DEFAULT 'SP') RETURN money IS
+    l_value money;
+  BEGIN
+    l_value := base_rate(p_destination) * 1.5;
+    RETURN l_value;
+  END calculate;
+
+  PROCEDURE quote(p_uf IN VARCHAR2, p_value OUT money) AS
+  BEGIN
+    p_value := base_rate(p_uf);
+  END;
+
+  FUNCTION count_items(p_uf VARCHAR2) RETURN NUMBER IS
+    l_count NUMBER;
+  BEGIN
+    SELECT COUNT(*) INTO l_count FROM freight_item WHERE uf = p_uf;
+    RETURN l_count;
+  END count_items;
+END freights;
+/
+```
+
+The application calls it through an interface of Penitent:
 
 <!-- snippet: testing/interface -->
 ```java
 @PlsqlPackage("FREIGHTS")
-interface Freights {
+public interface Freights {
+
     BigDecimal calculate(String pOrigin, String pDestination);
 
     void quote(String pUf, PlsqlOut<BigDecimal> pValue);
@@ -33,11 +75,16 @@ interface Freights {
 }
 ```
 
+A test creates the interface as the application does, calls it, and checks the result of the real PL/SQL:
+
 <!-- snippet: testing/real-call -->
 ```java
 Freights freights = PlsqlPackages.create(Freights.class, dataSource);
 
-assertThat(freights.calculate("SP", "CE")).isEqualByComparingTo("75");   // the real PL/SQL ran
+BigDecimal freight = freights.calculate("SP", "CE");
+
+// what the real PL/SQL computes: the rate of CE, 50, times 1.5
+assertThat(freight).isEqualByComparingTo("75.00");
 ```
 
 ### Arrange, act, assert
@@ -48,8 +95,8 @@ test starts from the same data, and no test cleans up after another:
 
 <!-- snippet: testing/arrange-act-assert -->
 ```java
-@SpringJUnitConfig(Application.class)   // or @SpringBootTest
-@Transactional                          // each test is rolled back at its end
+@SpringBootTest
+@Transactional
 class FreightReportTest {
 
     @Autowired JdbcTemplate jdbc;
@@ -57,12 +104,15 @@ class FreightReportTest {
 
     @Test
     void counts_the_items_of_a_state() {
-        jdbc.update("INSERT INTO FREIGHT_ITEM (ID, UF) VALUES (7001, 'CE')");   // arrange
+        // arrange
+        jdbc.update("INSERT INTO FREIGHT_ITEM (ID, UF) VALUES (7001, 'CE')");
         jdbc.update("INSERT INTO FREIGHT_ITEM (ID, UF) VALUES (7002, 'CE')");
 
-        int items = freights.countItems("CE");                                    // act
+        // act
+        int items = freights.countItems("CE");
 
-        assertThat(items).isEqualTo(2);                                           // assert
+        // assert
+        assertThat(items).isEqualTo(2);
     }
 }
 ```
@@ -81,31 +131,59 @@ one routine, and keep everything else real.
 
 ### A first mock
 
-With `penitent-test`, a routine of a package is stubbed in the style of Mockito, from the same interface the
-application calls it through. In a Spring test, it takes one annotation:
+Say the code under test is a service that adds the freight to an order's subtotal:
 
-<!-- snippet: testing/spring -->
+<!-- snippet: testing/service -->
 ```java
-@SpringJUnitConfig(Application.class)   // or @SpringBootTest
-@EnablePlsqlMocks
-@Transactional
-class FreightServiceTest {
+public class CheckoutService {
 
-    @Autowired PlsqlMocks mocks;
-    @Autowired Freights freights;
+    private final Freights freights;
 
-    @Test
-    void calculates_freight() {
-        when(mocks.mock(Freights.class).calculate("SP", "CE")).thenReturn(new BigDecimal("24.90"));
+    public CheckoutService(Freights freights) {
+        this.freights = freights;
+    }
 
-        assertThat(freights.calculate("SP", "CE")).isEqualByComparingTo("24.90");
+    public BigDecimal total(BigDecimal subtotal, String origin, String destination) {
+        return subtotal.add(freights.calculate(origin, destination));
     }
 }
 ```
 
-The application calls `freights.calculate` as always, and gets `24.90`. Everything else in the package stays real, and
-so does every other test: the stub lives only while this test runs. It is real PL/SQL, too, so the code under test
-sees it wherever it calls the routine from, Java or other PL/SQL.
+To test its arithmetic, the freight has to be one you know, whatever the real calculation does. With `penitent-test`,
+the test stubs the routine, in the style of Mockito, from the same interface the service calls. In a Spring Boot test,
+it takes one annotation, `@EnablePlsqlMocks`:
+
+<!-- snippet: testing/spring -->
+```java
+@SpringBootTest
+@EnablePlsqlMocks
+class CheckoutServiceTest {
+
+    @Autowired PlsqlMocks mocks;
+    @Autowired CheckoutService checkout;
+
+    @Test
+    void adds_the_freight_to_the_subtotal() {
+        // arrange
+        Freights freights = mocks.mock(Freights.class);
+        when(freights.calculate("SP", "CE")).thenReturn(new BigDecimal("24.90"));
+
+        // act
+        BigDecimal total = checkout.total(new BigDecimal("100.00"), "SP", "CE");
+
+        // assert
+        assertThat(total).isEqualByComparingTo("124.90");
+    }
+}
+```
+
+- **Arrange:** `mocks.mock(...)` gives a stand-in for the interface, and `when(...).thenReturn(...)` says what
+  `calculate("SP", "CE")` answers in this test.
+- **Act:** the service calls `freights.calculate("SP", "CE")` as always, and gets `24.90`.
+- **Assert:** the total is the subtotal plus the stubbed freight.
+
+The stub lives only while this test runs, and everything else in the package stays real. It is real PL/SQL, too, so
+the code under test sees it wherever it calls the routine from, Java or other PL/SQL.
 
 ### Getting started
 
@@ -126,7 +204,8 @@ right after it starts applies both:
 
 <!-- snippet: testing/prepare -->
 ```java
-PlsqlMocks.prepare(admin, pool, "PLSQL_TEST");   // admin: a DBA's DataSource; pool: the schema's own
+// admin: a DBA's DataSource; pool: the DataSource of the schema that owns the packages
+PlsqlMocks.prepare(admin, pool, "PLSQL_TEST");
 ```
 
 On a database shared by your team or your CI, apply the scripts as your migrations, as
@@ -137,11 +216,11 @@ begins, it fails with a message that says what, and how to fix it.
 
 ### Stubbing a routine
 
-The examples stub routines of this interface, through `mock`, which records the calls made on it:
+The examples below stub routines of `freights`, a mock of the interface, as in the first mock:
 
 <!-- snippet: untested -->
 ```java
-Freights mock = mocks.mock(Freights.class);
+Freights freights = mocks.mock(Freights.class);
 ```
 
 **Return a value.** `when(...).thenReturn(...)`, as in the first mock. Numbers, text, `LocalDate` and `null` are
@@ -153,8 +232,8 @@ Oracle's predefined exceptions, by name. Both reach the code under test as a rea
 
 <!-- snippet: testing/errors -->
 ```java
-when(mock.calculate("SP", "XX")).thenThrow(-20200, "Cannot calculate freight to XX");
-when(mock.calculate("SP", "AM")).thenRaise("NO_DATA_FOUND");
+when(freights.calculate("SP", "XX")).thenThrow(-20200, "Cannot calculate freight to XX");
+when(freights.calculate("SP", "AM")).thenRaise("NO_DATA_FOUND");
 ```
 
 **Set `OUT` parameters.** A procedure returns nothing, so its call goes in a lambda, and `out(value)` stands for the
@@ -162,7 +241,7 @@ when(mock.calculate("SP", "AM")).thenRaise("NO_DATA_FOUND");
 
 <!-- snippet: testing/procedure -->
 ```java
-when(() -> mock.quote(eq("CE"), out(new BigDecimal("99.99"))));
+when(() -> freights.quote(eq("CE"), out(new BigDecimal("99.99"))));
 ```
 
 **Match arguments.** A plain value matches itself; `eq`, `any` and `isNull` work as in Mockito. When several stubs
@@ -170,8 +249,9 @@ match a call, the last one wins, so write the general ones first:
 
 <!-- snippet: testing/matchers -->
 ```java
-when(mock.calculate(eq("SP"), any())).thenReturn(new BigDecimal("10.00"));
-when(mock.calculate(eq("SP"), isNull())).thenReturn(new BigDecimal("15.00"));   // the last that matches wins
+when(freights.calculate(eq("SP"), any())).thenReturn(new BigDecimal("10.00"));
+// the last stub that matches wins: this one, for a null destination
+when(freights.calculate(eq("SP"), isNull())).thenReturn(new BigDecimal("15.00"));
 ```
 
 ### Verifying calls
@@ -180,27 +260,37 @@ when(mock.calculate(eq("SP"), isNull())).thenReturn(new BigDecimal("15.00"));   
 
 <!-- snippet: testing/verify -->
 ```java
-verify(mock).calculate("SP", "CE");
-verify(mock, times(2)).calculate(eq("SP"), any());
-verify(mock, never()).calculate("RJ", "BA");
+verify(freights).calculate("SP", "CE");
+verify(freights, times(2)).calculate(eq("SP"), any());
+verify(freights, never()).calculate("RJ", "BA");
 ```
 
 ### With JUnit 5, without Spring
 
 `PlsqlMockExtension` does what `@EnablePlsqlMocks` does, for a test without Spring. Give it the `DataSource` the
-application uses in tests, wrapped by `PlsqlMocks.wrap`:
+application uses in tests, wrapped by `PlsqlMocks.wrap`, and create the code under test with it:
 
 <!-- snippet: testing/junit -->
 ```java
+// the DataSource the application uses in tests, wrapped
+static DataSource dataSource = PlsqlMocks.wrap(pool);
+
 @RegisterExtension
-static PlsqlMockExtension mocks = PlsqlMockExtension.on(() -> dataSource);   // from PlsqlMocks.wrap
+static PlsqlMockExtension mocks = PlsqlMockExtension.on(() -> dataSource);
+
+CheckoutService checkout = new CheckoutService(PlsqlPackages.create(Freights.class, dataSource));
 
 @Test
-void calculates_freight() {
-    Freights mock = mocks.mock(Freights.class);
-    when(mock.calculate("SP", "CE")).thenReturn(new BigDecimal("24.90"));
+void adds_the_freight_to_the_subtotal() {
+    // arrange
+    Freights freights = mocks.mock(Freights.class);
+    when(freights.calculate("SP", "CE")).thenReturn(new BigDecimal("24.90"));
 
-    assertThat(freights.calculate("SP", "CE")).isEqualByComparingTo("24.90");
+    // act
+    BigDecimal total = checkout.total(new BigDecimal("100.00"), "SP", "CE");
+
+    // assert
+    assertThat(total).isEqualByComparingTo("124.90");
 }
 ```
 
@@ -213,18 +303,24 @@ A test can also take its `PlsqlMocks` as a parameter.
 
 <!-- snippet: testing/without-extension -->
 ```java
-DataSource dataSource = PlsqlMocks.wrap(pool);                        // what the application uses in tests
-Freights freights = PlsqlPackages.create(Freights.class, dataSource);
+// the DataSource the application uses in tests, wrapped
+DataSource dataSource = PlsqlMocks.wrap(pool);
+CheckoutService checkout = new CheckoutService(PlsqlPackages.create(Freights.class, dataSource));
 
 try (PlsqlMocks mocks = PlsqlMocks.on(dataSource)) {
-    mocks.begin();                                                    // the test's edition
+    // begins the test: from here, stubs can be made
+    mocks.begin();
 
-    Freights mock = mocks.mock(Freights.class);
-    when(mock.calculate("SP", "CE")).thenReturn(new BigDecimal("24.90"));
+    // arrange
+    Freights freights = mocks.mock(Freights.class);
+    when(freights.calculate("SP", "CE")).thenReturn(new BigDecimal("24.90"));
 
-    assertThat(freights.calculate("SP", "CE")).isEqualByComparingTo("24.90");
-    verify(mock).calculate("SP", "CE");
-}                                                                     // end(): the edition is dropped
+    // act
+    BigDecimal total = checkout.total(new BigDecimal("100.00"), "SP", "CE");
+
+    // assert
+    assertThat(total).isEqualByComparingTo("124.90");
+}
 ```
 
 ## Things to keep in mind
@@ -262,7 +358,7 @@ The stub is not a Java trick: it is PL/SQL, compiled into the database, where on
   its sessions, so the wrapped `DataSource` moves each connection into the test's edition when it hands it out, and
   back when it is returned. In Spring, the edition begins before the test transaction and ends after it, and the stubs
   compile on a connection of their own, so they never commit the test transaction.
-- **Calls are recorded in a table,** by a transaction of their own, which `verify` reads.
+- **Calls are recorded in a table,** by an autonomous transaction, so `verify` sees them even when the test rolls back.
 
 [Architecture decision 0001](adr/0001-mocking-plsql-with-editions.md) has the design, the alternatives that were left
 aside, and what was measured to back each choice.

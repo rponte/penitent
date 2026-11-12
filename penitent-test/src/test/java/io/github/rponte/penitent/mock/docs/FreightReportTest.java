@@ -1,22 +1,21 @@
-package io.github.rponte.penitent.mock;
+package io.github.rponte.penitent.mock.docs;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 import org.springframework.transaction.annotation.Transactional;
 
-import io.github.rponte.penitent.mock.DocsTestingTest.Application;
-import io.github.rponte.penitent.mock.DocsTestingTest.Freights;
+import io.github.rponte.penitent.mock.TestKit;
 
 /** The test without mocks of docs/testing.md: run by DocsTestingTest, through JUnit's test kit. */
 @ExtendWith(TestKit.OnlyThroughTheTestKit.class)
 // snippet: testing/arrange-act-assert
-@SpringJUnitConfig(Application.class)   // or @SpringBootTest
-@Transactional                          // each test is rolled back at its end
+@SpringBootTest
+@Transactional
 class FreightReportTest {
 
     @Autowired JdbcTemplate jdbc;
@@ -24,12 +23,15 @@ class FreightReportTest {
 
     @Test
     void counts_the_items_of_a_state() {
-        jdbc.update("INSERT INTO FREIGHT_ITEM (ID, UF) VALUES (7001, 'CE')");   // arrange
+        // arrange
+        jdbc.update("INSERT INTO FREIGHT_ITEM (ID, UF) VALUES (7001, 'CE')");
         jdbc.update("INSERT INTO FREIGHT_ITEM (ID, UF) VALUES (7002, 'CE')");
 
-        int items = freights.countItems("CE");                                    // act
+        // act
+        int items = freights.countItems("CE");
 
-        assertThat(items).isEqualTo(2);                                           // assert
+        // assert
+        assertThat(items).isEqualTo(2);
     }
 }
 // end-snippet
