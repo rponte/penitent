@@ -77,6 +77,40 @@ class PlsqlMocksLifecycleTest {
 	}
 
 	@Test
+	@DisplayName("a connection taken before begin, and kept, stays outside the edition and sees the real routine")
+	void connection_taken_before_begin() throws SQLException {
+		Freights freights = PlsqlPackages.create(Freights.class, dataSource);
+		try (Connection before = dataSource.getConnection(); PlsqlMocks mocks = PlsqlMocks.on(dataSource)) {
+			mocks.begin();
+			when(mocks.mock(Freights.class).calculate("SP", "CE")).thenReturn(new BigDecimal("24.90"));
+
+			assertThat(PlsqlPackages.using(freights, before).calculate("SP", "CE")).isEqualByComparingTo("75");
+			assertThat(freights.calculate("SP", "CE")).isEqualByComparingTo("24.90");
+		}
+	}
+
+	@Test
+	@DisplayName("a connection taken in the test and still open at end keeps the edition in use: end fails, saying so")
+	void connection_open_at_end() throws SQLException {
+		PlsqlMocks mocks = PlsqlMocks.on(dataSource);
+		mocks.begin();
+		Connection open = dataSource.getConnection();
+		try {
+			assertThatThrownBy(mocks::end)
+					.isInstanceOf(IllegalStateException.class)
+					.hasMessageContaining("still be open");
+		} finally {
+			open.close();
+		}
+		// the edition left behind is dropped by the next begin
+		try (PlsqlMocks next = PlsqlMocks.on(dataSource)) {
+			next.begin();
+		}
+		assertThat(count(pool, "SELECT COUNT(*) FROM ALL_EDITIONS WHERE EDITION_NAME LIKE 'PENITENT\\_MOCK\\_%' ESCAPE '\\'"))
+				.isZero();
+	}
+
+	@Test
 	@DisplayName("an edition left by a run that died is dropped by the next begin")
 	void leftover_edition() {
 		TestDatabase.execute(pool, "CREATE EDITION PENITENT_MOCK_LEFTOVER AS CHILD OF ORA$BASE");

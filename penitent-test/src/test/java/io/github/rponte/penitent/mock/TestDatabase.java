@@ -76,6 +76,7 @@ final class TestDatabase {
 				  FUNCTION label(p_day DATE) RETURN VARCHAR2;
 				  FUNCTION real_one RETURN VARCHAR2;
 				  FUNCTION calls RETURN PLS_INTEGER;
+				  FUNCTION total(p_origin VARCHAR2, p_destination VARCHAR2) RETURN NUMBER;
 				END FREIGHTS;""",
 				"""
 				CREATE OR REPLACE PACKAGE BODY FREIGHTS AS
@@ -114,6 +115,12 @@ final class TestDatabase {
 				  FUNCTION real_one RETURN VARCHAR2 IS BEGIN RETURN 'REAL'; END;
 
 				  FUNCTION calls RETURN PLS_INTEGER IS BEGIN RETURN g_calls; END calls;
+
+				  -- calls another routine of the same package
+				  FUNCTION total(p_origin VARCHAR2, p_destination VARCHAR2) RETURN NUMBER IS
+				  BEGIN
+				    RETURN 100 + calculate(p_origin, p_destination);
+				  END total;
 				END FREIGHTS;""",
 				"""
 				CREATE OR REPLACE PACKAGE CHECKOUT AS

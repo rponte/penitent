@@ -44,6 +44,8 @@ class PlsqlMocksTest {
 		String label(LocalDate pDay);
 
 		String realOne();
+
+		BigDecimal total(String pOrigin, String pDestination);
 	}
 
 	@PlsqlPackage("CHECKOUT")
@@ -196,6 +198,41 @@ class PlsqlMocksTest {
 		when(mock.calculate("SP", "CE")).thenReturn(new BigDecimal("24.90"));
 
 		assertThat(checkout.total("SP", "CE")).isEqualByComparingTo("124.90");
+	}
+
+	@Test
+	@DisplayName("a real routine that calls a stubbed one of the same package gets the mock")
+	void same_package_caller() {
+		Freights mock = mocks.mock(Freights.class);
+
+		when(mock.calculate("SP", "CE")).thenReturn(new BigDecimal("24.90"));
+
+		assertThat(freights.total("SP", "CE")).isEqualByComparingTo("124.90");
+	}
+
+	@Test
+	@DisplayName("a stubbed routine no longer runs its real code, so what that code called is not called by it")
+	void stubbed_routine_runs_no_real_code() {
+		Freights mock = mocks.mock(Freights.class);
+		when(mock.calculate(any(), any())).thenReturn(new BigDecimal("24.90"));
+
+		when(mock.total("SP", "CE")).thenReturn(new BigDecimal("1"));
+		freights.total("SP", "CE");
+
+		verify(mock).total("SP", "CE");
+		verify(mock, never()).calculate(any(), any());
+	}
+
+	@Test
+	@DisplayName("verify of a routine with no stub in this test is refused: only stubbed routines record their calls")
+	void verify_without_stub() {
+		Freights mock = mocks.mock(Freights.class);
+		when(mock.total("SP", "CE")).thenReturn(new BigDecimal("1"));
+
+		assertThatThrownBy(() -> verify(mock, never()).calculate(any(), any()))
+				.isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("FREIGHTS.CALCULATE")
+				.hasMessageContaining("no stub");
 	}
 
 	@Test

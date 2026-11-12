@@ -77,6 +77,29 @@ verify(pkg).calculaFrete("SP", "CE");
 | strict | spy: the real logic when no stub matches |
 | JUnit 5, Spring Test | mocking SQL views, which editions can also do |
 
+### How a mock behaves
+
+What a test can count on, each case backed by a test of the module:
+
+| Case | Behavior |
+|---|---|
+| The other routines of the package, public and private, and the other overloads of the stubbed one | stay real: only the stubbed subprogram is rewritten, and the rest of the body is compiled as written |
+| A real routine that calls a stubbed routine **of the same package** | gets the mock: the whole body is compiled in the test's edition, so the call finds the rewritten version |
+| A routine **of another package** that calls the stubbed routine | gets the mock, for the same reason |
+| The stubbed routine itself | runs no real code: it records the call, checks the stubs, and returns or raises. What its real code called is no longer called by it |
+| A session outside the test's edition, at the same moment | sees the real routine |
+| `verify` of a routine with no stub in the test | refused: only a stubbed routine records its calls, so counting the calls of a real one would always give zero, and a `never()` would pass whatever happened |
+
+And what it cannot do, in the first version:
+
+- **A private routine, declared only in the body, cannot be stubbed.** A stub starts from a method of the interface,
+  and a private routine has none. It stays real, and a stubbed routine that called it no longer does.
+- **A wrapped body cannot be parsed,** so nothing in that package can be stubbed; the library refuses it.
+- **Only the connections of the wrapped `DataSource` enter the edition,** and only those taken after `begin()`. A
+  connection taken before, and kept, stays where it was, and keeps seeing the real routines.
+- **A connection taken in the test and still open at `end()`** keeps the edition in use, and dropping it fails, with a
+  message that says so.
+
 ## Measured
 
 A spike, on Oracle 23ai (`gvenzl/oracle-free:23.26.3`), with a package whose spec uses `%TYPE`, a `SUBTYPE`, a
