@@ -146,6 +146,44 @@ class PlsqlMocksTest {
 	}
 
 	@Test
+	@DisplayName("a second stub of the same arguments replaces the first, as in Mockito")
+	void same_arguments_twice() {
+		Freights mock = mocks.mock(Freights.class);
+
+		when(mock.calculate("SP", "CE")).thenReturn(new BigDecimal("24.90"));
+		when(mock.calculate("SP", "CE")).thenReturn(new BigDecimal("31.00"));
+
+		assertThat(freights.calculate("SP", "CE")).isEqualByComparingTo("31.00");
+	}
+
+	@Test
+	@DisplayName("stubs of different arguments of the same routine hold together, each for its own arguments")
+	void different_arguments() {
+		Freights mock = mocks.mock(Freights.class);
+
+		when(mock.calculate("SP", "CE")).thenReturn(new BigDecimal("24.90"));
+		when(mock.calculate("RJ", "BA")).thenReturn(new BigDecimal("31.00"));
+
+		assertThat(freights.calculate("SP", "CE")).isEqualByComparingTo("24.90");
+		assertThat(freights.calculate("RJ", "BA")).isEqualByComparingTo("31.00");
+	}
+
+	@Test
+	@DisplayName("then... twice on the same stubbing: the last answer given wins, and the other stubs stay")
+	void same_stubbing_twice() {
+		Freights mock = mocks.mock(Freights.class);
+
+		PlsqlMocks.Stubbing<BigDecimal> stubbing = when(mock.calculate("SP", "CE"));
+		stubbing.thenReturn(new BigDecimal("24.90"));
+		stubbing.thenThrow(-20200, "no freight");
+
+		assertThatThrownBy(() -> freights.calculate("SP", "CE"))
+				.isInstanceOfSatisfying(PlsqlRoutineRaisedException.class, e -> assertThat(e.getCode()).isEqualTo(20200));
+		when(mock.calculate("RJ", "BA")).thenReturn(BigDecimal.ONE);
+		assertThat(freights.calculate("RJ", "BA")).as("the other stubs, untouched").isEqualByComparingTo("1");
+	}
+
+	@Test
 	@DisplayName("a call that mixes matchers and plain values is refused, as Mockito does")
 	void mixed_matchers() {
 		Freights mock = mocks.mock(Freights.class);

@@ -416,6 +416,7 @@ With `penitent-test`, measured on Oracle 23ai only, as [Testing](testing.md#mock
 | A stub of a function returns its value, `null` included; of a date argument, matches it by value | Validated |
 | A stub raises an application error or a predefined exception, which arrives as `PlsqlRoutineRaisedException` | Validated |
 | A stub of a procedure sets its `OUT` value; matchers `eq`, `any` and `isNull`, the last stub that matches winning; a call mixing matchers and values refused | Validated |
+| Several stubs of the same routine: different arguments each answered; the same arguments twice, the later one wins; a second answer on the same stub replaces the first | Validated |
 | A call no stub matches fails with `ORA-20999`, naming the routine and showing the arguments | Validated |
 | The rest of the package stays real: other routines, private ones, other overloads; a real routine calling the stubbed one, in the same package or another, gets the mock; outside the test's edition, the routine is real | Validated |
 | `verify` counts the calls of a stubbed routine, from Java and from PL/SQL, with `times` and `never`; refused for a routine with no stub | Validated |
