@@ -234,6 +234,21 @@ first:
 
 ## Open questions
 
+- **Preparing the schema from the annotation, `@EnablePlsqlMocks(prepare = true)`.** Today the library never applies
+  the prerequisites by itself: `begin()` only checks them, and a test calls `PlsqlMocks.prepare` once, explicitly,
+  right after a disposable database starts. An attribute could do it for Spring tests, when the context starts.
+  - **In favor:** nothing to write besides the annotation, and no place to look for where the database is ready,
+    which is the part of the setup most often done wrong; it suits a disposable database, such as one of
+    Testcontainers, where it would run once per context and harmlessly again.
+  - **Against:** `ENABLE EDITIONS` cannot be undone, and an attribute hides that behind a word, where a call in the
+    code is visible in review; applied by mistake to a shared or long-lived database, it changes that schema for
+    good. It also needs a DBA's `DataSource`, which a Spring test does not usually have as a bean: the attribute
+    would have to name one, or the credentials would have to come from properties, which is more setup, not less.
+  - **Care it would need:** false by default; refusing to run when the schema's prerequisites are already there but
+    of another version, rather than changing them silently; refusing a database that does not look disposable, if
+    there is a reliable way to tell; and a log line, at warning level, each time it applies the admin script.
+  - **For now:** the explicit call, until a real case shows that the annotation pays for what it hides.
+
 - **Several pools of the same database sharing the mocks.** One edition, followed by every pool the test declares:
   `@EnablePlsqlMocks(dataSource = {"main", "reports"})`, or `mocks.include(reportsDataSource)` inside a test. The
   library would check that they reach the same database, by its `DB_UNIQUE_NAME` and `CON_NAME`, and a pool of
