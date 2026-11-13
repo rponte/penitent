@@ -1,0 +1,40 @@
+name: Feature request
+description: Something Penitent does not do yet, and should.
+labels: ["enhancement"]
+body:
+  - type: dropdown
+    id: module
+    attributes:
+      label: Module
+      options:
+        - penitent-core
+        - penitent-spring
+        - penitent-spring-boot-starter
+        - penitent-test (mocks)
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you are trying to do, and what gets in the way today. A real case helps the most.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you propose
+      description: How it could look from your code, such as the interface, the annotation or the call.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+      description: Other ways around it, including what you do today.
+  - type: textarea
+    id: done
+    attributes:
+      label: When it is done
+      description: What would tell that it works, such as a test you would write.

@@ -124,15 +124,21 @@ site again.
 
 ## Proposing a change
 
-- For anything beyond a small fix, open an issue first, so the design can be agreed before the code.
+- **Open an issue first** for a new feature, a bug, a change of behavior or of the API, or a design decision, so the
+  design can be agreed before the code. The issue forms ask for what helps: the problem, the proposal, the
+  alternatives and when it is done. A small fix goes straight to a pull request: a typo or a link in the
+  documentation, the CI, the dependencies, or a refactoring that changes no behavior.
+- Labels say the kind of issue (`bug`, `enhancement`, `documentation`, `design`) and the module (`core`, `spring`,
+  `starter`, `mocks`).
+- A pull request that settles an issue closes it, with `Closes #N` in its description.
 - Keep a pull request to one topic. The CI must pass.
 - Write the commit message as a short subject in the imperative, then a body that explains why.
 - Add a line to the `Unreleased` section of [`CHANGELOG.md`](CHANGELOG.md) when the change is visible to users.
 
 ## Reporting a bug
 
-Open an issue with the Oracle, driver and Java versions, the PL/SQL signature, the Java interface, and the full
-message of the exception. If the bug is a security vulnerability, follow [`SECURITY.md`](SECURITY.md) instead.
+Open an issue with the bug report form: it asks for the Oracle, driver and Java versions, the PL/SQL signature, the
+Java interface, and the full message of the exception. If the bug is a security vulnerability, follow [`SECURITY.md`](SECURITY.md) instead.
 
 ## License
 

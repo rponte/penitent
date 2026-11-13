@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/rponte/penitent/security/advisories/new
+    about: Privately, through GitHub, as SECURITY.md explains. Please do not open a public issue.
+  - name: Documentation
+    url: https://rponte.github.io/penitent/
+    about: Guides, the compatibility table and the troubleshooting page.
