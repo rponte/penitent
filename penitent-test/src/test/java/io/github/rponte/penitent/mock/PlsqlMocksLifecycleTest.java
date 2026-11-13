@@ -190,6 +190,40 @@ class PlsqlMocksLifecycleTest {
 	}
 
 	@Test
+	@DisplayName("a call on a mock that is neither stubbed nor verified fails at the next call on a mock, saying why")
+	void unused_call_then_another_call() {
+		try (PlsqlMocks mocks = PlsqlMocks.on(dataSource)) {
+			mocks.begin();
+			Freights mock = mocks.mock(Freights.class);
+			mock.calculate("RJ", "BA");
+
+			assertThatThrownBy(() -> when(mock.calculate("SP", "CE")).thenReturn(BigDecimal.ONE))
+					.isInstanceOf(IllegalStateException.class)
+					.hasMessageContaining("Freights.calculate('RJ', 'BA')")
+					.hasMessageContaining("neither stubbed nor verified")
+					.hasMessageContaining("the code under test");
+		}
+	}
+
+	@Test
+	@DisplayName("a call on a mock that is neither stubbed nor verified, as the last thing of a test, fails at end,"
+			+ " which still drops the edition")
+	void unused_call_at_end() {
+		PlsqlMocks mocks = PlsqlMocks.on(dataSource);
+		mocks.begin();
+		Freights mock = mocks.mock(Freights.class);
+		when(mock.calculate("SP", "CE")).thenReturn(new BigDecimal("42.99"));
+		mock.calculate("SP", "CE");
+
+		assertThatThrownBy(mocks::end)
+				.isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("Freights.calculate('SP', 'CE')")
+				.hasMessageContaining("neither stubbed nor verified");
+		assertThat(count(pool, "SELECT COUNT(*) FROM ALL_EDITIONS WHERE EDITION_NAME LIKE 'PENITENT\\_MOCK\\_%' ESCAPE '\\'"))
+				.isZero();
+	}
+
+	@Test
 	@DisplayName("begin twice without end is refused")
 	void begin_twice() {
 		try (PlsqlMocks mocks = PlsqlMocks.on(dataSource)) {

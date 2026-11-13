@@ -100,8 +100,12 @@ public final class PlsqlMocks implements AutoCloseable {
 
 	/** Ends the test: connections leave the edition, which is dropped, and so are the calls it recorded. */
 	public void end() {
+		Invocation unused = Recording.takeLast();
 		Recording.reset();
 		session.end();
+		if (unused != null) {
+			throw Recording.unused(unused);
+		}
 	}
 
 	/** {@link #end}, when the test began. */

@@ -35,6 +35,28 @@ public final class Recording {
 		LAST.set(invocation);
 	}
 
+	/**
+	 * Refuses a call made on a mock that no {@code when} nor {@code verify} took: the mock only records, so such a call
+	 * ran nothing and returned nothing, most likely by mistake, expecting the stub's answer or the routine to run.
+	 */
+	static void refuseUnused() {
+		Invocation unused = LAST.get();
+		if (unused != null) {
+			reset();
+			throw unused(unused);
+		}
+	}
+
+	/** The failure for {@code unused}, a call on a mock that was neither stubbed nor verified. */
+	public static IllegalStateException unused(Invocation unused) {
+		java.util.StringJoiner arguments = new java.util.StringJoiner(", ",
+				unused.mock().type().getSimpleName() + "." + unused.method().getName() + "(", ")");
+		unused.matchers().forEach(matcher -> arguments.add(matcher.toString()));
+		return new IllegalStateException(arguments + " was called on a mock, and neither stubbed nor verified: a mock"
+				+ " only records calls for when() and verify(), and runs nothing, so it returned nothing. To run the"
+				+ " routine, or get the answer of its stub, call the code under test, or the application's interface");
+	}
+
 	/** The last call made on a mock, taken; {@code null} when there was none. */
 	public static Invocation takeLast() {
 		Invocation invocation = LAST.get();
