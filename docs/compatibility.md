@@ -425,7 +425,8 @@ With `penitent-test`, measured on Oracle 23ai only, as [Testing](testing.md#mock
 | An edition per test, dropped after it, also after a test that fails or a run that died; a second mocks on the same database refused | Validated |
 | A stub made after the package was used fails the next call once with `ORA-04068`, and the one after sees it | Validated |
 | A pool with no connection to spare: a clear message | Validated |
-| JUnit 5: `PlsqlMockExtension`, stubs in `@BeforeEach`, `PlsqlMocks` as a parameter | Validated |
+| JUnit 5: `PlsqlMockExtension`, stubs in `@BeforeEach`, `PlsqlMocks` as a parameter of `@Test`, `@BeforeEach` and `@AfterEach`; refused in `@BeforeAll` | Validated |
+| Spring: `PlsqlMocks` as a parameter with `@Autowired`; without it, not resolved | Validated |
 | Spring: `@EnablePlsqlMocks` in a transactional test, rolled back as usual, the stub never committing it; without a transaction; several `DataSource`s; the context cached; Spring Boot's `DataSource` | Validated |
 | The core and the JUnit 5 extension without Spring on the classpath | Validated |
 | The log of the mocks, under `io.github.rponte.penitent.mock`: the edition, stubs and verifies at `DEBUG`, the generated PL/SQL at `TRACE`, a leftover edition at `WARN`, nothing at `INFO` | Validated |

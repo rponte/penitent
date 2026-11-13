@@ -184,6 +184,47 @@ class EnablePlsqlMocksTest {
 		TestKit.run(BeforeEachSample.class).assertStatistics(stats -> stats.started(1).succeeded(1));
 	}
 
+	/** The test's PlsqlMocks as a parameter of the test method, with @Autowired, as Spring asks. */
+	@ExtendWith(TestKit.OnlyThroughTheTestKit.class)
+	@SpringJUnitConfig(Application.class)
+	@EnablePlsqlMocks
+	static class ParameterSample {
+
+		@Autowired Freights freights;
+
+		@Test
+		void takes_the_mocks(@Autowired PlsqlMocks mocks) {
+			when(mocks.mock(Freights.class).calculate("SP", "CE")).thenReturn(new BigDecimal("24.90"));
+
+			assertThat(freights.calculate("SP", "CE")).isEqualByComparingTo("24.90");
+		}
+	}
+
+	@Test
+	@DisplayName("with Spring, a test method takes its PlsqlMocks as a parameter with @Autowired")
+	void parameter_with_autowired() {
+		TestKit.run(ParameterSample.class).assertStatistics(stats -> stats.started(1).succeeded(1));
+	}
+
+	/** The same parameter, without @Autowired. */
+	@ExtendWith(TestKit.OnlyThroughTheTestKit.class)
+	@SpringJUnitConfig(Application.class)
+	@EnablePlsqlMocks
+	static class ParameterWithoutAutowiredSample {
+
+		@Test
+		void takes_the_mocks(PlsqlMocks mocks) {
+		}
+	}
+
+	@Test
+	@DisplayName("with Spring, without @Autowired the parameter is not resolved: Spring resolves only those it marks")
+	void parameter_without_autowired() {
+		Throwable failure = TestKit.firstFailure(TestKit.run(ParameterWithoutAutowiredSample.class)
+				.assertStatistics(stats -> stats.failed(1)));
+		assertThat(failure).hasMessageContaining("No ParameterResolver registered for parameter");
+	}
+
 	/** A context of a class without the annotation. */
 	@ExtendWith(TestKit.OnlyThroughTheTestKit.class)
 	@SpringJUnitConfig(Application.class)

@@ -29,6 +29,13 @@ public final class TestKit {
 				.selectors(selectClass(sample)).execute().testEvents();
 	}
 
+	/** The failure of the first container, a class, that failed: as a {@code @BeforeAll} that throws makes it. */
+	public static Throwable containerFailure(Class<?> sample) {
+		Events containers = EngineTestKit.engine("junit-jupiter").configurationParameter(SAMPLES, "true")
+				.selectors(selectClass(sample)).execute().containerEvents();
+		return firstFailure(containers);
+	}
+
 	/** The failure of the first test that failed. */
 	public static Throwable firstFailure(Events events) {
 		return events.failed().stream().findFirst().orElseThrow()
