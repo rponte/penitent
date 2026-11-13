@@ -9,10 +9,12 @@ import static io.github.rponte.penitent.mock.PlsqlMocks.times;
 import static io.github.rponte.penitent.mock.PlsqlMocks.verify;
 import static io.github.rponte.penitent.mock.PlsqlMocks.when;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 import javax.sql.DataSource;
 
@@ -46,6 +48,16 @@ class PlsqlMocksTest {
 		String realOne();
 
 		BigDecimal total(String pOrigin, String pDestination);
+
+		BigDecimal weigh(List<FreightItem> pItems, String pOrigin);
+
+		void register(FreightItem pItem);
+
+		String describe(FreightItem pRow);
+	}
+
+	/** FREIGHT_ITEM_T, and a row of FREIGHT_ITEM. */
+	record FreightItem(Long id, String uf) {
 	}
 
 	@PlsqlPackage("CHECKOUT")
@@ -313,6 +325,52 @@ class PlsqlMocksTest {
 				.isInstanceOf(IllegalStateException.class)
 				.hasMessageContaining("WRAPPED_ONE")
 				.hasMessageContaining("wrapped");
+	}
+
+	@Test
+	@DisplayName("a routine that takes a collection of an object type: any() on it, a value on the rest, and the stub answers")
+	void collection_parameter() {
+		Freights mock = mocks.mock(Freights.class);
+
+		when(mock.weigh(any(), eq("SP"))).thenReturn(new BigDecimal("7"));
+
+		assertThat(freights.weigh(List.of(new FreightItem(1L, "SP")), "SP")).isEqualByComparingTo("7");
+		verify(mock).weigh(any(), eq("SP"));
+	}
+
+	@Test
+	@DisplayName("a procedure that takes an object type: thenThrow, and verify with any()")
+	void object_parameter() {
+		Freights mock = mocks.mock(Freights.class);
+
+		when(() -> mock.register(any())).thenThrow(-20300, "not registered");
+
+		assertThatThrownBy(() -> freights.register(new FreightItem(1L, "SP")))
+				.isInstanceOfSatisfying(PlsqlRoutineRaisedException.class, e -> assertThat(e.getCode()).isEqualTo(20300));
+		verify(mock).register(any());
+	}
+
+	@Test
+	@DisplayName("a routine that takes a %ROWTYPE record: its stub compiles, with any() on it")
+	void record_parameter() {
+		Freights mock = mocks.mock(Freights.class);
+
+		assertThatCode(() -> when(mock.describe(any())).thenReturn("stubbed")).doesNotThrowAnyException();
+	}
+
+	@Test
+	@DisplayName("a value, or isNull(), for a parameter of an object type, a collection or a record is refused, with any() as the way")
+	void composite_parameter_matched_by_value() {
+		Freights mock = mocks.mock(Freights.class);
+
+		assertThatThrownBy(() -> when(() -> mock.register(new FreightItem(1L, "SP"))))
+				.isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("P_ITEM")
+				.hasMessageContaining("any()");
+		assertThatThrownBy(() -> when(mock.weigh(isNull(), eq("SP"))).thenReturn(BigDecimal.ONE))
+				.isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("P_ITEMS")
+				.hasMessageContaining("any()");
 	}
 
 	@Test

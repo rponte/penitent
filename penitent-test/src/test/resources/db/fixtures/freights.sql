@@ -7,6 +7,16 @@ CREATE TABLE freight_item (
 )
 /
 
+-- an object type and a collection of it, for routines that take them
+CREATE OR REPLACE TYPE freight_item_t AS OBJECT (
+  id NUMBER,
+  uf VARCHAR2(2)
+)
+/
+
+CREATE OR REPLACE TYPE freight_item_list_t AS TABLE OF freight_item_t
+/
+
 CREATE OR REPLACE PACKAGE freights AS
   SUBTYPE money IS NUMBER(10,2);
 
@@ -18,6 +28,9 @@ CREATE OR REPLACE PACKAGE freights AS
   FUNCTION real_one RETURN VARCHAR2;
   FUNCTION calls RETURN PLS_INTEGER;
   FUNCTION total(p_origin VARCHAR2, p_destination VARCHAR2) RETURN NUMBER;
+  FUNCTION weigh(p_items freight_item_list_t, p_origin VARCHAR2) RETURN NUMBER;
+  PROCEDURE register(p_item freight_item_t);
+  FUNCTION describe(p_row freight_item%ROWTYPE) RETURN VARCHAR2;
 END freights;
 /
 
@@ -71,6 +84,22 @@ CREATE OR REPLACE PACKAGE BODY freights AS
   BEGIN
     RETURN 100 + calculate(p_origin, p_destination);
   END total;
+
+  -- take an object type, a collection and a record
+  FUNCTION weigh(p_items freight_item_list_t, p_origin VARCHAR2) RETURN NUMBER IS
+  BEGIN
+    RETURN p_items.COUNT;
+  END weigh;
+
+  PROCEDURE register(p_item freight_item_t) IS
+  BEGIN
+    INSERT INTO freight_item (id, uf) VALUES (p_item.id, p_item.uf);
+  END register;
+
+  FUNCTION describe(p_row freight_item%ROWTYPE) RETURN VARCHAR2 IS
+  BEGIN
+    RETURN p_row.id || '/' || p_row.uf;
+  END describe;
 END freights;
 /
 

@@ -32,7 +32,15 @@ final class BodyRewriter {
 	record StubbedCall(Map<String, Matcher> byParameter, Stub.Action action) {
 	}
 
+	/** What a recorded call holds for an argument of an object type, a collection or a record. */
+	static final String NOT_RECORDED = "(not recorded)";
+
 	private BodyRewriter() {
+	}
+
+	/** An object type, a collection, a record or a cursor: no PL/SQL literal stands for it, nor JSON_ARRAY takes it. */
+	static boolean composite(RoutineMetadata.Argument argument) {
+		return argument.isStruct() || argument.isCollection() || argument.isCursor();
 	}
 
 	static String rewrite(String qualifiedPackage, String body, List<Subprogram> subprograms) {
@@ -85,7 +93,8 @@ final class BodyRewriter {
 		} else {
 			StringJoiner arguments = new StringJoiner(", ", "    SELECT JSON_ARRAY(", " NULL ON NULL) INTO l_penitent_args"
 					+ " FROM DUAL;\n");
-			recorded.forEach(argument -> arguments.add(argument.name()));
+			// JSON_ARRAY takes scalars: an object type, a collection or a record is marked, keeping each one's position
+			recorded.forEach(argument -> arguments.add(composite(argument) ? "'" + NOT_RECORDED + "'" : argument.name()));
 			code.append(arguments);
 		}
 		code.append("    PENITENT_MOCK.record('").append(callKey(routine)).append("', l_penitent_args);\n");

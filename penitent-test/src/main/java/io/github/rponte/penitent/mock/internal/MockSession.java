@@ -142,6 +142,7 @@ public final class MockSession {
 		requireBegun();
 		long start = System.nanoTime();
 		RoutineMetadata routine = routineOf(stub.invocation());
+		requireMatchable(routine, byParameter(routine, stub.invocation()));
 		String pkg = packageOf(routine);
 		List<Stub> stubs = stubsByPackage.computeIfAbsent(pkg, k -> new ArrayList<>());
 		int index = replaced == null ? -1 : stubs.indexOf(replaced);
@@ -226,6 +227,7 @@ public final class MockSession {
 		RoutineMetadata routine = routineOf(invocation);
 		requireStubbed(routine);
 		Map<String, Matcher> byParameter = byParameter(routine, invocation);
+		requireMatchable(routine, byParameter);
 		StringBuilder sql = new StringBuilder(
 				"SELECT COUNT(*) FROM PENITENT_MOCK_CALLS WHERE EDITION_NAME = ? AND ROUTINE = ?");
 		int index = 0;
@@ -261,6 +263,27 @@ public final class MockSession {
 		throw new AssertionError(routine.qualifiedName() + invocation.matchers().toString().replace('[', '(')
 				.replace(']', ')') + " was expected " + timesOf(times) + " in this test, and was called "
 				+ timesOf(calls));
+	}
+
+	/**
+	 * An argument of an object type, a collection or a record is matched with {@code any()} only, so far: no PL/SQL
+	 * literal stands for its value, and a recorded call does not hold it. Anything else is refused now, rather than
+	 * failing to compile, or counting calls wrong.
+	 */
+	private static void requireMatchable(RoutineMetadata routine, Map<String, Matcher> byParameter) {
+		for (RoutineMetadata.Argument parameter : routine.parameters()) {
+			Matcher matcher = byParameter.get(parameter.name());
+			if (matcher == null || matcher instanceof Matcher.Any || !BodyRewriter.composite(parameter)) {
+				continue;
+			}
+			if (matcher instanceof Matcher.Out) {
+				throw new IllegalStateException(routine.qualifiedName() + ": " + parameter.name() + " is an OUT of "
+						+ parameter.dataType() + ", which the mocks cannot set yet: they set OUT values of scalars only");
+			}
+			throw new IllegalStateException(routine.qualifiedName() + ": " + parameter.name() + " is of "
+					+ parameter.dataType() + ", which the mocks match with any() only, so far: write any() for it,"
+					+ " and match the other arguments by value");
+		}
 	}
 
 	/**

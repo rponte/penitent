@@ -416,6 +416,7 @@ With `penitent-test`, measured on Oracle 23ai only, as [Testing](testing.md#mock
 | A stub of a function returns its value, `null` included; of a date argument, matches it by value | Validated |
 | A stub raises an application error or a predefined exception, which arrives as `PlsqlRoutineRaisedException` | Validated |
 | A stub of a procedure sets its `OUT` value; matchers `eq`, `any` and `isNull`, the last stub that matches winning; a call mixing matchers and values refused | Validated |
+| A routine taking a collection of an object type, an object type or a `%ROWTYPE`: its stub compiles, `any()` matches it in the stub and in `verify`, and the stub answers; a value or `isNull()` on such a parameter refused | Validated |
 | Several stubs of the same routine: different arguments each answered; the same arguments twice, the later one wins; a second answer on the same stub replaces the first | Validated |
 | A call no stub matches fails with `ORA-20999`, naming the routine and showing the arguments | Validated |
 | The rest of the package stays real: other routines, private ones, other overloads; a real routine calling the stubbed one, in the same package or another, gets the mock; outside the test's edition, the routine is real | Validated |
@@ -435,6 +436,8 @@ With `penitent-test`, measured on Oracle 23ai only, as [Testing](testing.md#mock
 
 - Oracle 18c and older, such as 12c.
 - `penitent-test` on Oracle 21c and 19c, and stubs of booleans and `LocalDateTime`.
+- A `%ROWTYPE` argument after a stub of its package, in the same test, which failed with `ORA-17060` in a probe
+  outside the tests: [issue #31](https://github.com/rponte/penitent/issues/31).
 - Drivers 18.x and older.
 - Resilience4j's `@Retry` on a `@Transactional` method, `@Bulkhead` and `@RateLimiter`.
 - A Jakarta EE container's `DataSource` inside a JTA transaction, with `create` or with `PlsqlPackages.using`.

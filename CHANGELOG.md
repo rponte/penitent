@@ -6,6 +6,12 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- `penitent-test`: a stub of a routine that takes an object type, a collection or a record no longer fails to
+  compile with `ORA-00939`. Such a parameter is matched with `any()`, and another matcher on it is refused with a
+  clear message.
+
 ## [0.29.0]
 
 Mocking PL/SQL in tests. A new module, `penitent-test`, stubs a routine of a package in an integration test, in the
