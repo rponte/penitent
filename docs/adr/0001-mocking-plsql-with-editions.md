@@ -127,6 +127,12 @@ What a test can count on, each case backed by a test of the module:
 
 And what it cannot do, in the first version:
 
+- **An argument of an object type, a collection or a record is matched with `any()` only.** No PL/SQL literal
+  stands for its value, and `JSON_ARRAY` does not take it, so a recorded call holds `"(not recorded)"` in its place,
+  keeping the position of the others; another matcher on it is refused before compiling. A stub cannot return one
+  yet, nor set it as an `OUT`.
+- **A `%ROWTYPE` argument cannot be bound once a stub recompiled its package,** in the same test: the driver fails to
+  build the type's descriptor (`ORA-17060`), even with the spec recompiled too (measured; issue #31).
 - **A private routine, declared only in the body, cannot be stubbed.** A stub starts from a method of the interface,
   and a private routine has none. It stays real, and a stubbed routine that called it no longer does.
 - **A wrapped body cannot be parsed,** so nothing in that package can be stubbed; the library refuses it.

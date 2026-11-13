@@ -358,8 +358,11 @@ try (PlsqlMocks mocks = PlsqlMocks.on(dataSource)) {
 - **The pool needs one connection to spare,** for the mocks' own work, besides those the test holds.
 - **In Spring, inject `DataSource`, not the pool's type,** such as `HikariDataSource`: the bean is wrapped. Use
   `unwrap` to reach the pool.
-- **What can be stubbed, so far:** routines declared in a package spec, in the test user's schema, with scalar values.
-  A private routine has no method to stub it through, and a wrapped body cannot be read.
+- **What can be stubbed, so far:** routines declared in a package spec, in the test user's schema, answering with
+  scalar values. A parameter of an object type, a collection or a record is matched with `any()` only, and a stub
+  cannot return one yet. A private routine has no method to stub it through, and a wrapped body cannot be read.
+- **A `%ROWTYPE` argument cannot be bound after a stub of its package,** in the same test: the driver fails with
+  `ORA-17060`, as [issue #31](https://github.com/rponte/penitent/issues/31) details.
 
 ## Seeing what the mocks do
 
