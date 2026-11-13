@@ -361,8 +361,10 @@ try (PlsqlMocks mocks = PlsqlMocks.on(dataSource)) {
 - **What can be stubbed, so far:** routines declared in a package spec, in the test user's schema, answering with
   scalar values. A parameter of an object type, a collection or a record is matched with `any()` only, and a stub
   cannot return one yet. A private routine has no method to stub it through, and a wrapped body cannot be read.
-- **A `%ROWTYPE` argument cannot be bound after a stub of its package,** in the same test: the driver fails with
-  `ORA-17060`, as [issue #31](https://github.com/rponte/penitent/issues/31) details.
+- **A routine that takes or returns a `%ROWTYPE` cannot be called in a test with mocks,** stubbed or not: in the
+  test's edition, Oracle cannot describe the type for the driver, and the call fails with `ORA-17060`. A `RECORD`
+  declared in a package and an object type work. [Issue #31](https://github.com/rponte/penitent/issues/31) has the
+  measurements and the way around it being studied.
 
 ## Seeing what the mocks do
 

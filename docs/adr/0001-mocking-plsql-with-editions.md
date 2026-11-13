@@ -131,8 +131,10 @@ And what it cannot do, in the first version:
   stands for its value, and `JSON_ARRAY` does not take it, so a recorded call holds `"(not recorded)"` in its place,
   keeping the position of the others; another matcher on it is refused before compiling. A stub cannot return one
   yet, nor set it as an `OUT`.
-- **A `%ROWTYPE` argument cannot be bound once a stub recompiled its package,** in the same test: the driver fails to
-  build the type's descriptor (`ORA-17060`), even with the spec recompiled too (measured; issue #31).
+- **A `%ROWTYPE` cannot be passed nor read from a session in the test's edition,** stub or not: to bind it, the driver
+  asks the database to describe the type (`DBMS_PICKLER`), and in an edition other than the default one the
+  database cannot, so the call fails with `ORA-17060`, with drivers 23, 21 and 19. A package `RECORD` and an object
+  type are described fine (measured with plain JDBC; issue #31, where a way around it is being studied).
 - **A private routine, declared only in the body, cannot be stubbed.** A stub starts from a method of the interface,
   and a private routine has none. It stays real, and a stubbed routine that called it no longer does.
 - **A wrapped body cannot be parsed,** so nothing in that package can be stubbed; the library refuses it.
