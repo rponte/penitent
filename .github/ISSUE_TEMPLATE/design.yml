@@ -1,0 +1,35 @@
+name: Design discussion
+description: A decision about how Penitent should work, to discuss before it is built.
+labels: ["design"]
+body:
+  - type: dropdown
+    id: module
+    attributes:
+      label: Module
+      options:
+        - penitent-core
+        - penitent-spring
+        - penitent-spring-boot-starter
+        - penitent-test (mocks)
+        - Several
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: What leads to the decision, and what is at stake.
+    validations:
+      required: true
+  - type: textarea
+    id: options
+    attributes:
+      label: Options
+      description: The options, with what each gains and costs.
+    validations:
+      required: true
+  - type: textarea
+    id: recommendation
+    attributes:
+      label: Recommendation
+      description: The option you would pick, and why. Link an architecture decision record in docs/adr if there is one.

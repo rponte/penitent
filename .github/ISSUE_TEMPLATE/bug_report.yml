@@ -1,0 +1,43 @@
+name: Bug report
+description: Penitent does something it should not, or fails where it should work.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report it. A security issue goes through the repository's **Security** tab
+        instead, as [SECURITY.md](https://github.com/rponte/penitent/blob/main/SECURITY.md) explains.
+  - type: dropdown
+    id: module
+    attributes:
+      label: Module
+      options:
+        - penitent-core
+        - penitent-spring
+        - penitent-spring-boot-starter
+        - penitent-test (mocks)
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened, and what you expected
+      description: The exception and its message, as they came, help most.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce it
+      description: The routine's declaration in PL/SQL, the Java interface, and the call. The smaller, the better.
+      render: java
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Penitent, Oracle Database, the Oracle JDBC driver (artifact and version), Java, and Spring Boot if any.
+      placeholder: "Penitent 0.28.0, Oracle 19c, ojdbc11 23.26.3, Java 21, Spring Boot 4.1.2"
+    validations:
+      required: true
