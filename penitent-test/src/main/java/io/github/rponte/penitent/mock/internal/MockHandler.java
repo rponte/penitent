@@ -42,6 +42,7 @@ public final class MockHandler implements InvocationHandler {
 		if (method.isDefault()) {
 			return InvocationHandler.invokeDefault(proxy, method, args);
 		}
+		Recording.refuseUnused();
 		Object[] arguments = args == null ? new Object[0] : args;
 		Invocation invocation = new Invocation(this, method, matchersOf(method, arguments));
 		Recording.Verification verification = Recording.takeVerification(proxy);

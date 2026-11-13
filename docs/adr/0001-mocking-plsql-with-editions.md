@@ -123,6 +123,7 @@ What a test can count on, each case backed by a test of the module:
 | The stubbed routine itself | runs no real code: it records the call, checks the stubs, and returns or raises. What its real code called is no longer called by it |
 | A session outside the test's edition, at the same moment | sees the real routine |
 | `verify` of a routine with no stub in the test | refused: only a stubbed routine records its calls, so counting the calls of a real one would always give zero, and a `never()` would pass whatever happened |
+| A call on the mock itself, neither stubbed nor verified | refused, at the next call on a mock or at `end()`: the mock only records, unlike a Mockito one, so such a call ran nothing and returned nothing, most likely expecting the stub's answer or the routine to run |
 
 And what it cannot do, in the first version:
 

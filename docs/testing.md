@@ -337,6 +337,11 @@ try (PlsqlMocks mocks = PlsqlMocks.on(dataSource)) {
 
 ## Things to keep in mind
 
+- **The mock only records; the code under test answers.** Unlike a Mockito mock, the object from `mocks.mock(...)`
+  does not answer calls: it tells `when` and `verify` which routine and which arguments they are about. The stub
+  lives in the database, so it is the code under test, or the application's interface, that gets the stubbed answer.
+  A call on the mock that is neither stubbed nor verified, such as `freights.calculate("SP", "CE")` on its own, fails
+  the test, saying so, at the next call on a mock or when the test ends.
 - **Stub first, then act.** Make the stubs of a package before the test calls it. A stub made after the package was
   used fails the next call there once, with `ORA-04068`; see [How it works](#how-it-works).
 - **A call no stub matches fails,** with `ORA-20999`, naming the routine and showing the arguments, so a missing stub

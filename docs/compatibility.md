@@ -420,6 +420,7 @@ With `penitent-test`, measured on Oracle 23ai only, as [Testing](testing.md#mock
 | A call no stub matches fails with `ORA-20999`, naming the routine and showing the arguments | Validated |
 | The rest of the package stays real: other routines, private ones, other overloads; a real routine calling the stubbed one, in the same package or another, gets the mock; outside the test's edition, the routine is real | Validated |
 | `verify` counts the calls of a stubbed routine, from Java and from PL/SQL, with `times` and `never`; refused for a routine with no stub | Validated |
+| A call on the mock itself that is neither stubbed nor verified fails, at the next call on a mock or at `end()`, which still drops the edition | Validated |
 | A wrapped body refused; prerequisites missing reported all at once, naming the scripts; `prepare` twice harmless | Validated |
 | An edition per test, dropped after it, also after a test that fails or a run that died; a second mocks on the same database refused | Validated |
 | A stub made after the package was used fails the next call once with `ORA-04068`, and the one after sees it | Validated |
