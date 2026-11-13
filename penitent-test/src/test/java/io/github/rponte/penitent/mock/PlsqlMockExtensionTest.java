@@ -137,6 +137,63 @@ class PlsqlMockExtensionTest {
 		assertThat(editionsLeft()).isZero();
 	}
 
+	/** The test's PlsqlMocks as a parameter of @BeforeEach and @AfterEach, around a test that uses it. */
+	@ExtendWith(TestKit.OnlyThroughTheTestKit.class)
+	static class ParametersAroundTheTestSample {
+
+		@RegisterExtension
+		static PlsqlMockExtension mocks = PlsqlMockExtension.on(() -> dataSource);
+
+		static boolean afterEachSawIt;
+
+		@BeforeEach
+		void stub(PlsqlMocks testMocks) {
+			when(testMocks.mock(Freights.class).calculate("SP", "CE")).thenReturn(new BigDecimal("24.90"));
+		}
+
+		@Test
+		void sees_the_stub() {
+			assertThat(PlsqlPackages.create(Freights.class, dataSource).calculate("SP", "CE"))
+					.isEqualByComparingTo("24.90");
+		}
+
+		@org.junit.jupiter.api.AfterEach
+		void verifies(PlsqlMocks testMocks) {
+			verify(testMocks.mock(Freights.class), PlsqlMocks.never()).calculate("RJ", "BA");
+			afterEachSawIt = true;
+		}
+	}
+
+	@Test
+	@DisplayName("the test's PlsqlMocks as a parameter of @BeforeEach and @AfterEach")
+	void parameters_around_the_test() {
+		run(ParametersAroundTheTestSample.class).assertStatistics(stats -> stats.started(1).succeeded(1));
+		assertThat(ParametersAroundTheTestSample.afterEachSawIt).isTrue();
+	}
+
+	/** Asks for the test's PlsqlMocks in @BeforeAll, before any test runs. */
+	@ExtendWith(TestKit.OnlyThroughTheTestKit.class)
+	static class ParameterInBeforeAllSample {
+
+		@RegisterExtension
+		static PlsqlMockExtension mocks = PlsqlMockExtension.on(() -> dataSource);
+
+		@org.junit.jupiter.api.BeforeAll
+		static void tooEarly(PlsqlMocks testMocks) {
+		}
+
+		@Test
+		void never_runs() {
+		}
+	}
+
+	@Test
+	@DisplayName("the test's PlsqlMocks as a parameter of @BeforeAll is refused: no test is running yet")
+	void parameter_in_before_all() {
+		Throwable failure = TestKit.containerFailure(ParameterInBeforeAllSample.class);
+		assertThat(failure).hasStackTraceContaining("no test is running");
+	}
+
 	/** Uses the extension's mock outside a test: in a static initializer, before any test began. */
 	@ExtendWith(TestKit.OnlyThroughTheTestKit.class)
 	static class MockOutsideATestSample {

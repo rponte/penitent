@@ -306,7 +306,10 @@ void adds_the_freight_to_the_subtotal() {
 }
 ```
 
-A test can also take its `PlsqlMocks` as a parameter.
+A method can also take the test's `PlsqlMocks` as a parameter, `@Test`, `@BeforeEach` and `@AfterEach` alike; not
+`@BeforeAll`, which runs before any test, and fails saying so. In a Spring test, a parameter takes it with
+`@Autowired`, as Spring asks of every parameter it fills, so `void test(@Autowired PlsqlMocks mocks)`; without the
+annotation, JUnit finds no one to fill it.
 
 ### With any other test framework
 
