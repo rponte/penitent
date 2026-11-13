@@ -6,6 +6,12 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.29.0]
+
+Mocking PL/SQL in tests. A new module, `penitent-test`, stubs a routine of a package in an integration test, in the
+style of Mockito, from the same interface the application calls it through, and a new Testing page shows how to test
+code that calls PL/SQL, with and without mocks. Measured on Oracle 23ai.
+
 ### Added
 
 - `penitent-test`, a new module that stubs a routine of a package in an integration test, in the style of Mockito,
@@ -181,7 +187,8 @@ driven by the database dictionary: see the [README](https://github.com/rponte/pe
 
 - Spring Boot 4.1.2 for the versions the library is built and tested with.
 
-[Unreleased]: https://github.com/rponte/penitent/compare/v0.28.0...HEAD
+[Unreleased]: https://github.com/rponte/penitent/compare/v0.29.0...HEAD
+[0.29.0]: https://github.com/rponte/penitent/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/rponte/penitent/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/rponte/penitent/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/rponte/penitent/compare/v0.25.0...v0.26.0
