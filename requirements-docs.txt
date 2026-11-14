@@ -1,2 +1,2 @@
 # The documentation site's tools, for scripts/docs.sh and the CI. Pinned, and updated by Dependabot.
-zensical==0.1.0
+zensical==0.1.1
