@@ -190,9 +190,12 @@ public final class PlsqlMocks implements AutoCloseable {
 		return new Stubber(Stubbing.applicationError(code, message), "doThrow(" + code + ", ...)");
 	}
 
-	/** Stubs the next call made on the mock to raise one of Oracle's predefined exceptions, by name, such as {@code NO_DATA_FOUND}. */
-	public static Stubber doRaise(String predefinedException) {
-		return new Stubber(Stubbing.predefined(predefinedException), "doRaise(" + predefinedException + ")");
+	/**
+	 * Stubs the next call made on the mock to raise {@code error}: one of Oracle's predefined exceptions, as in
+	 * {@code doRaise(NO_DATA_FOUND)}, or one a package declares, from {@link PlsqlError#declared}.
+	 */
+	public static Stubber doRaise(PlsqlError error) {
+		return new Stubber(Stubbing.raise(error), "doRaise(" + error.raiseName() + ")");
 	}
 
 	private static Invocation lastInvocation() {
@@ -357,9 +360,12 @@ public final class PlsqlMocks implements AutoCloseable {
 			then(applicationError(code, message));
 		}
 
-		/** Raises one of Oracle's predefined exceptions, by name, such as {@code NO_DATA_FOUND}. */
-		public void thenRaise(String predefinedException) {
-			then(predefined(predefinedException));
+		/**
+		 * Raises {@code error}: one of Oracle's predefined exceptions, as in {@code thenRaise(NO_DATA_FOUND)}, or one a
+		 * package declares, from {@link PlsqlError#declared}.
+		 */
+		public void thenRaise(PlsqlError error) {
+			then(raise(error));
 		}
 
 		static Stub.Action applicationError(int code, String message) {
@@ -369,11 +375,8 @@ public final class PlsqlMocks implements AutoCloseable {
 			return new Stub.ApplicationError(code, Objects.requireNonNull(message, "message"));
 		}
 
-		static Stub.Action predefined(String predefinedException) {
-			if (predefinedException == null || !predefinedException.matches("[A-Za-z][A-Za-z0-9_$#]*")) {
-				throw new IllegalArgumentException("not the name of an exception: " + predefinedException);
-			}
-			return new Stub.Predefined(predefinedException.toUpperCase(java.util.Locale.ROOT));
+		static Stub.Action raise(PlsqlError error) {
+			return new Stub.Raise(Objects.requireNonNull(error, "error").raiseName());
 		}
 
 		private void then(Stub.Action action) {

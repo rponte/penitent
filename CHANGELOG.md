@@ -8,12 +8,17 @@ All notable changes to this project are listed here. The format follows
 
 ### Removed
 
+- `penitent-test`: `thenRaise(String)` and `doRaise(String)`, replaced by `thenRaise(PlsqlError)` and
+  `doRaise(PlsqlError)`: `thenRaise("NO_DATA_FOUND")` becomes `thenRaise(PredefinedError.NO_DATA_FOUND)`.
 - `penitent-test`: `when(Runnable)`, the lambda that stubbed a procedure, replaced by the `doXxx()` family:
   `when(() -> m.p(...))` becomes `doNothing().when(m).p(...)`, and `when(() -> m.p(...)).thenThrow(code, message)`
   becomes `doThrow(code, message).when(m).p(...)`.
 
 ### Added
 
+- `penitent-test`: `PlsqlError`, the exception a stub raises: an Oracle predefined exception, from the enum
+  `PredefinedError`, with its code, or an exception a package declares in its spec, from `PlsqlError.declared`, which
+  the PL/SQL that calls the routine catches by name. A name that does not exist is reported as the likely mistake.
 - `penitent-test`: the `doXxx()` family, as in Mockito, for stubs of procedures: `doNothing()`, `doThrow(code,
   message)` and `doRaise(name)`, as in `doNothing().when(freights).quote(eq("CE"), out(value))`; and `doReturn(value)`
   for functions. The answer comes before the call, so a stub that raises compiles the package once.

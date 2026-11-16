@@ -15,7 +15,7 @@ public record Stub(Invocation invocation, Action action) {
 	public record ApplicationError(int code, String message) implements Action {
 	}
 
-	/** {@code RAISE} one of Oracle's predefined exceptions. */
-	public record Predefined(String name) implements Action {
+	/** {@code RAISE name}: a predefined exception, or one a package declares, as {@code PACKAGE.EXCEPTION}. */
+	public record Raise(String name) implements Action {
 	}
 }

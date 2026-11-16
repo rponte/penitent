@@ -132,7 +132,7 @@ final class BodyRewriter {
 		if (action instanceof Stub.ApplicationError error) {
 			return "RAISE_APPLICATION_ERROR(" + error.code() + ", " + PlsqlLiterals.of(error.message()) + ");";
 		}
-		return "RAISE " + ((Stub.Predefined) action).name() + ";";
+		return "RAISE " + ((Stub.Raise) action).name() + ";";
 	}
 
 	/** How a call of {@code routine} is recorded: its name and its parameters, which tell overloads apart. */

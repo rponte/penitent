@@ -11,6 +11,7 @@ import static io.github.rponte.penitent.mock.PlsqlMocks.out;
 import static io.github.rponte.penitent.mock.PlsqlMocks.times;
 import static io.github.rponte.penitent.mock.PlsqlMocks.verify;
 import static io.github.rponte.penitent.mock.PlsqlMocks.when;
+import static io.github.rponte.penitent.mock.PredefinedError.NO_DATA_FOUND;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -112,7 +113,7 @@ class DoFamilyTest {
 	@Test
 	@DisplayName("doRaise() raises one of Oracle's predefined exceptions, by name")
 	void do_raise() {
-		doRaise("NO_DATA_FOUND").when(mocks.mock(Freights.class)).integrate(anyInt(), any());
+		doRaise(NO_DATA_FOUND).when(mocks.mock(Freights.class)).integrate(anyInt(), any());
 
 		assertThatThrownBy(() -> freights.integrate(1, "VERBA"))
 				.isInstanceOfSatisfying(PlsqlRoutineRaisedException.class, e -> assertThat(e.getCode()).isEqualTo(1403));

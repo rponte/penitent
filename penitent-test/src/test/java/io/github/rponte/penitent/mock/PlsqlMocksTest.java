@@ -10,6 +10,7 @@ import static io.github.rponte.penitent.mock.PlsqlMocks.out;
 import static io.github.rponte.penitent.mock.PlsqlMocks.times;
 import static io.github.rponte.penitent.mock.PlsqlMocks.verify;
 import static io.github.rponte.penitent.mock.PlsqlMocks.when;
+import static io.github.rponte.penitent.mock.PredefinedError.NO_DATA_FOUND;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -141,7 +142,7 @@ class PlsqlMocksTest {
 	void raises_predefined_exception() {
 		Freights mock = mocks.mock(Freights.class);
 
-		when(mock.calculate("SP", "XX")).thenRaise("NO_DATA_FOUND");
+		when(mock.calculate("SP", "XX")).thenRaise(NO_DATA_FOUND);
 
 		assertThatThrownBy(() -> freights.calculate("SP", "XX"))
 				.isInstanceOfSatisfying(PlsqlRoutineRaisedException.class, e -> assertThat(e.getCode()).isEqualTo(1403));

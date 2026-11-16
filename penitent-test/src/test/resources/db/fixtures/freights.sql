@@ -46,8 +46,15 @@ CREATE OR REPLACE VIEW freight_items_v AS
   SELECT id, uf FROM freight_item
 /
 
+-- exceptions a package declares, which a stub raises and a caller catches by name
+CREATE OR REPLACE PACKAGE freight_errors AS
+  no_quote EXCEPTION;
+END freight_errors;
+/
+
 CREATE OR REPLACE PACKAGE freights AS
   SUBTYPE money IS NUMBER(10,2);
+  unknown_uf EXCEPTION;
   TYPE freight_rows_t IS TABLE OF freight_item%ROWTYPE;
   TYPE freight_ids_t IS TABLE OF NUMBER INDEX BY PLS_INTEGER;
 
@@ -254,6 +261,23 @@ CREATE OR REPLACE PACKAGE BODY checkout AS
     RETURN 100 + freights.calculate(p_origin, p_destination);
   END total;
 END checkout;
+/
+
+-- catches, by name, the exceptions freights.calculate may raise
+CREATE OR REPLACE PACKAGE safe_checkout AS
+  FUNCTION total(p_origin VARCHAR2, p_destination VARCHAR2) RETURN NUMBER;
+END safe_checkout;
+/
+
+CREATE OR REPLACE PACKAGE BODY safe_checkout AS
+  FUNCTION total(p_origin VARCHAR2, p_destination VARCHAR2) RETURN NUMBER IS
+  BEGIN
+    RETURN 100 + freights.calculate(p_origin, p_destination);
+  EXCEPTION
+    WHEN freights.unknown_uf THEN RETURN -1;
+    WHEN freight_errors.no_quote THEN RETURN -2;
+  END total;
+END safe_checkout;
 /
 
 -- a package whose body is wrapped, which the mocks cannot read

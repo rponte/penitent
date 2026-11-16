@@ -10,6 +10,7 @@ import static io.github.rponte.penitent.mock.PlsqlMocks.out;
 import static io.github.rponte.penitent.mock.PlsqlMocks.times;
 import static io.github.rponte.penitent.mock.PlsqlMocks.verify;
 import static io.github.rponte.penitent.mock.PlsqlMocks.when;
+import static io.github.rponte.penitent.mock.PredefinedError.NO_DATA_FOUND;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -167,7 +168,7 @@ class DocsTestingTest {
 		void errors() {
 			// snippet: testing/errors
 			when(freights.calculate("SP", "XX")).thenThrow(-20200, "Cannot calculate freight to XX");
-			when(freights.calculate("SP", "AM")).thenRaise("NO_DATA_FOUND");
+			when(freights.calculate("SP", "AM")).thenRaise(NO_DATA_FOUND);
 			// end-snippet
 
 			assertThatThrownBy(() -> application.calculate("SP", "XX")).isInstanceOfSatisfying(
