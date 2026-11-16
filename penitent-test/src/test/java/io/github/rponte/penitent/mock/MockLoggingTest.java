@@ -21,8 +21,10 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 
+import io.github.rponte.penitent.PlsqlBlock;
 import io.github.rponte.penitent.PlsqlPackage;
 import io.github.rponte.penitent.PlsqlPackages;
+import io.github.rponte.penitent.PlsqlType;
 
 /**
  * The log of the mocks, under {@code io.github.rponte.penitent.mock}: the edition of each test at DEBUG, each stub and
@@ -37,10 +39,22 @@ class MockLoggingTest {
 		BigDecimal calculate(String pOrigin, String pDestination);
 
 		String describe(FreightItem pRow);
+
+		String describeRegion(Region pRegion);
+	}
+
+	/** The same routine, through a block that writes the table's name as people do, in lowercase. */
+	interface Blocks {
+		@PlsqlBlock("BEGIN :result := freights.describe(:row); END;")
+		String describe(@PlsqlType("freight_item%ROWTYPE") FreightItem row);
 	}
 
 	/** A row of FREIGHT_ITEM. */
 	record FreightItem(Long id, String uf) {
+	}
+
+	/** A row of PLSQL_REGISTRY.REGION. */
+	record Region(Long id, String uf) {
 	}
 
 	private static DataSource pool;
@@ -146,6 +160,27 @@ class MockLoggingTest {
 				+ "\n +END PENITENT_ROW_\\w+;"));
 		assertThat(lines()).filteredOn(line -> line.contains("-> type name")).hasSize(2).allSatisfy(line -> assertThat(line)
 				.matches("DEBUG -> type name        : \"PLSQL_TEST\"\\.FREIGHT_ITEM%ROWTYPE as " + alias));
+	}
+
+	@Test
+	@DisplayName("each table gets a package of its own, numbered in the order the test binds them, created once")
+	void row_type_per_table() {
+		logger().setLevel(Level.DEBUG);
+		Freights freights = PlsqlPackages.create(Freights.class, dataSource);
+		Blocks blocks = PlsqlPackages.create(Blocks.class, dataSource);
+		try (PlsqlMocks mocks = PlsqlMocks.on(dataSource)) {
+			mocks.begin();
+			assertThat(freights.describe(new FreightItem(1L, "SP"))).isEqualTo("1/SP");
+			assertThat(freights.describeRegion(new Region(2L, "CE"))).isEqualTo("2/CE");
+			assertThat(blocks.describe(new FreightItem(3L, "RJ"))).isEqualTo("3/RJ");
+			assertThat(freights.describeRegion(new Region(4L, "BA"))).isEqualTo("4/BA");
+		}
+
+		assertThat(lines()).filteredOn(line -> line.contains("Aliased row type")).satisfiesExactly(
+				line -> assertThat(line).matches("DEBUG Aliased row type    : \"PLSQL_TEST\"\\.FREIGHT_ITEM%ROWTYPE as"
+						+ " PLSQL_TEST\\.PENITENT_ROW_\\w{12}_1\\.ROW_T in \\d+ ms"),
+				line -> assertThat(line).matches("DEBUG Aliased row type    : \"PLSQL_REGISTRY\"\\.REGION%ROWTYPE as"
+						+ " PLSQL_TEST\\.PENITENT_ROW_\\w{12}_2\\.ROW_T in \\d+ ms"));
 	}
 
 	@Test

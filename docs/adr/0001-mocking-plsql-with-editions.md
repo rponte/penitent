@@ -297,9 +297,9 @@ same way, and so does python-oracledb's thin mode, which does not use JDBC at al
    the edition, in the schema of the mocks and on a connection of its own, a package holding one subtype:
 
    ```sql
-   CREATE OR REPLACE PACKAGE "PLSQL_TEST".PENITENT_ROW_5F2A91C3D4E6_1A2B3C4D AS
+   CREATE OR REPLACE PACKAGE "PLSQL_TEST".PENITENT_ROW_5F2A91C3D4E6_1 AS
      SUBTYPE ROW_T IS "PLSQL_TEST".FREIGHT_ITEM%ROWTYPE;
-   END PENITENT_ROW_5F2A91C3D4E6_1A2B3C4D;
+   END PENITENT_ROW_5F2A91C3D4E6_1;
    ```
 
 2. From then on, in that test, the record binds by the subtype's name: as an argument, as a value read back, and as
@@ -322,6 +322,13 @@ handled in the module that needs it without changing the core.
 - **The name carries the edition's.** A pool keeps its connections from test to test, and the driver keeps the
   descriptors of a connection. With the edition in the name, a connection never meets a name it described in an
   earlier test, whose package is gone.
+- **And a number, in the order the test binds the tables:** `_1`, `_2`, and so on. A hash of the table's name would
+  do without the order, but two tables with the same hash would share a package, and the second would replace the
+  first's subtype, binding its records by the wrong shape, in silence. The numbers come from the test's own list of
+  tables, so two tables never share one. One table is one name there: the core gives it as the dictionary has it,
+  however the code wrote it, as in `freight_item%ROWTYPE` in a block.
+- **The prefix `PENITENT_` is the library's,** as for `PENITENT_MOCK` and `PENITENT_MOCK_CALLS`: an object of the
+  schema named like one of these packages would clash with it, failing with `ORA-00955` if it is not a package.
 - **In the schema of the mocks, never in the table's.** The schema of the mocks has editions for its packages, which
   `begin()` checks, so the package belongs to the edition there. The table's schema may have none, and a package
   compiled there would be a real one, seen by every session and left behind; it would also take a privilege to create
