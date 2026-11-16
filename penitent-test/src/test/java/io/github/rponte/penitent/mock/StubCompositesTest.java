@@ -1,5 +1,6 @@
 package io.github.rponte.penitent.mock;
 
+import static io.github.rponte.penitent.mock.PlsqlMocks.doNothing;
 import static io.github.rponte.penitent.mock.PlsqlMocks.eq;
 import static io.github.rponte.penitent.mock.PlsqlMocks.out;
 import static io.github.rponte.penitent.mock.PlsqlMocks.when;
@@ -242,7 +243,7 @@ class StubCompositesTest {
 	void out_object() {
 		Freights mock = mocks.mock(Freights.class);
 
-		when(() -> mock.loadItem(eq(new BigDecimal("5")), out(new FreightItem(5L, "CE"))));
+		doNothing().when(mock).loadItem(eq(new BigDecimal("5")), out(new FreightItem(5L, "CE")));
 
 		PlsqlOut<FreightItem> item = new PlsqlOut<>();
 		freights.loadItem(new BigDecimal("5"), item);

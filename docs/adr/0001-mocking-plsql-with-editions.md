@@ -29,7 +29,7 @@ CalculadoraFretes pkg = mocks.mock(CalculadoraFretes.class);
 
 when(pkg.calculaFrete("SP", "CE")).thenReturn(new BigDecimal("24.90"));
 when(pkg.calculaFrete("SP", "XX")).thenThrow(-20200, "Cannot calculate freight to XX");
-when(() -> pkg.cotacao(eq("CE"), out(new BigDecimal("99.99"))));
+doNothing().when(pkg).cotacao(eq("CE"), out(new BigDecimal("99.99")));
 
 BigDecimal value = service.freightBetween("SP", "CE");   // real code, real database
 
@@ -111,7 +111,8 @@ verify(pkg).calculaFrete("SP", "CE");
 | strict | spy: the real logic when no stub matches |
 | JUnit 5, Spring Test | mocking SQL views, which editions can also do |
 
-Since then: object types and collections in a stub, as values returned and as `OUT`
+Since then: the `doXxx()` family for procedures, which compiles a stub once where a lambda compiled it twice,
+object types and collections in a stub, as values returned and as `OUT`
 ([An object type or a collection in a stub](#an-object-type-or-a-collection-in-a-stub)), and views, standalone
 routines and synonyms replaced by a script ([Scripts in the test's edition](#scripts-in-the-tests-edition)).
 

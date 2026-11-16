@@ -1,6 +1,8 @@
 package io.github.rponte.penitent.mock.docs;
 
 import static io.github.rponte.penitent.mock.PlsqlMocks.any;
+import static io.github.rponte.penitent.mock.PlsqlMocks.doNothing;
+import static io.github.rponte.penitent.mock.PlsqlMocks.doThrow;
 import static io.github.rponte.penitent.mock.PlsqlMocks.eq;
 import static io.github.rponte.penitent.mock.PlsqlMocks.isNull;
 import static io.github.rponte.penitent.mock.PlsqlMocks.never;
@@ -202,12 +204,15 @@ class DocsTestingTest {
 		@DisplayName("testing.md: a procedure with OUT")
 		void procedure() {
 			// snippet: testing/procedure
-			when(() -> freights.quote(eq("CE"), out(new BigDecimal("99.99"))));
+			doNothing().when(freights).quote(eq("CE"), out(new BigDecimal("99.99")));
+			doThrow(-20200, "No quote for XX").when(freights).quote(eq("XX"), any());
 			// end-snippet
 
 			PlsqlOut<BigDecimal> value = new PlsqlOut<>();
 			application.quote("CE", value);
 			assertThat(value.get()).isEqualByComparingTo("99.99");
+			assertThatThrownBy(() -> application.quote("XX", new PlsqlOut<>()))
+					.isInstanceOf(PlsqlRoutineRaisedException.class).hasMessageContaining("No quote for XX");
 		}
 
 		@Test

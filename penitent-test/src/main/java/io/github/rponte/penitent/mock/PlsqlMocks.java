@@ -105,10 +105,19 @@ public final class PlsqlMocks implements AutoCloseable {
 	/** Ends the test: connections leave the edition, which is dropped, and so are the calls it recorded. */
 	public void end() {
 		Invocation unused = Recording.takeLast();
+		IllegalStateException pending = null;
+		try {
+			Recording.refusePending();
+		} catch (IllegalStateException e) {
+			pending = e;
+		}
 		Recording.reset();
 		session.end();
 		if (unused != null) {
 			throw Recording.unused(unused);
+		}
+		if (pending != null) {
+			throw pending;
 		}
 	}
 
@@ -156,19 +165,34 @@ public final class PlsqlMocks implements AutoCloseable {
 
 	/** Stubs the call just made on a mock, which returns a value. */
 	public static <T> Stubbing<T> when(T call) {
-		return new Stubbing<>(lastInvocation(), true);
+		Recording.refusePending();
+		return new Stubbing<>(lastInvocation());
 	}
 
 	/**
-	 * Stubs a call that returns nothing, made inside {@code call}: a procedure. With {@link #out} arguments, it sets
-	 * them and returns; {@link Stubbing#thenThrow} raises instead.
+	 * Stubs the next call made on the mock to do nothing: for a procedure, which returns nothing, as in
+	 * {@code doNothing().when(freights).quote(eq("CE"), out(value))}, setting its {@link #out} arguments.
 	 */
-	public static Stubbing<Void> when(Runnable call) {
-		Recording.takeLast();
-		call.run();
-		Stubbing<Void> stubbing = new Stubbing<>(lastInvocation(), false);
-		stubbing.then(new Stub.Return(null, false));
-		return stubbing;
+	public static Stubber doNothing() {
+		return new Stubber(new Stub.Return(null, false), "doNothing()");
+	}
+
+	/** Stubs the next call made on the mock to return {@code value}: for a function, as {@code when(...).thenReturn} does. */
+	public static Stubber doReturn(Object value) {
+		return new Stubber(new Stub.Return(value, true), "doReturn(" + value + ")");
+	}
+
+	/**
+	 * Stubs the next call made on the mock to raise an application error, as {@code RAISE_APPLICATION_ERROR(code,
+	 * message)} would, code between -20999 and -20000: for a procedure or a function.
+	 */
+	public static Stubber doThrow(int code, String message) {
+		return new Stubber(Stubbing.applicationError(code, message), "doThrow(" + code + ", ...)");
+	}
+
+	/** Stubs the next call made on the mock to raise one of Oracle's predefined exceptions, by name, such as {@code NO_DATA_FOUND}. */
+	public static Stubber doRaise(String predefinedException) {
+		return new Stubber(Stubbing.predefined(predefinedException), "doRaise(" + predefinedException + ")");
 	}
 
 	private static Invocation lastInvocation() {
@@ -188,10 +212,8 @@ public final class PlsqlMocks implements AutoCloseable {
 	/** Checks that the next call made on {@code mock} was made as many times as {@code times} says, in this test. */
 	public static <T> T verify(T mock, Times times) {
 		Objects.requireNonNull(times, "times");
-		if (mock == null || !Proxy.isProxyClass(mock.getClass())
-				|| !(Proxy.getInvocationHandler(mock) instanceof MockHandler)) {
-			throw new IllegalArgumentException("verify(...) needs a mock, from PlsqlMocks.mock");
-		}
+		requireMock(mock, "verify(...)");
+		Recording.refusePending();
 		Recording.verification(new Recording.Verification(mock, times.count()));
 		return mock;
 	}
@@ -273,6 +295,35 @@ public final class PlsqlMocks implements AutoCloseable {
 		return null;
 	}
 
+	private static void requireMock(Object mock, String what) {
+		if (mock == null || !Proxy.isProxyClass(mock.getClass())
+				|| !(Proxy.getInvocationHandler(mock) instanceof MockHandler)) {
+			throw new IllegalArgumentException(what + " needs a mock, from PlsqlMocks.mock");
+		}
+	}
+
+	/**
+	 * The answer of a {@code doXxx()}, waiting for the call it stubs, as in Mockito: the answer comes first, so the stub
+	 * is compiled once, when the call arrives.
+	 */
+	public static final class Stubber {
+
+		private final Stub.Action action;
+		private final String label;
+
+		private Stubber(Stub.Action action, String label) {
+			this.action = action;
+			this.label = label;
+		}
+
+		/** {@code mock}, whose next call is stubbed with this answer, as in {@code doNothing().when(mock).routine(...)}. */
+		public <T> T when(T mock) {
+			requireMock(mock, label + ".when(...)");
+			Recording.pending(new Recording.Pending(mock, action, label));
+			return mock;
+		}
+	}
+
 	/** How many times a call is expected, for {@link #verify(Object, Times)}. */
 	public record Times(int count) {
 		public Times {
@@ -290,36 +341,39 @@ public final class PlsqlMocks implements AutoCloseable {
 	public static final class Stubbing<T> {
 
 		private final Invocation invocation;
-		private final boolean function;
 		private Stub current;
 
-		private Stubbing(Invocation invocation, boolean function) {
+		private Stubbing(Invocation invocation) {
 			this.invocation = invocation;
-			this.function = function;
 		}
 
 		/** Returns {@code value}. */
 		public void thenReturn(T value) {
-			if (!function) {
-				throw new IllegalStateException("a procedure returns nothing: its OUT values go in out(...) arguments");
-			}
 			then(new Stub.Return(value, true));
 		}
 
 		/** Raises an application error, as {@code RAISE_APPLICATION_ERROR(code, message)} would, code between -20999 and -20000. */
 		public void thenThrow(int code, String message) {
-			if (code < -20999 || code > -20000) {
-				throw new IllegalArgumentException("an application error has a code between -20999 and -20000, not " + code);
-			}
-			then(new Stub.ApplicationError(code, Objects.requireNonNull(message, "message")));
+			then(applicationError(code, message));
 		}
 
 		/** Raises one of Oracle's predefined exceptions, by name, such as {@code NO_DATA_FOUND}. */
 		public void thenRaise(String predefinedException) {
+			then(predefined(predefinedException));
+		}
+
+		static Stub.Action applicationError(int code, String message) {
+			if (code < -20999 || code > -20000) {
+				throw new IllegalArgumentException("an application error has a code between -20999 and -20000, not " + code);
+			}
+			return new Stub.ApplicationError(code, Objects.requireNonNull(message, "message"));
+		}
+
+		static Stub.Action predefined(String predefinedException) {
 			if (predefinedException == null || !predefinedException.matches("[A-Za-z][A-Za-z0-9_$#]*")) {
 				throw new IllegalArgumentException("not the name of an exception: " + predefinedException);
 			}
-			then(new Stub.Predefined(predefinedException.toUpperCase(java.util.Locale.ROOT)));
+			return new Stub.Predefined(predefinedException.toUpperCase(java.util.Locale.ROOT));
 		}
 
 		private void then(Stub.Action action) {

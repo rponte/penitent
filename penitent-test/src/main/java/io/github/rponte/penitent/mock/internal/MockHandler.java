@@ -8,8 +8,9 @@ import java.util.List;
 import io.github.rponte.penitent.PlsqlOut;
 
 /**
- * Behind a mock: a call is only recorded, for {@code when}, or checked, when a {@code verify} waits for it. It
- * never reaches the database, and returns the default value of its type.
+ * Behind a mock: a call is only recorded, for {@code when}, stubbed, when a {@code doXxx()} waits for it, or
+ * checked, when a {@code verify} waits for it. It never reaches the database, and returns the default value of its
+ * type.
  */
 public final class MockHandler implements InvocationHandler {
 
@@ -43,15 +44,32 @@ public final class MockHandler implements InvocationHandler {
 			return InvocationHandler.invokeDefault(proxy, method, args);
 		}
 		Recording.refuseUnused();
+		Recording.Pending pending = Recording.takePending(proxy);
+		Recording.refusePending();
 		Object[] arguments = args == null ? new Object[0] : args;
 		Invocation invocation = new Invocation(this, method, matchersOf(method, arguments));
 		Recording.Verification verification = Recording.takeVerification(proxy);
 		if (verification != null) {
 			session.verify(invocation, verification.times());
+		} else if (pending != null) {
+			session.stub(new Stub(invocation, actionFor(method, pending)), null);
 		} else {
 			Recording.last(invocation);
 		}
 		return defaultOf(method.getReturnType());
+	}
+
+	/** The answer, refused when it does not fit the routine: a value from a procedure, nothing from a function. */
+	private static Stub.Action actionFor(Method method, Recording.Pending pending) {
+		boolean function = method.getReturnType() != void.class;
+		if (pending.action() instanceof Stub.Return returned && returned.function() != function) {
+			Recording.reset();
+			throw new IllegalStateException(method.getName() + (function
+					? " is a function, which returns a value: stub it with doReturn(value), not " + pending.label()
+					: " is a procedure, which returns nothing: stub it with doNothing(), and give its OUT values with"
+							+ " out(value), not " + pending.label()));
+		}
+		return pending.action();
 	}
 
 	private static List<Matcher> matchersOf(Method method, Object[] arguments) {

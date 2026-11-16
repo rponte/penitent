@@ -6,8 +6,17 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+### Removed
+
+- `penitent-test`: `when(Runnable)`, the lambda that stubbed a procedure, replaced by the `doXxx()` family:
+  `when(() -> m.p(...))` becomes `doNothing().when(m).p(...)`, and `when(() -> m.p(...)).thenThrow(code, message)`
+  becomes `doThrow(code, message).when(m).p(...)`.
+
 ### Added
 
+- `penitent-test`: the `doXxx()` family, as in Mockito, for stubs of procedures: `doNothing()`, `doThrow(code,
+  message)` and `doRaise(name)`, as in `doNothing().when(freights).quote(eq("CE"), out(value))`; and `doReturn(value)`
+  for functions. The answer comes before the call, so a stub that raises compiles the package once.
 - `penitent-test`: `anyInt()`, `anyLong()`, `anyShort()`, `anyByte()`, `anyDouble()`, `anyFloat()` and `anyBoolean()`
   match any value of a parameter of a primitive type, in a stub and in `verify`. `any()` returns `null`, which Java
   unboxes before the call reaches the mock, and failed with a `NullPointerException`.
