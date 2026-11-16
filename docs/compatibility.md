@@ -418,7 +418,7 @@ With `penitent-test`, measured on Oracle 23ai only, as [Testing](testing.md#mock
 | A stub of a procedure sets its `OUT` value; matchers `eq`, `any` and `isNull`, the last stub that matches winning; a call mixing matchers and values refused | Validated |
 | A routine taking a collection of an object type or an object type: its stub compiles, `any()` matches it in the stub and in `verify`, and the stub answers; a value or `isNull()` on such a parameter refused; a routine taking a `%ROWTYPE`: its stub compiles | Validated |
 | A `%ROWTYPE` in the test's edition, through a subtype compiled there: as an argument, of a real routine and of a stubbed one; as a return value; a collection of them, in and back; in Spring's transaction; again in the next test's edition, with nothing left after it; of a table of another schema, without editions, with nothing created in it; a package per table, numbered, created once, also for a block that writes the name in lowercase; with drivers 23, 21 and 19 | Validated |
-| A stub returns an object type, a collection of object types, of text and a `VARRAY` of numbers, an object type holding an object type and collections, empty collections and `null` attributes and elements; PL/SQL calling the routine gets it; a procedure's stub sets an `OUT` of an object type; a `RECORD`, `%ROWTYPE` or `INDEX BY` returned, and a Java type that does not fit, refused before compiling | Validated |
+| A stub returns an object type, with a `DATE` from a `LocalDate` or a `LocalDateTime` and a `TIMESTAMP` with its fraction, a collection of object types, of text and a `VARRAY` of numbers, an object type holding an object type and collections, empty collections and `null` attributes and elements; PL/SQL calling the routine gets it; a procedure's stub sets an `OUT` of an object type; a `RECORD`, `%ROWTYPE` or `INDEX BY` returned, and a Java type that does not fit, refused before compiling | Validated |
 | Several stubs of the same routine: different arguments each answered; the same arguments twice, the later one wins; a second answer on the same stub replaces the first | Validated |
 | A call no stub matches fails with `ORA-20999`, naming the routine and showing the arguments | Validated |
 | The rest of the package stays real: other routines, private ones, other overloads; a real routine calling the stubbed one, in the same package or another, gets the mock; outside the test's edition, the routine is real | Validated |
@@ -442,8 +442,8 @@ With `penitent-test`, measured on Oracle 23ai only, as [Testing](testing.md#mock
   - a method-level converter, `@PlsqlConvert` on the method: it does not apply to the value a stub returns, only the
     converters of the attributes do;
   - a collection declared in a package (`TYPE ... IS TABLE OF` or `VARRAY` in a spec), rather than in the schema;
-  - attributes or elements of `DATE`, `TIMESTAMP`, `TIMESTAMP WITH TIME ZONE`, `BOOLEAN`, `RAW`, `CLOB` and `BLOB`:
-    the tests cover numbers and text; a value the mocks cannot write is refused before compiling, naming its Java
+  - attributes or elements of `TIMESTAMP WITH TIME ZONE`, `BOOLEAN`, `RAW`, `CLOB` and `BLOB`: the tests cover
+    numbers, text, `DATE` and `TIMESTAMP`; a value the mocks cannot write is refused before compiling, naming its Java
     class;
   - a collection of collections;
   - what a stub with a large value costs to compile.
