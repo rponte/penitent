@@ -14,9 +14,12 @@ import com.zaxxer.hikari.HikariDataSource;
  * One Oracle for all the test classes of this module, started on first use, with the prerequisites of the mocks
  * applied through {@link PlsqlMocks#prepare}, and the fixtures: a package whose spec uses {@code %TYPE}, a
  * {@code SUBTYPE}, a {@code DEFAULT}, an overload and an {@code OUT}, with state and a private function, and a
- * second package that calls the first.
+ * second package that calls the first; and a table of another schema, {@value #REGISTRY}, without editions.
  */
 public final class TestDatabase {
+
+	/** A schema without editions, whose table a package of the test user takes as a {@code %ROWTYPE}. */
+	static final String REGISTRY = "PLSQL_REGISTRY";
 
 	private static OracleUnderTest oracle;
 
@@ -36,6 +39,7 @@ public final class TestDatabase {
 			oracle = OracleUnderTest.start(IMAGE);
 			pool = newPool(OracleUnderTest.USER);
 			PlsqlMocks.prepare(newPool(oracle.adminUser()), pool, OracleUnderTest.USER);
+			createRegistry();
 			createFixtures();
 		}
 		return pool;
@@ -68,6 +72,15 @@ public final class TestDatabase {
 	static OracleUnderTest oracle() {
 		pool();
 		return oracle;
+	}
+
+	private static void createRegistry() {
+		oracle.executeAsAdmin(
+				"CREATE USER " + REGISTRY + " IDENTIFIED BY \"" + OracleUnderTest.PASSWORD + "\" QUOTA UNLIMITED ON "
+						+ oracle.defaultTablespace(),
+				"CREATE TABLE " + REGISTRY + ".REGION (ID NUMBER PRIMARY KEY, UF VARCHAR2(2))",
+				// directly, not through a role: a package compiles only with direct grants
+				"GRANT SELECT ON " + REGISTRY + ".REGION TO " + OracleUnderTest.USER);
 	}
 
 	/** The statements of {@code db/fixtures/freights.sql}, each ended by a line holding only a slash. */

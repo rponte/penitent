@@ -417,8 +417,8 @@ The stub is not a Java trick: it is PL/SQL, compiled into the database, where on
 - **A `%ROWTYPE` goes by a subtype in the test's edition.** In an edition other than the default one, Oracle cannot
   describe `TABLE%ROWTYPE` to the driver, and the call would fail with `ORA-17060`. So the first time a record of a
   table is bound in the test, the library compiles a package with `SUBTYPE ROW_T IS TABLE%ROWTYPE` into the edition,
-  and binds the record by that name, which the driver resolves. The package goes with the edition. In the call log,
-  the call shows it:
+  in the schema of the mocks, never in the table's, and binds the record by that name, which the driver resolves. The
+  package goes with the edition. In the call log, the call shows it:
 
   <!-- snippet: untested -->
   ```text

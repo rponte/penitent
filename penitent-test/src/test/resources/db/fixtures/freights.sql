@@ -35,6 +35,7 @@ CREATE OR REPLACE PACKAGE freights AS
   FUNCTION find(p_id NUMBER) RETURN freight_item%ROWTYPE;
   FUNCTION count_rows(p_rows freight_rows_t) RETURN NUMBER;
   FUNCTION rows_of(p_count NUMBER) RETURN freight_rows_t;
+  FUNCTION describe_region(p_region plsql_registry.region%ROWTYPE) RETURN VARCHAR2;
 END freights;
 /
 
@@ -129,6 +130,12 @@ CREATE OR REPLACE PACKAGE BODY freights AS
     END LOOP;
     RETURN l_rows;
   END rows_of;
+
+  -- takes a row of a table of another schema, which has no editions
+  FUNCTION describe_region(p_region plsql_registry.region%ROWTYPE) RETURN VARCHAR2 IS
+  BEGIN
+    RETURN p_region.id || '/' || p_region.uf;
+  END describe_region;
 END freights;
 /
 
