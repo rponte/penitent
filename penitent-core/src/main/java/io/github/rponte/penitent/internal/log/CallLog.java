@@ -116,13 +116,6 @@ public final class CallLog {
 		}
 	}
 
-	/** Once, when the implementations of {@code TypeNameIntegration} load. */
-	public static void typeNamesFrom(String implementation) {
-		if (CALLS.isDebugEnabled()) {
-			CALLS.debug("Type names from     : {}", implementation);
-		}
-	}
-
 	/**
 	 * At warn, unlike the rest of this log: a value the driver will read wrong, in silence. The call
 	 * itself goes on, since true and false still read right. See {@code NullBooleanOutputs}.
