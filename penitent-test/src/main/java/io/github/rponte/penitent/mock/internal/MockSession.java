@@ -46,6 +46,8 @@ public final class MockSession implements RowTypes {
 	private final Map<String, String> bodies = new HashMap<>();
 	private final Map<String, List<Stub>> stubsByPackage = new LinkedHashMap<>();
 	private final Map<String, String> rowTypes = new HashMap<>();
+	/** The packages a script replaced in this test, which a stub would undo, as {@code SCHEMA.NAME}. */
+	private final java.util.Set<String> scriptedPackages = new java.util.HashSet<>();
 	private volatile String edition;
 	/** The schema of the mocks, whose packages have editions: where the subtypes of {@code %ROWTYPE} records go. */
 	private String schema;
@@ -89,6 +91,7 @@ public final class MockSession implements RowTypes {
 		edition = null;
 		stubsByPackage.clear();
 		bodies.clear();
+		scriptedPackages.clear();
 		synchronized (rowTypes) {
 			rowTypes.clear();
 		}
@@ -154,6 +157,7 @@ public final class MockSession implements RowTypes {
 		long start = System.nanoTime();
 		RoutineMetadata routine = routineOf(stub.invocation());
 		requireMatchable(routine, byParameter(routine, stub.invocation()));
+		requireNotScripted(routine);
 		stub = written(stub, routine);
 		String pkg = packageOf(routine);
 		List<Stub> stubs = stubsByPackage.computeIfAbsent(pkg, k -> new ArrayList<>());
@@ -273,6 +277,59 @@ public final class MockSession implements RowTypes {
 					+ "' AND NAME = '" + name + "' AND TYPE = '" + type + "' ORDER BY SEQUENCE");
 		} finally {
 			EditionDataSource.execute(connection, "ALTER SESSION SET EDITION = " + defaultEdition);
+		}
+	}
+
+	// ---------------------------------------------------------------- scripts
+
+	/**
+	 * Applies {@code script}, from {@code source}, in the test's edition, on a connection of the mocks' own: every
+	 * statement is checked first, so a refused one applies none; then each runs, and a compilation error stops the
+	 * script there, with the statements before it applied, until the edition goes.
+	 */
+	public void applyScript(String script, String source) {
+		requireBegun();
+		List<PlsqlScript.Statement> statements = PlsqlScript.parse(script, source);
+		EditionScripts.requireAccepted(statements);
+		try (Connection connection = connection()) {
+			EditionScripts.requireEditioned(statements, schema, connection);
+			for (PlsqlScript.Statement statement : statements) {
+				requireNoStubs(statement);
+			}
+			for (PlsqlScript.Statement statement : statements) {
+				long start = System.nanoTime();
+				List<String> errors = compileInEdition(connection, statement.sql(), schema, statement.name(),
+						statement.type());
+				if (!errors.isEmpty()) {
+					throw new IllegalStateException(statement.where() + ": " + statement.object() + " does not compile:\n  "
+							+ String.join("\n  ", errors) + "\n" + statement.sql());
+				}
+				if (statement.type().startsWith("PACKAGE")) {
+					scriptedPackages.add(schema + "." + statement.name());
+				}
+				MockLog.applied(statement, start);
+			}
+		} catch (SQLException e) {
+			throw new IllegalStateException("failed to apply " + source + ": " + e.getMessage(), e);
+		}
+	}
+
+	/** A script replacing a package with stubs would undo them, and the stubs would count nothing. */
+	private void requireNoStubs(PlsqlScript.Statement statement) {
+		String pkg = schema + "." + statement.name();
+		if (statement.type().startsWith("PACKAGE") && stubsByPackage.containsKey(pkg)) {
+			throw new IllegalStateException(statement.where() + ": " + pkg + " has stubs in this test, and replacing it"
+					+ " with a script would undo them: a package has stubs or is replaced by a script in a test, not both");
+		}
+	}
+
+	/** A stub rewrites the body as the default edition has it, which would undo what a script replaced. */
+	private void requireNotScripted(RoutineMetadata routine) {
+		String pkg = packageOf(routine);
+		if (scriptedPackages.contains(pkg)) {
+			throw new IllegalStateException(routine.qualifiedName() + ": " + pkg + " was replaced by a script in this"
+					+ " test, and a stub would undo it, since it rewrites the body as the default edition has it: a"
+					+ " package has stubs or is replaced by a script in a test, not both");
 		}
 	}
 

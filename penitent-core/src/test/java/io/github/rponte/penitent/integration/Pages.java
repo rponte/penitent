@@ -35,9 +35,13 @@ final class Pages {
 	static final List<Path> TESTS = List.of(Path.of("src", "test", "java"),
 			Path.of("..", "penitent-test", "src", "test", "java"));
 
-	/** The fixtures the pages' SQL comes from: this module's, and those of penitent-test, for its page. */
+	/**
+	 * The fixtures the pages' SQL comes from: this module's, and those of penitent-test, for its page, with the scripts
+	 * its tests apply in their editions.
+	 */
 	static final List<Path> FIXTURES = List.of(Path.of("src", "test", "resources", "db", "fixtures"),
-			Path.of("..", "penitent-test", "src", "test", "resources", "db", "fixtures"));
+			Path.of("..", "penitent-test", "src", "test", "resources", "db", "fixtures"),
+			Path.of("..", "penitent-test", "src", "test", "resources", "mocks"));
 
 	private static final Pattern MARKER = Pattern.compile("^\\s*<!-- snippet: (\\S+) -->\\s*$");
 

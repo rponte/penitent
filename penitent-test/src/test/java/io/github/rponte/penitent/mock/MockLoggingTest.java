@@ -202,6 +202,24 @@ class MockLoggingTest {
 	}
 
 	@Test
+	@DisplayName("at DEBUG: each statement a script applies, with its time; at TRACE, its SQL")
+	void applied_script() {
+		logger().setLevel(Level.TRACE);
+		try (PlsqlMocks mocks = PlsqlMocks.on(dataSource)) {
+			mocks.begin();
+			mocks.applyScript("/mocks/freight-items-and-checkout.sql");
+		}
+
+		assertThat(lines()).filteredOn(line -> line.startsWith("DEBUG Applied SQL")).satisfiesExactly(
+				line -> assertThat(line).matches("DEBUG Applied SQL         : /mocks/freight-items-and-checkout\\.sql,"
+						+ " statement 1, CREATE OR REPLACE VIEW FREIGHT_ITEMS_V in \\d+ ms"),
+				line -> assertThat(line).matches("DEBUG Applied SQL         : /mocks/freight-items-and-checkout\\.sql,"
+						+ " statement 2, CREATE OR REPLACE PACKAGE BODY CHECKOUT in \\d+ ms"));
+		assertThat(lines()).anySatisfy(line -> assertThat(line)
+				.startsWith("TRACE -> applied SQL      : CREATE OR REPLACE VIEW freight_items_v AS"));
+	}
+
+	@Test
 	@DisplayName("at WARN: an edition left by a run that died, when the next begin drops it")
 	void leftover() {
 		logger().setLevel(Level.WARN);

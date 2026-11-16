@@ -307,6 +307,42 @@ verify(freights, times(2)).calculate(eq("SP"), any());
 verify(freights, never()).calculate("RJ", "BA");
 ```
 
+### Replacing a view or a package
+
+A stub replaces one routine. When a test needs to replace a whole object, most often a **view** whose rows come from
+somewhere the test cannot control, a script does it, in the test's edition:
+
+<!-- snippet: fixture -->
+```sql
+-- freight items of the test's own, in place of the real ones
+CREATE OR REPLACE VIEW freight_items_v AS
+  SELECT 1 AS id, 'SP' AS uf FROM dual
+  UNION ALL
+  SELECT 2, 'SP' FROM dual;
+```
+
+<!-- snippet: testing/apply-script -->
+```java
+mocks.applyScript("/mocks/freight-items-v.sql");
+```
+
+From there on, the test sees those two rows, from Java and from PL/SQL, and every other session the real view. The
+script goes with the edition when the test ends, and it runs on a connection of the mocks' own, so it commits nothing
+of the test's transaction.
+
+- **Where the script comes from:** the classpath, as above or with `classpath:`; the file system, with `file:` or a
+  `Path`; an `InputStream`, which stays open; or text, with `applyScriptText`, in the same format as a file.
+  `applyScript` takes only a location: SQL given to it is refused, pointing to `applyScriptText`.
+- **The format is SQL*Plus's:** PL/SQL, such as a package body, ends on a line holding only `/`, and SQL, such as a
+  view, with `;` or such a line. Comments are kept, hints included, and nothing inside a string or a comment ends a
+  statement.
+- **What it can replace:** `CREATE OR REPLACE` of a view, a package, its body, a function, a procedure or a synonym, in
+  the schema of the mocks, whose editions keep that type. Anything else is refused before any statement runs,
+  naming the statement and its line: a table, DML, `DROP` or `ALTER` would change the database itself, and in a
+  schema that does not edition the type, a `CREATE OR REPLACE` would replace the real object for good.
+- **A package has stubs or is replaced by a script in a test, not both:** a stub rewrites the body as the default
+  edition has it, so one would undo the other.
+
 ### With JUnit 5, without Spring
 
 `PlsqlMockExtension` does what `@EnablePlsqlMocks` does, for a test without Spring. Give it the `DataSource` the
@@ -420,9 +456,10 @@ DEBUG Ended mocks         : edition PENITENT_MOCK_5F2A91C3D4E6 dropped in 15 ms
 ```
 
 - **At `DEBUG`:** the edition of each test, each stub, with what it answers and to which arguments, each `verify`
-  that passed, and the subtype each `%ROWTYPE` goes by in the test's edition (see [How it works](#how-it-works)).
-- **At `TRACE`:** also the PL/SQL generated for each stub and each subtype, the first thing to read when a stub does
-  not answer as expected.
+  that passed, each statement a script applied, and the subtype each `%ROWTYPE` goes by in the test's edition (see
+  [How it works](#how-it-works)).
+- **At `TRACE`:** also the PL/SQL generated for each stub and each subtype, and the SQL of each statement applied, the
+  first thing to read when a stub does not answer as expected.
 - **At `WARN`:** only what is out of the ordinary, such as an edition left by a run that died, dropped when the next
   test begins.
 - **At `INFO`,** the usual default, nothing: the tests stay quiet.
@@ -472,11 +509,14 @@ or a container init script:
 
 | Script | Run by | What it does |
 |---|---|---|
-| `penitent-mock-admin.sql` | a DBA | enables editions for the schema's packages, and grants `CREATE ANY EDITION` and `DROP ANY EDITION` |
+| `penitent-mock-admin.sql` | a DBA | enables editions for the schema's packages and views, and grants `CREATE ANY EDITION` and `DROP ANY EDITION` |
 | `penitent-mock-schema.sql` | the schema that owns the packages | creates the table `PENITENT_MOCK_CALLS` and the package `PENITENT_MOCK`, which record the calls |
 
-> **Only on a test database.** `ENABLE EDITIONS` cannot be undone. The admin script limits it to packages, so tables
-> and object types are left as they are, but it is still a change for good to the schema.
+> **Only on a test database.** `ENABLE EDITIONS` cannot be undone. The admin script limits it to packages and views,
+> so tables and object types are left as they are, but it is still a change for good to the schema. A materialized
+> view that reads one of the schema's views makes the views' statement fail with `ORA-38819`: the packages are
+> enabled anyway, by a statement of their own, and a script replacing a view is refused with what to do.
+> `ENABLE EDITIONS FOR VIEW FORCE` would get past it, but leaves that materialized view `INVALID`.
 
 The library never applies them by itself: when a test begins, it checks them, and if something is missing, the test
 fails with a message that lists everything missing and names the scripts.

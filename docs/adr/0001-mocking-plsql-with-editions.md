@@ -54,7 +54,7 @@ verify(pkg).calculaFrete("SP", "CE");
    closed.
 6. **Prerequisites are explicit DDL,** shipped in the jar and in the documentation, for the user to apply as a
    migration, a Flyway callback or a container init script:
-   - `penitent-mock-admin.sql`, for a DBA: `ENABLE EDITIONS FOR PACKAGE`, limited to packages so that the schema's
+   - `penitent-mock-admin.sql`, for a DBA: `ENABLE EDITIONS FOR PACKAGE`, and for views, limited so that the schema's
      tables and object types are left as they are, and `CREATE ANY EDITION` and `DROP ANY EDITION`;
    - `penitent-mock-schema.sql`, for the schema owner: the table `PENITENT_MOCK_CALLS` and the package `PENITENT_MOCK`,
      static, with an autonomous `record` and a `version`.
@@ -290,6 +290,50 @@ in the compatibility page, under "Not measured".
 **Left aside:** mapping the Java value again in the mocks, from the dictionary. It would be a second mapping to keep
 in step with the core's, and the first difference between them would be a stub that answers something the
 application could never receive.
+
+### Scripts in the test's edition
+
+A stub replaces one routine; a test that has to replace a whole object, most often a view whose rows come from
+another system, applies a script: `applyScript` for a location, `applyScriptText` for text.
+
+**Why a library API, rather than running the script on the test's connection,** as teams that mock with editions do:
+the DDL would commit the test's transaction; in a schema that does not edition views, `CREATE OR REPLACE VIEW`
+replaces the real one, for every session, for good; and a second mechanism of editions cannot run beside the mocks,
+since an edition has one child only (`ORA-38807`).
+
+**The script's format** is SQL*Plus's, as Flyway's Oracle parser reads it (`OracleParser`, read in versions 12.4.0
+and 13.12.2): PL/SQL ends on a line holding only `/`, and keeps its semicolons; SQL ends with `;`, which is removed,
+or such a line. A view with a PL/SQL function in its `WITH` clause is PL/SQL. Strings, alternative quotes (`q'[...]'`),
+quoted names and comments never end nor classify a statement. Unlike Flyway, the reader does not count blocks: a
+PL/SQL statement ends only at its slash line, so `IF NOT EXISTS`, `$IF ... $END` and `CASE` as a name, the three
+cases Flyway fixed in its block counting since 12.4.0, cannot end one early. A line starting with `CREATE` inside a
+statement means the one before was not ended, and is refused; so are SQL*Plus commands, such as `SET DEFINE OFF`,
+which no driver runs.
+
+**Two pieces.** `PlsqlScript` knows what a script is: it splits, cleans and classifies the statements, and refuses
+only what is malformed. `EditionScripts` decides what the mocks accept: only `CREATE OR REPLACE` of a view, a package,
+its body, a function, a procedure or a synonym, in the schema of the mocks, of a type it editions
+(`USER_EDITIONED_TYPES`), checked for every statement before any runs.
+
+**How it runs:** on a connection of the mocks' own, in the test's edition, as a stub's body is compiled; a compilation
+error stops the script there, with the statements before it applied until the edition goes.
+
+**A package has stubs or a script in a test, not both.** A stub rewrites the body as the default edition has it, so
+a script before it would be undone, and a script after it would undo the stubs, whose calls `verify` would then never
+count. Either order is refused. Letting a script be the base the stubs rewrite was left for when a case needs it.
+
+**Editions for views.** The admin script enables them, in a statement apart from the packages': a materialized view
+that reads one of the schema's views makes it fail with `ORA-38819` (measured), and the packages are still enabled.
+`FORCE` gets past it, but leaves the materialized view `INVALID` (measured), so the library never uses it.
+
+**Left aside:**
+
+- **Spring's `ScriptUtils`**, through `ResourceDatabasePopulator`: with `/` as the separator, it splits on any slash
+  outside strings and comments, a division included, does not know alternative quotes, and does not tell SQL from
+  PL/SQL.
+- **Flyway's parser as a dependency:** it is Flyway's internal API, and every project of the mocks would get Flyway.
+- **IslandSQL,** which the mocks already use for bodies: it would split statements without any separator, but on a
+  new path of the parser, to be measured against real scripts first; the slash line is what teams already write.
 
 ### What `verify` reads
 
