@@ -6,6 +6,12 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.30.0]
+
+The mocks reach further. A stub answers with object types and collections, a routine that takes or returns a
+`%ROWTYPE` works in a test with mocks, and a script replaces a view, a package, a standalone routine or a synonym in
+the test's edition, with `applyScript` or `@PlsqlMockScript`. Measured on Oracle 23ai.
+
 ### Added
 
 - `penitent-test`: `applyScript` and `applyScriptText` apply a script in the test's edition, to replace a view, a
@@ -18,6 +24,12 @@ All notable changes to this project are listed here. The format follows
   `out(value)`, mapped as the application maps them. The value is written as a PL/SQL constructor, which Java and
   PL/SQL calling the routine both get. A `RECORD`, a `%ROWTYPE` and an `INDEX BY` have no constructor, and are
   refused before compiling.
+
+### Changed
+
+- `penitent-test`: `penitent-mock-admin.sql` enables editions for views too, in a statement apart from the packages'.
+  A schema prepared with 0.29.0 keeps working for stubs; to replace a view with a script, a DBA runs
+  `ALTER USER <schema> ENABLE EDITIONS FOR VIEW`, which cannot be undone.
 
 ### Fixed
 
@@ -210,7 +222,8 @@ driven by the database dictionary: see the [README](https://github.com/rponte/pe
 
 - Spring Boot 4.1.2 for the versions the library is built and tested with.
 
-[Unreleased]: https://github.com/rponte/penitent/compare/v0.29.0...HEAD
+[Unreleased]: https://github.com/rponte/penitent/compare/v0.30.0...HEAD
+[0.30.0]: https://github.com/rponte/penitent/compare/v0.29.0...v0.30.0
 [0.29.0]: https://github.com/rponte/penitent/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/rponte/penitent/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/rponte/penitent/compare/v0.26.0...v0.27.0
