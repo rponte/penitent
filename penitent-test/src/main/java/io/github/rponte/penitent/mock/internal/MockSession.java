@@ -47,6 +47,8 @@ public final class MockSession implements RowTypes {
 	private final Map<String, List<Stub>> stubsByPackage = new LinkedHashMap<>();
 	private final Map<String, String> rowTypes = new HashMap<>();
 	private volatile String edition;
+	/** The schema of the mocks, whose packages have editions: where the subtypes of {@code %ROWTYPE} records go. */
+	private String schema;
 	private String defaultEdition;
 
 	public MockSession(EditionDataSource dataSource) {
@@ -63,6 +65,7 @@ public final class MockSession implements RowTypes {
 		long start = System.nanoTime();
 		try (Connection connection = connection()) {
 			Prerequisites.require(connection, SCHEMA_VERSION);
+			schema = single(connection, "SELECT SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA') FROM DUAL");
 			defaultEdition = single(connection,
 					"SELECT PROPERTY_VALUE FROM DATABASE_PROPERTIES WHERE PROPERTY_NAME = 'DEFAULT_EDITION'");
 			dropLeftovers(connection);
@@ -208,12 +211,13 @@ public final class MockSession implements RowTypes {
 	// ---------------------------------------------------------------- %ROWTYPE records
 
 	/**
-	 * In a child edition of a schema with editions enabled, the driver cannot resolve {@code "SCHEMA".TABLE%ROWTYPE}
-	 * and fails with {@code ORA-17060}, while it resolves a package subtype of it. So the first time a record of a
-	 * table is bound in the test's edition, a package with that subtype is compiled in the edition, and the record
-	 * goes by the subtype's name from then on; the package goes with the edition. Its name carries the edition's, so
-	 * that no connection of the pool can hold the descriptor of the one of an earlier test. In a schema without
-	 * editions, where the package would not be the edition's, the record resolves as it is, and keeps its name.
+	 * In a child edition, the driver cannot resolve {@code "SCHEMA".TABLE%ROWTYPE} and fails with {@code ORA-17060},
+	 * while it resolves a package subtype of it. So the first time a record of a table is bound in the test's edition,
+	 * a package with that subtype is compiled in the edition, and the record goes by the subtype's name from then on;
+	 * the package goes with the edition. It is compiled in the schema of the mocks, whose packages have editions, and
+	 * never in the table's, which may have none, and where nothing is written: the subtype takes the grant on the
+	 * table that the routine taking the record already needs. Its name carries the edition's, so that no connection
+	 * of the pool can hold the descriptor of the one of an earlier test.
 	 */
 	@Override
 	public String nameOf(CompositeType type, String name) {
@@ -229,22 +233,16 @@ public final class MockSession implements RowTypes {
 			long start = System.nanoTime();
 			String pkg = "PENITENT_ROW_" + current.substring(PREFIX.length()) + "_"
 					+ String.format(Locale.ROOT, "%08X", name.toUpperCase(Locale.ROOT).hashCode());
-			String ddl = "CREATE OR REPLACE PACKAGE \"" + type.schema() + "\"." + pkg + " AS\n  SUBTYPE ROW_T IS "
+			String ddl = "CREATE OR REPLACE PACKAGE \"" + schema + "\"." + pkg + " AS\n  SUBTYPE ROW_T IS "
 					+ name + ";\nEND " + pkg + ";";
 			String alias;
 			try (Connection connection = connection()) {
-				List<String> errors = compileInEdition(connection, ddl, type.schema(), pkg, "PACKAGE");
-				if (visibleOutsideTheEdition(connection, type.schema(), pkg)) {
-					// a schema without editions has no editioned objects: the package is not the edition's, and goes
-					EditionDataSource.execute(connection, "DROP PACKAGE \"" + type.schema() + "\"." + pkg);
-					rowTypes.put(name, name);
-					return name;
-				}
+				List<String> errors = compileInEdition(connection, ddl, schema, pkg, "PACKAGE");
 				if (!errors.isEmpty()) {
 					throw new IllegalStateException("the subtype of " + name + " for the test's edition does not"
 							+ " compile:\n  " + String.join("\n  ", errors) + "\n" + ddl);
 				}
-				alias = type.schema() + "." + pkg + ".ROW_T";
+				alias = schema + "." + pkg + ".ROW_T";
 			} catch (SQLException e) {
 				throw new IllegalStateException("failed to compile the subtype of " + name + " for the test's edition: "
 						+ e.getMessage(), e);
@@ -253,20 +251,6 @@ public final class MockSession implements RowTypes {
 			MockLog.aliased(name, alias, start);
 			MockLog.generated(ddl);
 			return alias;
-		}
-	}
-
-	/** Run in the default edition, which does not see what is compiled in the test's edition. */
-	private static boolean visibleOutsideTheEdition(Connection connection, String owner, String name)
-			throws SQLException {
-		try (PreparedStatement select = connection.prepareStatement(
-				"SELECT COUNT(*) FROM ALL_OBJECTS WHERE OWNER = ? AND OBJECT_NAME = ? AND OBJECT_TYPE = 'PACKAGE'")) {
-			select.setString(1, owner);
-			select.setString(2, name);
-			try (ResultSet rows = select.executeQuery()) {
-				rows.next();
-				return rows.getInt(1) > 0;
-			}
 		}
 	}
 

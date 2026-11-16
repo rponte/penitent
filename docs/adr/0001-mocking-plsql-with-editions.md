@@ -179,7 +179,7 @@ And what it cannot do, in the first version:
 | The test's edition | the database, created before the test and dropped after it | holds the rewritten package bodies, which only sessions in the edition see |
 | The rewritten body | the test's edition | the package's own body, with the stubbed routine replaced by generated code |
 | The wrapped `DataSource` | the application's tests | moves each connection it hands out into the test's edition, and back when it is returned |
-| The subtype of a `%ROWTYPE` | the test's edition, compiled the first time a record of the table is bound | a package `PENITENT_ROW_...` with `SUBTYPE ROW_T IS "SCHEMA".TABLE%ROWTYPE`, by whose name the record binds in the edition |
+| The subtype of a `%ROWTYPE` | the test's edition, in the schema of the mocks, compiled the first time a record of the table is bound | a package `PENITENT_ROW_...` with `SUBTYPE ROW_T IS "SCHEMA".TABLE%ROWTYPE`, by whose name the record binds in the edition |
 | `PlsqlMocks` | the test | creates and drops the edition, compiles the stubs, and counts the calls for `verify` |
 
 ### A test, step by step
@@ -283,17 +283,18 @@ Only a stubbed routine records its calls, which is why `verify` refuses a routin
 ### A `%ROWTYPE` in the test's edition
 
 **The problem.** To bind a record or read one back, the driver asks the database to describe its type by name, with
-`DBMS_PICKLER.GET_TYPE_SHAPE`. In a child edition of a schema with editions enabled, the database does not find
-`"SCHEMA".TABLE%ROWTYPE`, and the call fails with `ORA-17060`, stub or not, in any call of the test. Nothing has to be
-compiled in the edition for it to happen. A package `RECORD`, an object type and a package subtype of the same
-`%ROWTYPE` are all described fine. The failure is on the server: drivers 23, 21 and 19 fail the same way, and so does
-python-oracledb's thin mode, which does not use JDBC at all.
+`DBMS_PICKLER.GET_TYPE_SHAPE`. In a child edition, the database does not find `"SCHEMA".TABLE%ROWTYPE` when the
+table's schema has editions enabled, and the call fails with `ORA-17060`, stub or not, in any call of the test.
+Nothing has to be compiled in the edition for it to happen, and it depends on the table's schema, not the session's:
+in the same session, a table of a schema without editions resolves. A package `RECORD`, an object type and a package
+subtype of the same `%ROWTYPE` are all described fine. The failure is on the server: drivers 23, 21 and 19 fail the
+same way, and so does python-oracledb's thin mode, which does not use JDBC at all.
 [Issue #31](https://github.com/rponte/penitent/issues/31) has the measurements.
 
 **The decision.** The test's edition belongs to the test, so the library may create what it needs there:
 
 1. The first time a record of a table is bound on a connection in the test's edition, `penitent-test` compiles, in
-   the edition and on a connection of its own, a package holding one subtype:
+   the edition, in the schema of the mocks and on a connection of its own, a package holding one subtype:
 
    ```sql
    CREATE OR REPLACE PACKAGE "PLSQL_TEST".PENITENT_ROW_5F2A91C3D4E6_1A2B3C4D AS
@@ -321,8 +322,12 @@ handled in the module that needs it without changing the core.
 - **The name carries the edition's.** A pool keeps its connections from test to test, and the driver keeps the
   descriptors of a connection. With the edition in the name, a connection never meets a name it described in an
   earlier test, whose package is gone.
-- **A schema without editions** cannot have editioned objects: the package would be compiled outside the edition, so
-  the library drops it and keeps the record's own name, which resolves there.
+- **In the schema of the mocks, never in the table's.** The schema of the mocks has editions for its packages, which
+  `begin()` checks, so the package belongs to the edition there. The table's schema may have none, and a package
+  compiled there would be a real one, seen by every session and left behind; it would also take a privilege to create
+  objects in another schema. The subtype only needs the grant on the table that the routine taking the record already
+  has, given directly and not through a role. The same subtype serves a table of a schema without editions, which
+  would resolve by its own name, so there is one way for every table.
 - **The cost** is one package compiled per table and per test, on the first record bound, and the pool needs a
   connection to spare for it, as for a stub.
 - **The log** shows each subtype at `DEBUG` under `io.github.rponte.penitent.mock`, with its DDL at `TRACE`, and
@@ -368,6 +373,14 @@ The `%ROWTYPE` spikes, on the same database, with plain JDBC and drivers 23, 21 
 | a record bound as a package subtype of it, or as a package `RECORD` of the same fields | the routine taking `TABLE%ROWTYPE` takes it |
 | the same package compiled only in the edition | works, as an argument, a value read back and the elements of a collection; again after the edition is dropped and created |
 | that package, seen from the default edition | not there |
+
+And in the tests of `penitent-test`, in the session of the test user, whose schema has editions:
+
+| In the test's edition, by its own name | Result |
+|---|---|
+| `"PLSQL_TEST".FREIGHT_ITEM%ROWTYPE`, a table of a schema with editions | `ORA-17060` |
+| `"PLSQL_REGISTRY".REGION%ROWTYPE`, a table of a schema without editions | resolves |
+| the subtype of either one, in the schema of the mocks | resolves, and nothing is created in `PLSQL_REGISTRY` |
 
 ## Alternatives considered
 

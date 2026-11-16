@@ -60,6 +60,12 @@ class PlsqlMocksTest {
 		BigDecimal countRows(List<FreightItem> pRows);
 
 		List<FreightItem> rowsOf(BigDecimal pCount);
+
+		String describeRegion(Region pRegion);
+	}
+
+	/** A row of PLSQL_REGISTRY.REGION, a table of a schema without editions. */
+	record Region(Long id, String uf) {
 	}
 
 	/** FREIGHT_ITEM_T, and a row of FREIGHT_ITEM. */
@@ -405,6 +411,20 @@ class PlsqlMocksTest {
 		mocks.begin();
 		assertThat(freights.describe(new FreightItem(2L, "CE"))).isEqualTo("2/CE");
 		assertThat(realFreights.describe(new FreightItem(3L, "SP"))).isEqualTo("3/SP");
+	}
+
+	@Test
+	@DisplayName("in the test's edition, a %ROWTYPE record of a table of a schema without editions binds, and nothing is"
+			+ " created in that schema")
+	void record_of_a_schema_without_editions() throws Exception {
+		assertThat(freights.describeRegion(new Region(4L, "CE"))).isEqualTo("4/CE");
+		try (java.sql.Connection connection = pool.getConnection();
+				java.sql.Statement statement = connection.createStatement();
+				java.sql.ResultSet rows = statement.executeQuery("SELECT COUNT(*) FROM ALL_OBJECTS WHERE OWNER = '"
+						+ TestDatabase.REGISTRY + "' AND OBJECT_TYPE = 'PACKAGE'")) {
+			rows.next();
+			assertThat(rows.getInt(1)).as("packages in " + TestDatabase.REGISTRY).isZero();
+		}
 	}
 
 	/** The packages the mocks create for %ROWTYPE records, as the default edition sees them. */
