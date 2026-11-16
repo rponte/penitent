@@ -326,6 +326,12 @@ count. Either order is refused. Letting a script be the base the stubs rewrite w
 that reads one of the schema's views makes it fail with `ORA-38819` (measured), and the packages are still enabled.
 `FORCE` gets past it, but leaves the materialized view `INVALID` (measured), so the library never uses it.
 
+**The annotation, `@PlsqlMockScript`,** applies the scripts once the test's edition begins, before `@BeforeEach`: the
+class's first, then the method's, each one's locations (`value`, or its alias `scripts`), then its `scriptText`. The
+attributes say what a value is, as Spring's `@Sql` does, so nothing is guessed from the content. In a Spring test
+without `@EnablePlsqlMocks`, the listener that would apply it refuses it, since ignoring it would let the test run
+against the real objects.
+
 **Left aside:**
 
 - **Spring's `ScriptUtils`**, through `ResourceDatabasePopulator`: with `/` as the separator, it splits on any slash

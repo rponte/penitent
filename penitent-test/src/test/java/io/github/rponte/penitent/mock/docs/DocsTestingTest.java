@@ -89,6 +89,12 @@ class DocsTestingTest {
 	}
 
 	@Test
+	@DisplayName("testing.md: the @PlsqlMockScript example")
+	void script_annotation_example() {
+		TestKit.run(FreightItemsTest.class).assertStatistics(stats -> stats.started(1).succeeded(1));
+	}
+
+	@Test
 	@DisplayName("testing.md: the JUnit 5 example")
 	void junit_example() {
 		TestKit.run(CheckoutTest.class).assertStatistics(stats -> stats.started(1).succeeded(1));
