@@ -19,7 +19,7 @@ import io.github.rponte.penitent.mock.TestKit;
 @ExtendWith(TestKit.OnlyThroughTheTestKit.class)
 class FreightItemsTest {
 
-	static DataSource dataSource = PlsqlMocks.wrap(TestDatabase.pool());
+	static DataSource dataSource = PlsqlMocks.wrap(TestDatabase.lazyPool());
 
 	@RegisterExtension
 	static PlsqlMockExtension mocks = PlsqlMockExtension.on(() -> dataSource);

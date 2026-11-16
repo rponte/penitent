@@ -21,7 +21,7 @@ import io.github.rponte.penitent.mock.TestKit;
 @ExtendWith(TestKit.OnlyThroughTheTestKit.class)
 class CheckoutTest {
 
-	static DataSource pool = TestDatabase.pool();
+	static DataSource pool = TestDatabase.lazyPool();
 
 	// snippet: testing/junit
 	// the DataSource the application uses in tests, wrapped

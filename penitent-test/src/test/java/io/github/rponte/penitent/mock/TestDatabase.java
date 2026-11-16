@@ -45,6 +45,27 @@ public final class TestDatabase {
 		return pool;
 	}
 
+	/**
+	 * {@link #pool()}, reached on first use, for a static field of a sample class: JUnit reads such a field, to find
+	 * the extension in it, before it decides to skip the class, and the pool aborts the class on another database than
+	 * Oracle 23ai. {@code equals}, {@code hashCode} and {@code toString} answer without it.
+	 */
+	public static DataSource lazyPool() {
+		return (DataSource) java.lang.reflect.Proxy.newProxyInstance(TestDatabase.class.getClassLoader(),
+				new Class<?>[] { DataSource.class }, (proxy, method, args) -> switch (method.getName()) {
+					case "equals" -> proxy == args[0];
+					case "hashCode" -> System.identityHashCode(proxy);
+					case "toString" -> "the test pool, reached on first use";
+					default -> {
+						try {
+							yield method.invoke(pool(), args);
+						} catch (java.lang.reflect.InvocationTargetException e) {
+							throw e.getCause();
+						}
+					}
+				});
+	}
+
 	public static HikariDataSource newPool(String user) {
 		HikariDataSource dataSource = new HikariDataSource();
 		dataSource.setJdbcUrl(oracle.jdbcUrl());
