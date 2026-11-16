@@ -24,6 +24,14 @@ CREATE OR REPLACE TYPE freight_tags_t AS TABLE OF VARCHAR2(20)
 CREATE OR REPLACE TYPE freight_codes_v AS VARRAY(5) OF NUMBER
 /
 
+-- an object type with a DATE and a TIMESTAMP
+CREATE OR REPLACE TYPE freight_event_t AS OBJECT (
+  id         NUMBER,
+  happened   DATE,
+  stamped_at TIMESTAMP
+)
+/
+
 CREATE OR REPLACE TYPE freight_shipment_t AS OBJECT (
   code  VARCHAR2(10),
   item  freight_item_t,
@@ -60,6 +68,7 @@ CREATE OR REPLACE PACKAGE freights AS
   PROCEDURE load_item(p_id NUMBER, p_item OUT freight_item_t);
   FUNCTION count_items_of(p_uf VARCHAR2) RETURN NUMBER;
   FUNCTION ids_of(p_uf VARCHAR2) RETURN freight_ids_t;
+  FUNCTION event_of(p_id NUMBER) RETURN freight_event_t;
 END freights;
 /
 
@@ -199,6 +208,11 @@ CREATE OR REPLACE PACKAGE BODY freights AS
     l_ids(1) := 1;
     RETURN l_ids;
   END ids_of;
+
+  FUNCTION event_of(p_id NUMBER) RETURN freight_event_t IS
+  BEGIN
+    RETURN freight_event_t(p_id, NULL, NULL);
+  END event_of;
 END freights;
 /
 

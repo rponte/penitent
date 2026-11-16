@@ -7,6 +7,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 
@@ -46,6 +48,26 @@ class StubCompositesTest {
 		FreightItem find(BigDecimal pId);
 
 		List<BigDecimal> idsOf(String pUf);
+
+		FreightEvent eventOf(BigDecimal pId);
+	}
+
+	/** FREIGHT_EVENT_T, with the DATE read with its time. */
+	@PlsqlPackage("FREIGHTS")
+	interface Events {
+		FreightEvent eventOf(BigDecimal pId);
+	}
+
+	/** FREIGHT_EVENT_T, with the DATE read as a day. */
+	@PlsqlPackage("FREIGHTS")
+	interface Days {
+		FreightDay eventOf(BigDecimal pId);
+	}
+
+	record FreightEvent(Long id, LocalDateTime happened, LocalDateTime stampedAt) {
+	}
+
+	record FreightDay(Long id, LocalDate happened, LocalDateTime stampedAt) {
 	}
 
 	/** FREIGHT_ITEM_T, through a Java type that does not have its attribute UF. */
@@ -158,6 +180,29 @@ class StubCompositesTest {
 
 		assertThat(freights.shipmentOf("S2")).isEqualTo(new Shipment("S2", null, null, null, null));
 		assertThat(freights.itemsOf("SP")).containsExactly(new FreightItem(1L, null), null);
+	}
+
+	@Test
+	@DisplayName("a stub returns an object type with a DATE, with its time, and a TIMESTAMP, with its fraction")
+	void dates() {
+		Events mock = mocks.mock(Events.class);
+		FreightEvent event = new FreightEvent(1L, LocalDateTime.of(2017, 4, 5, 10, 20, 30),
+				LocalDateTime.of(2017, 4, 5, 10, 20, 30, 123_456_000));
+
+		when(mock.eventOf(BigDecimal.ONE)).thenReturn(event);
+
+		assertThat(PlsqlPackages.create(Events.class, dataSource).eventOf(BigDecimal.ONE)).isEqualTo(event);
+	}
+
+	@Test
+	@DisplayName("a stub returns an object type with a DATE from a LocalDate")
+	void day() {
+		Days mock = mocks.mock(Days.class);
+		FreightDay day = new FreightDay(1L, LocalDate.of(2017, 4, 5), LocalDateTime.of(2017, 4, 5, 0, 0));
+
+		when(mock.eventOf(BigDecimal.ONE)).thenReturn(day);
+
+		assertThat(PlsqlPackages.create(Days.class, dataSource).eventOf(BigDecimal.ONE)).isEqualTo(day);
 	}
 
 	@Test
