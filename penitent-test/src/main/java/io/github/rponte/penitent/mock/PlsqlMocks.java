@@ -204,10 +204,55 @@ public final class PlsqlMocks implements AutoCloseable {
 		return new Times(0);
 	}
 
-	/** Matches any value, {@code null} included. */
+	/**
+	 * Matches any value, {@code null} included. Not for a parameter of a primitive type: Java unboxes the
+	 * {@code null} it returns before the call reaches the mock; {@link #anyInt()} and the like are for those.
+	 */
 	public static <T> T any() {
 		Recording.matcher(new Matcher.Any());
 		return null;
+	}
+
+	/** {@link #any()}, for an {@code int} parameter: returns 0, which Java does not unbox. */
+	public static int anyInt() {
+		Recording.matcher(new Matcher.Any());
+		return 0;
+	}
+
+	/** {@link #any()}, for a {@code long} parameter. */
+	public static long anyLong() {
+		Recording.matcher(new Matcher.Any());
+		return 0L;
+	}
+
+	/** {@link #any()}, for a {@code short} parameter. */
+	public static short anyShort() {
+		Recording.matcher(new Matcher.Any());
+		return 0;
+	}
+
+	/** {@link #any()}, for a {@code byte} parameter. */
+	public static byte anyByte() {
+		Recording.matcher(new Matcher.Any());
+		return 0;
+	}
+
+	/** {@link #any()}, for a {@code double} parameter. */
+	public static double anyDouble() {
+		Recording.matcher(new Matcher.Any());
+		return 0d;
+	}
+
+	/** {@link #any()}, for a {@code float} parameter. */
+	public static float anyFloat() {
+		Recording.matcher(new Matcher.Any());
+		return 0f;
+	}
+
+	/** {@link #any()}, for a {@code boolean} parameter: returns {@code false}. */
+	public static boolean anyBoolean() {
+		Recording.matcher(new Matcher.Any());
+		return false;
 	}
 
 	/** Matches {@code value}; needed beside other matchers, since a call uses matchers for all of its arguments or none. */
