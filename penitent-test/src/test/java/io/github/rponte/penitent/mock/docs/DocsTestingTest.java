@@ -12,6 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 import javax.sql.DataSource;
 
@@ -24,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import io.github.rponte.penitent.PlsqlOut;
+import io.github.rponte.penitent.PlsqlPackage;
 import io.github.rponte.penitent.PlsqlPackages;
 import io.github.rponte.penitent.exception.PlsqlRoutineRaisedException;
 import io.github.rponte.penitent.mock.PlsqlMocks;
@@ -118,6 +120,19 @@ class DocsTestingTest {
 		// end-snippet
 	}
 
+	// snippet: testing/composite-interface
+	@PlsqlPackage("FREIGHTS")
+	public interface FreightItems {
+
+	    // FUNCTION items_of(p_uf VARCHAR2) RETURN freight_item_list_t
+	    List<FreightItem> itemsOf(String pUf);
+	}
+
+	// FREIGHT_ITEM_T: id NUMBER, uf VARCHAR2(2)
+	public record FreightItem(Long id, String uf) {
+	}
+	// end-snippet
+
 	/** The stubbing examples, each in a test of its own. */
 	@Nested
 	class Stubbing {
@@ -151,6 +166,19 @@ class DocsTestingTest {
 					PlsqlRoutineRaisedException.class, e -> assertThat(e.getCode()).isEqualTo(20200));
 			assertThatThrownBy(() -> application.calculate("SP", "AM")).isInstanceOfSatisfying(
 					PlsqlRoutineRaisedException.class, e -> assertThat(e.getCode()).isEqualTo(1403));
+		}
+
+		@Test
+		@DisplayName("testing.md: a stub that returns a collection of object types")
+		void composite() {
+			FreightItems freightItems = mocks.mock(FreightItems.class);
+
+			// snippet: testing/composite-stub
+			when(freightItems.itemsOf("SP")).thenReturn(List.of(new FreightItem(1L, "SP"), new FreightItem(2L, "CE")));
+			// end-snippet
+
+			assertThat(PlsqlPackages.create(FreightItems.class, dataSource).itemsOf("SP"))
+					.containsExactly(new FreightItem(1L, "SP"), new FreightItem(2L, "CE"));
 		}
 
 		@Test

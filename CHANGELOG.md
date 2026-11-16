@@ -6,6 +6,13 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `penitent-test`: a stub can return an object type or a collection, and set one as an `OUT`, with `thenReturn` and
+  `out(value)`, mapped as the application maps them. The value is written as a PL/SQL constructor, which Java and
+  PL/SQL calling the routine both get. A `RECORD`, a `%ROWTYPE` and an `INDEX BY` have no constructor, and are
+  refused before compiling.
+
 ### Fixed
 
 - `penitent-test`: a stub of a routine that takes an object type, a collection or a record no longer fails to

@@ -244,6 +244,34 @@ when(freights.calculate("SP", "AM")).thenRaise("NO_DATA_FOUND");
 when(() -> freights.quote(eq("CE"), out(new BigDecimal("99.99"))));
 ```
 
+**Return an object type or a collection.** `thenReturn` takes the same Java types the application calls the routine
+with, mapped the same way, `@PlsqlType`, `@PlsqlAttr` and the converters of the attributes included. For a function
+that returns a collection of an object type:
+
+<!-- snippet: testing/composite-interface -->
+```java
+@PlsqlPackage("FREIGHTS")
+public interface FreightItems {
+
+    // FUNCTION items_of(p_uf VARCHAR2) RETURN freight_item_list_t
+    List<FreightItem> itemsOf(String pUf);
+}
+
+// FREIGHT_ITEM_T: id NUMBER, uf VARCHAR2(2)
+public record FreightItem(Long id, String uf) {
+}
+```
+
+<!-- snippet: testing/composite-stub -->
+```java
+when(freightItems.itemsOf("SP")).thenReturn(List.of(new FreightItem(1L, "SP"), new FreightItem(2L, "CE")));
+```
+
+The stub answers with `FREIGHT_ITEM_LIST_T(FREIGHT_ITEM_T(1, 'SP'), FREIGHT_ITEM_T(2, 'CE'))`, to Java and to PL/SQL
+alike. Object types nest, collections can be empty, attributes and elements can be `null`, and an `OUT` of an object type
+or a collection is set the same way, with `out(value)`. A `RECORD`, a `%ROWTYPE` and an `INDEX BY` have no constructor
+in PL/SQL, so a stub cannot return them yet: it can `thenReturn(null)` or `thenThrow`.
+
 **Match arguments.** A plain value matches itself; `eq`, `any` and `isNull` work as in Mockito. When several stubs
 match a call, the last one wins, so write the general ones first:
 
@@ -359,8 +387,9 @@ try (PlsqlMocks mocks = PlsqlMocks.on(dataSource)) {
 - **In Spring, inject `DataSource`, not the pool's type,** such as `HikariDataSource`: the bean is wrapped. Use
   `unwrap` to reach the pool.
 - **What can be stubbed, so far:** routines declared in a package spec, in the test user's schema, answering with
-  scalar values. A parameter of an object type, a collection or a record is matched with `any()` only, and a stub
-  cannot return one yet. A private routine has no method to stub it through, and a wrapped body cannot be read.
+  scalars, object types and collections. A parameter of an object type, a collection or a record is matched with
+  `any()` only, and a stub cannot return a `RECORD`, a `%ROWTYPE` or an `INDEX BY` yet. A private routine has no
+  method to stub it through, and a wrapped body cannot be read.
 
 ## Seeing what the mocks do
 

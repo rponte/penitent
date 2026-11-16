@@ -145,12 +145,16 @@ public final class MockSession implements RowTypes {
 		return (T) Proxy.newProxyInstance(type.getClassLoader(), new Class<?>[] { type }, new MockHandler(this, type));
 	}
 
-	/** Adds {@code stub}, or replaces it when it is the same object, and compiles its package again. */
-	public void stub(Stub stub, Stub replaced) {
+	/**
+	 * Adds {@code stub}, or replaces {@code replaced} with it, and compiles its package again. Gives back the stub as it
+	 * is kept, with its object types and collections written as PL/SQL: that is the one to replace next time.
+	 */
+	public Stub stub(Stub stub, Stub replaced) {
 		requireBegun();
 		long start = System.nanoTime();
 		RoutineMetadata routine = routineOf(stub.invocation());
 		requireMatchable(routine, byParameter(routine, stub.invocation()));
+		stub = written(stub, routine);
 		String pkg = packageOf(routine);
 		List<Stub> stubs = stubsByPackage.computeIfAbsent(pkg, k -> new ArrayList<>());
 		int index = replaced == null ? -1 : stubs.indexOf(replaced);
@@ -168,6 +172,70 @@ public final class MockSession implements RowTypes {
 		}
 		MockLog.stubbed(MockLog.call(routine.qualifiedName(), stub.invocation().matchers()), stub.action(), start);
 		MockLog.generated(generated);
+		return stub;
+	}
+
+	/**
+	 * {@code stub}, with the object type or collection it returns, and those it sets as OUT values, written as PL/SQL
+	 * constructors. The core encodes each value as a call would send it, so the mapping is the one the application
+	 * uses, {@code @PlsqlType}, {@code @PlsqlAttr} and converters included, and the constructor is written from what
+	 * the driver holds. A RECORD, a {@code %ROWTYPE} and an {@code INDEX BY} have no constructor, and are refused.
+	 */
+	private Stub written(Stub stub, RoutineMetadata routine) {
+		Invocation invocation = stub.invocation();
+		Stub.Action action = stub.action();
+		boolean returnsComposite = action instanceof Stub.Return returned && returned.function()
+				&& returned.value() != null && BodyRewriter.composite(routine.returnValue().orElseThrow());
+		List<Matcher> matchers = new ArrayList<>(invocation.matchers());
+		Map<Integer, RoutineMetadata.Argument> outs = new LinkedHashMap<>();
+		for (int i = 0; i < matchers.size(); i++) {
+			RoutineMetadata.Argument parameter = parameterAt(routine, invocation.method(), i);
+			if (matchers.get(i) instanceof Matcher.Out out && out.value() != null && BodyRewriter.composite(parameter)) {
+				outs.put(i, parameter);
+			}
+		}
+		if (!returnsComposite && outs.isEmpty()) {
+			return stub;
+		}
+		Object describer = describerOf(invocation.mock().type());
+		try (Connection connection = connection()) {
+			if (returnsComposite) {
+				action = new Stub.Return(write(describer, invocation.method(), routine,
+						routine.returnValue().orElseThrow(), ((Stub.Return) action).value(), connection), true);
+			}
+			for (Map.Entry<Integer, RoutineMetadata.Argument> out : outs.entrySet()) {
+				matchers.set(out.getKey(), new Matcher.Out(write(describer, invocation.method(), routine,
+						out.getValue(), ((Matcher.Out) matchers.get(out.getKey())).value(), connection)));
+			}
+		} catch (SQLException e) {
+			throw new IllegalStateException("failed to write the stub of " + routine.qualifiedName() + " as PL/SQL: "
+					+ e.getMessage(), e);
+		}
+		return new Stub(new Invocation(invocation.mock(), invocation.method(), List.copyOf(matchers)), action);
+	}
+
+	private static PlsqlLiterals.Written write(Object describer, Method method, RoutineMetadata routine,
+			RoutineMetadata.Argument target, Object value, Connection connection) throws SQLException {
+		String what = target.name() == null ? "the value it returns" : target.name();
+		if ("PL/SQL RECORD".equals(target.dataType())) {
+			throw new IllegalStateException(routine.qualifiedName() + ": " + what + " is a RECORD or a %ROWTYPE, which"
+					+ " the mocks cannot write yet, since PL/SQL has no constructor for it: they write object types and"
+					+ " collections; stub it with thenReturn(null) or thenThrow");
+		}
+		if ("PL/SQL TABLE".equals(target.dataType())) {
+			throw new IllegalStateException(routine.qualifiedName() + ": " + what + " is an INDEX BY collection, which"
+					+ " has no constructor, so the mocks cannot write it: they write nested tables and VARRAYs");
+		}
+		return PlsqlLiterals.constructor(Views.handlerOf(describer).encode(method, target, value, connection));
+	}
+
+	/** The parameter the {@code index}-th Java argument binds to, as the call would bind it. */
+	private static RoutineMetadata.Argument parameterAt(RoutineMetadata routine, Method method, int index) {
+		if (!routine.byName()) {
+			return routine.parameters().get(index);
+		}
+		String name = RoutineMetadata.oracleNameOf(method, method.getParameters()[index]);
+		return routine.parameters().stream().filter(p -> p.name().equals(name)).findFirst().orElseThrow();
 	}
 
 	/** Compiles the package's body with its stubs, and gives the PL/SQL generated for {@code any}'s routine. */
@@ -330,17 +398,14 @@ public final class MockSession implements RowTypes {
 	/**
 	 * An argument of an object type, a collection or a record is matched with {@code any()} only, so far: no PL/SQL
 	 * literal stands for its value, and a recorded call does not hold it. Anything else is refused now, rather than
-	 * failing to compile, or counting calls wrong.
+	 * failing to compile, or counting calls wrong. An OUT value of one is set, not matched: see {@link #written}.
 	 */
 	private static void requireMatchable(RoutineMetadata routine, Map<String, Matcher> byParameter) {
 		for (RoutineMetadata.Argument parameter : routine.parameters()) {
 			Matcher matcher = byParameter.get(parameter.name());
-			if (matcher == null || matcher instanceof Matcher.Any || !BodyRewriter.composite(parameter)) {
+			if (matcher == null || matcher instanceof Matcher.Any || matcher instanceof Matcher.Out
+					|| !BodyRewriter.composite(parameter)) {
 				continue;
-			}
-			if (matcher instanceof Matcher.Out) {
-				throw new IllegalStateException(routine.qualifiedName() + ": " + parameter.name() + " is an OUT of "
-						+ parameter.dataType() + ", which the mocks cannot set yet: they set OUT values of scalars only");
 			}
 			throw new IllegalStateException(routine.qualifiedName() + ": " + parameter.name() + " is of "
 					+ parameter.dataType() + ", which the mocks match with any() only, so far: write any() for it,"
