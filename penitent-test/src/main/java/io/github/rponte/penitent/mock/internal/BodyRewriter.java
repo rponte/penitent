@@ -13,6 +13,8 @@ import org.antlr.v4.runtime.ParserRuleContext;
 import ch.islandsql.grammar.IslandSqlDocument;
 import ch.islandsql.grammar.IslandSqlParser.FunctionDefinitionContext;
 import ch.islandsql.grammar.IslandSqlParser.ParameterDeclarationContext;
+import ch.islandsql.grammar.IslandSqlParser.PlsqlFunctionSourceContext;
+import ch.islandsql.grammar.IslandSqlParser.PlsqlProcedureSourceContext;
 import ch.islandsql.grammar.IslandSqlParser.ProcedureDefinitionContext;
 
 import io.github.rponte.penitent.internal.metadata.RoutineMetadata;
@@ -149,6 +151,9 @@ final class BodyRewriter {
 		List<ParserRuleContext> definitions = new ArrayList<>();
 		definitions.addAll(document.getAllContentsOfType(FunctionDefinitionContext.class));
 		definitions.addAll(document.getAllContentsOfType(ProcedureDefinitionContext.class));
+		// a standalone routine is a CREATE of its own, whose source has a declare section and a body as well
+		definitions.addAll(document.getAllContentsOfType(PlsqlFunctionSourceContext.class));
+		definitions.addAll(document.getAllContentsOfType(PlsqlProcedureSourceContext.class));
 		List<ParserRuleContext> matching = definitions.stream()
 				.filter(definition -> identifier(nameOf(definition)).equals(routine.routineName()))
 				.filter(definition -> parametersOf(definition).stream()
@@ -166,24 +171,46 @@ final class BodyRewriter {
 	}
 
 	private static String nameOf(ParserRuleContext definition) {
-		return definition instanceof FunctionDefinitionContext function
-				? function.functionHeading().functionName.getText()
-				: ((ProcedureDefinitionContext) definition).procedureHeading().procedure.getText();
+		if (definition instanceof FunctionDefinitionContext function) {
+			return function.functionHeading().functionName.getText();
+		}
+		if (definition instanceof ProcedureDefinitionContext procedure) {
+			return procedure.procedureHeading().procedure.getText();
+		}
+		return definition instanceof PlsqlFunctionSourceContext function ? function.functionName.getText()
+				: ((PlsqlProcedureSourceContext) definition).procedureName.getText();
 	}
 
 	private static List<ParameterDeclarationContext> parametersOf(ParserRuleContext definition) {
-		return definition instanceof FunctionDefinitionContext function
-				? function.functionHeading().parameterDeclaration()
-				: ((ProcedureDefinitionContext) definition).procedureHeading().parameterDeclaration();
+		if (definition instanceof FunctionDefinitionContext function) {
+			return function.functionHeading().parameterDeclaration();
+		}
+		if (definition instanceof ProcedureDefinitionContext procedure) {
+			return procedure.procedureHeading().parameterDeclaration();
+		}
+		return definition instanceof PlsqlFunctionSourceContext function ? function.parameterDeclaration()
+				: ((PlsqlProcedureSourceContext) definition).parameterDeclaration();
 	}
 
 	private static ParserRuleContext declareSectionOf(ParserRuleContext definition) {
-		return definition instanceof FunctionDefinitionContext function ? function.declareSection()
-				: ((ProcedureDefinitionContext) definition).declareSection();
+		if (definition instanceof FunctionDefinitionContext function) {
+			return function.declareSection();
+		}
+		if (definition instanceof ProcedureDefinitionContext procedure) {
+			return procedure.declareSection();
+		}
+		return definition instanceof PlsqlFunctionSourceContext function ? function.declareSection()
+				: ((PlsqlProcedureSourceContext) definition).declareSection();
 	}
 
 	private static ParserRuleContext bodyOf(ParserRuleContext definition) {
-		return definition instanceof FunctionDefinitionContext function ? function.body()
-				: ((ProcedureDefinitionContext) definition).body();
+		if (definition instanceof FunctionDefinitionContext function) {
+			return function.body();
+		}
+		if (definition instanceof ProcedureDefinitionContext procedure) {
+			return procedure.body();
+		}
+		return definition instanceof PlsqlFunctionSourceContext function ? function.body()
+				: ((PlsqlProcedureSourceContext) definition).body();
 	}
 }

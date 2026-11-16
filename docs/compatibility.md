@@ -418,6 +418,7 @@ With `penitent-test`, measured on Oracle 23ai only, as [Testing](testing.md#mock
 | A stub of a procedure sets its `OUT` value; matchers `eq`, `any` and `isNull`, the last stub that matches winning; a call mixing matchers and values refused | Validated |
 | `anyInt()`, `anyLong()`, `anyShort()`, `anyByte()`, `anyDouble()`, `anyFloat()` and `anyBoolean()` for parameters of primitive types, in a stub of a function and of a procedure, and in `verify` | Validated |
 | `thenRaise` and `doRaise` of each of the 23 predefined exceptions of `STANDARD`, with its Oracle code, five of them as `PlsqlExecutionException`; of an exception declared in the spec of the mocked package and of another, caught by name; uncaught, as `ORA-06510`; a declared exception that does not exist, reported naming it | Validated |
+| A stub of a standalone function and of a standalone procedure, from an interface with `@PlsqlSchema`: values, matchers, `OUT` values, errors and `verify`; PL/SQL calling them gets the stub, other sessions the real routine; gone with the edition; a script replacing one; a stub and a script on the same routine, one of another schema and a wrapped one, refused | Validated |
 | `doNothing()`, `doThrow()`, `doRaise()` and `doReturn()`: a procedure setting its `OUT` values or raising, compiled once; a function returning, the last stub that matches winning; `verify` after them; `doNothing()` on a function, `doReturn()` on a procedure, a `doXxx().when(mock)` with no call after it, and something that is not a mock, refused | Validated |
 | A routine taking a collection of an object type or an object type: its stub compiles, `any()` matches it in the stub and in `verify`, and the stub answers; a value or `isNull()` on such a parameter refused; a routine taking a `%ROWTYPE`: its stub compiles | Validated |
 | A `%ROWTYPE` in the test's edition, through a subtype compiled there: as an argument, of a real routine and of a stubbed one; as a return value; a collection of them, in and back; in Spring's transaction; again in the next test's edition, with nothing left after it; of a table of another schema, without editions, with nothing created in it; a package per table, numbered, created once, also for a block that writes the name in lowercase; with drivers 23, 21 and 19 | Validated |
@@ -443,8 +444,11 @@ With `penitent-test`, measured on Oracle 23ai only, as [Testing](testing.md#mock
 
 - Oracle 18c and older, such as 12c.
 - `penitent-test` on Oracle 21c and 19c, and stubs of booleans and `LocalDateTime`.
-- A script that replaces a package spec, a function, a procedure or a synonym in the test's edition: the tests replace
-  views and package bodies.
+- A script that replaces a package spec or a synonym in the test's edition: the tests replace views, package bodies
+  and standalone functions.
+- A stub of a standalone routine in a schema that does not edition its type, refused saying what to run: not run by a
+  test, since editions cannot be undone in the test database; nor a standalone routine with `AUTHID`,
+  `DETERMINISTIC`, `RESULT_CACHE`, `PIPELINED` or `PARALLEL_ENABLE`, which IslandSQL parsed in a one-off probe.
 - `ENABLE EDITIONS FOR VIEW` with a materialized view reading one of the schema's views: `ORA-38819`, and with `FORCE`
   the materialized view left `INVALID`, measured once by hand, not by a test that runs.
 - A stub that returns an object type or a collection, in cases its tests do not cover:
