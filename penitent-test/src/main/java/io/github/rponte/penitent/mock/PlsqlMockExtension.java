@@ -1,5 +1,7 @@
 package io.github.rponte.penitent.mock;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.function.Supplier;
 
@@ -10,6 +12,9 @@ import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.ParameterContext;
 import org.junit.jupiter.api.extension.ParameterResolver;
+import org.junit.platform.commons.support.AnnotationSupport;
+
+import io.github.rponte.penitent.mock.internal.AnnotatedScripts;
 
 /**
  * {@link PlsqlMocks} for JUnit 5: each test gets an edition of its own, created before its {@code @BeforeEach}
@@ -58,6 +63,12 @@ public final class PlsqlMockExtension implements BeforeEachCallback, AfterEachCa
 		PlsqlMocks mocks = PlsqlMocks.on(dataSource.get());
 		mocks.begin();
 		current = mocks;
+		// the class's first, then the method's; a failure here still ends the mocks, in afterEach
+		List<PlsqlMockScript> scripts = new ArrayList<>(
+				AnnotationSupport.findRepeatableAnnotations(context.getRequiredTestClass(), PlsqlMockScript.class));
+		scripts.addAll(AnnotationSupport.findRepeatableAnnotations(context.getRequiredTestMethod(), PlsqlMockScript.class));
+		AnnotatedScripts.apply(mocks, scripts, context.getRequiredTestClass().getSimpleName() + "."
+				+ context.getRequiredTestMethod().getName());
 	}
 
 	@Override

@@ -330,6 +330,25 @@ From there on, the test sees those two rows, from Java and from PL/SQL, and ever
 script goes with the edition when the test ends, and it runs on a connection of the mocks' own, so it commits nothing
 of the test's transaction.
 
+**Or with an annotation.** `@PlsqlMockScript` applies its scripts when the test's edition begins, before
+`@BeforeEach`, with the JUnit 5 extension and with `@EnablePlsqlMocks`:
+
+<!-- snippet: testing/script-annotation -->
+```java
+@Test
+@PlsqlMockScript("/mocks/freight-items-v.sql")
+void sees_the_items_of_the_script() {
+    Integer items = jdbc.queryForObject("SELECT COUNT(*) FROM freight_items_v WHERE uf = 'SP'", Integer.class);
+
+    assertThat(items).isEqualTo(2);
+}
+```
+
+On the test class, it applies to every test, before the method's own. It may be repeated, and each one applies in its
+order. `value`, or its alias `scripts`, holds locations, and `scriptText` a script as text, applied after them; one
+that holds neither is refused. In a Spring test without `@EnablePlsqlMocks`, it is refused rather than ignored. With
+any other test framework, which has no extension, call `applyScript` in the test's setup.
+
 - **Where the script comes from:** the classpath, as above or with `classpath:`; the file system, with `file:` or a
   `Path`; an `InputStream`, which stays open; or text, with `applyScriptText`, in the same format as a file.
   `applyScript` takes only a location: SQL given to it is refused, pointing to `applyScriptText`.

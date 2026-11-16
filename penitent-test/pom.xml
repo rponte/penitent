@@ -142,6 +142,7 @@
 								<include>**/PlsqlMocksTest.java</include>
 								<include>**/PlsqlMocksLifecycleTest.java</include>
 								<include>**/PlsqlMockExtensionTest.java</include>
+								<include>**/PlsqlMockScriptExtensionTest.java</include>
 							</includes>
 							<classpathDependencyExcludes>
 								<classpathDependencyExclude>org.springframework:*</classpathDependencyExclude>

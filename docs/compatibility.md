@@ -420,6 +420,7 @@ With `penitent-test`, measured on Oracle 23ai only, as [Testing](testing.md#mock
 | A `%ROWTYPE` in the test's edition, through a subtype compiled there: as an argument, of a real routine and of a stubbed one; as a return value; a collection of them, in and back; in Spring's transaction; again in the next test's edition, with nothing left after it; of a table of another schema, without editions, with nothing created in it; a package per table, numbered, created once, also for a block that writes the name in lowercase; with drivers 23, 21 and 19 | Validated |
 | A stub returns an object type, with a `DATE` from a `LocalDate` or a `LocalDateTime` and a `TIMESTAMP` with its fraction, a collection of object types, of text and a `VARRAY` of numbers, an object type holding an object type and collections, empty collections and `null` attributes and elements; PL/SQL calling the routine gets it; a procedure's stub sets an `OUT` of an object type; a `RECORD`, `%ROWTYPE` or `INDEX BY` returned, and a Java type that does not fit, refused before compiling | Validated |
 | A script in the test's edition, from the classpath, `file:`, a `Path`, an `InputStream` or text: a view and a package body replaced, seen only in the edition and gone with it; nothing of the test's transaction committed; a table, DML, `DROP`, `ALTER`, another schema and a type the schema does not edition refused before any statement runs; compilation errors reported; a package with stubs and a script refused, in either order | Validated |
+| `@PlsqlMockScript` with the JUnit 5 extension, also without Spring, and with `@EnablePlsqlMocks` in a transactional test: the class's scripts in every test, then the method's, repeated in their order, before `@BeforeEach`; one with no script, and one with different `value` and `scripts`, refused; in Spring without `@EnablePlsqlMocks`, refused | Validated |
 | Several stubs of the same routine: different arguments each answered; the same arguments twice, the later one wins; a second answer on the same stub replaces the first | Validated |
 | A call no stub matches fails with `ORA-20999`, naming the routine and showing the arguments | Validated |
 | The rest of the package stays real: other routines, private ones, other overloads; a real routine calling the stubbed one, in the same package or another, gets the mock; outside the test's edition, the routine is real | Validated |
@@ -441,6 +442,7 @@ With `penitent-test`, measured on Oracle 23ai only, as [Testing](testing.md#mock
 - `penitent-test` on Oracle 21c and 19c, and stubs of booleans and `LocalDateTime`.
 - A script that replaces a package spec, a function, a procedure or a synonym in the test's edition: the tests replace
   views and package bodies.
+- `@PlsqlMockScript` on the enclosing class of a JUnit 5 `@Nested` test, on a superclass, or as a meta-annotation.
 - `ENABLE EDITIONS FOR VIEW` with a materialized view reading one of the schema's views: `ORA-38819`, and with `FORCE`
   the materialized view left `INVALID`, measured once by hand, not by a test that runs.
 - A stub that returns an object type or a collection, in cases its tests do not cover:
