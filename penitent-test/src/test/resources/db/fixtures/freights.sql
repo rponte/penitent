@@ -75,6 +75,8 @@ CREATE OR REPLACE PACKAGE freights AS
   FUNCTION ids_of(p_uf VARCHAR2) RETURN freight_ids_t;
   FUNCTION event_of(p_id NUMBER) RETURN freight_event_t;
   FUNCTION count_view_items(p_uf VARCHAR2) RETURN NUMBER;
+  FUNCTION describe_flag(p_flag BOOLEAN) RETURN VARCHAR2;
+  PROCEDURE integrate(p_operation NUMBER, p_name VARCHAR2);
 END freights;
 /
 
@@ -227,6 +229,17 @@ CREATE OR REPLACE PACKAGE BODY freights AS
     SELECT COUNT(*) INTO l_count FROM freight_items_v WHERE uf = p_uf;
     RETURN l_count;
   END count_view_items;
+
+  -- take primitives in Java: a BOOLEAN, and a number with a name
+  FUNCTION describe_flag(p_flag BOOLEAN) RETURN VARCHAR2 IS
+  BEGIN
+    RETURN CASE WHEN p_flag THEN 'yes' ELSE 'no' END;
+  END describe_flag;
+
+  PROCEDURE integrate(p_operation NUMBER, p_name VARCHAR2) IS
+  BEGIN
+    NULL;
+  END integrate;
 END freights;
 /
 

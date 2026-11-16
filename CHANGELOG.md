@@ -6,6 +6,12 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `penitent-test`: `anyInt()`, `anyLong()`, `anyShort()`, `anyByte()`, `anyDouble()`, `anyFloat()` and `anyBoolean()`
+  match any value of a parameter of a primitive type, in a stub and in `verify`. `any()` returns `null`, which Java
+  unboxes before the call reaches the mock, and failed with a `NullPointerException`.
+
 ## [0.30.0]
 
 The mocks reach further. A stub answers with object types and collections, a routine that takes or returns a

@@ -275,8 +275,10 @@ constructor in PL/SQL, so a stub cannot return them yet: it can `thenReturn(null
 declared on the method, `@PlsqlConvert` on it, does not apply to what a stub returns; those of the attributes do. The
 [compatibility page](compatibility.md#not-measured) lists what the tests of this do not cover yet.
 
-**Match arguments.** A plain value matches itself; `eq`, `any` and `isNull` work as in Mockito. When several stubs
-match a call, the last one wins, so write the general ones first:
+**Match arguments.** A plain value matches itself; `eq`, `any` and `isNull` work as in Mockito. A parameter of a
+primitive type, such as `int`, takes `anyInt()`, and likewise `anyLong()`, `anyShort()`, `anyByte()`, `anyDouble()`,
+`anyFloat()` and `anyBoolean()`: `any()` returns `null`, which Java unboxes before the call reaches the mock, failing
+with a `NullPointerException`. When several stubs match a call, the last one wins, so write the general ones first:
 
 <!-- snippet: testing/matchers -->
 ```java
