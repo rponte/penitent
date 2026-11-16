@@ -213,7 +213,7 @@ On a database shared by your team or your CI, apply the scripts as your migratio
 [Preparing a shared test database](#preparing-a-shared-test-database) shows. If anything is missing when a test
 begins, it fails with a message that says what, and how to fix it.
 
-> **Measured on Oracle 23ai.** Oracle 21c and 19c are not measured yet.
+> **Measured on Oracle 23ai and 21c,** with drivers 23, 21 and 19. Oracle 19c is not measured yet.
 
 ### Stubbing a routine
 

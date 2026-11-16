@@ -147,6 +147,22 @@ class PrimitiveMatchersTest {
 	}
 
 	@Test
+	@DisplayName("verify counts the calls of a BOOLEAN argument by its value, and a stub matches it by value")
+	void boolean_by_value() {
+		Flags mock = mocks.mock(Flags.class);
+		when(mock.describeFlag(true)).thenReturn("on");
+		when(mock.describeFlag(false)).thenReturn("off");
+
+		assertThat(real(Flags.class).describeFlag(true)).isEqualTo("on");
+		assertThat(real(Flags.class).describeFlag(true)).isEqualTo("on");
+		assertThat(real(Flags.class).describeFlag(false)).isEqualTo("off");
+
+		verify(mock, times(2)).describeFlag(true);
+		verify(mock, times(1)).describeFlag(false);
+		verify(mock, times(3)).describeFlag(anyBoolean());
+	}
+
+	@Test
 	@DisplayName("a procedure taking an int, stubbed for any operation, with the other argument matched by value")
 	void procedure() {
 		doThrow(-20300, "not integrated").when(mocks.mock(Flags.class)).integrate(anyInt(), eq("VERBA"));
