@@ -33,8 +33,8 @@ public final class TestDatabase {
 
 	/** The pool of the test user, as an application has it: not wrapped. */
 	public static synchronized DataSource pool() {
-		// measured on Oracle 23ai only, so far: architecture decision 0001 lists 21c and 19c as open questions
-		Assumptions.assumeTrue(IMAGE.contains("oracle-free"), "the mocks are measured on Oracle 23ai only, so far");
+		// measured on Oracle 23ai and 21c, so far: 19c, on the Autonomous Database image, is still open (issue #53)
+		Assumptions.assumeFalse(IMAGE.contains("adb-free"), "the mocks are not measured on Oracle 19c yet");
 		if (pool == null) {
 			oracle = OracleUnderTest.start(IMAGE);
 			pool = newPool(OracleUnderTest.USER);

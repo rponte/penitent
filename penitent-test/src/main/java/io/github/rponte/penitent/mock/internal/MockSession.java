@@ -450,7 +450,7 @@ public final class MockSession implements RowTypes {
 			if (!parameter.isIn()) {
 				continue;
 			}
-			Matcher matcher = byParameter.get(parameter.name());
+			Matcher matcher = recordedAs(parameter, byParameter.get(parameter.name()));
 			String check = matcher == null ? null
 					: matcher.condition("JSON_VALUE(ARGS, '$[" + index + "]' RETURNING " + jsonType(parameter) + ")");
 			if (check != null) {
@@ -510,6 +510,17 @@ public final class MockSession implements RowTypes {
 			throw new IllegalStateException(routine.qualifiedName() + " has no stub in this test, so its calls are not"
 					+ " recorded: only a stubbed routine records them, and verify can only count those");
 		}
+	}
+
+	/**
+	 * The matcher against the recorded value: a BOOLEAN is recorded as 'true' or 'false', since only Oracle 23ai takes
+	 * a BOOLEAN into SQL, so its value is compared as that text, not as the literal TRUE.
+	 */
+	private static Matcher recordedAs(RoutineMetadata.Argument parameter, Matcher matcher) {
+		if (parameter.isBoolean() && matcher instanceof Matcher.Equal equal && equal.value() instanceof Boolean flag) {
+			return new Matcher.Equal(flag ? "true" : "false");
+		}
+		return matcher;
 	}
 
 	private static String jsonType(RoutineMetadata.Argument parameter) {

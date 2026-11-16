@@ -1,7 +1,7 @@
 # 0001. Mocking PL/SQL in integration tests with editions
 
 - **Status:** Accepted, 2026-11-11. The core, the JUnit 5 extension and the Spring Test support are implemented and
-  measured on Oracle 23ai; the module's tests are skipped on other versions until they are measured.
+  measured on Oracle 23ai and 21c; the module's tests are skipped on 19c until it is measured.
 - **Module:** `penitent-test`.
 
 ## Context
@@ -579,6 +579,8 @@ API of its own for views. Object types need
   care: enabling editions for a type that a table uses fails (`ORA-38819`), and forcing it leaves the table invalid,
   as an earlier measurement showed.
 
-- Oracle 21c and 19c, including whether `ADMIN` can enable editions on the Autonomous Database image used for 19c.
+- Oracle 19c, including whether `ADMIN` can enable editions on the Autonomous Database image used for 19c. Oracle
+  21c, measured: the one difference was a `BOOLEAN` argument, which a call recorded through SQL, where only 23ai takes
+  one; it is now written as `'true'` or `'false'` in PL/SQL first, on every version.
 - Spy mode: running the original body, as a nested block, when no stub matches.
 - Packages in another schema, and how much privilege that asks for.

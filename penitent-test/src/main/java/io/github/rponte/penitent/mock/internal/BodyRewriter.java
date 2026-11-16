@@ -89,14 +89,27 @@ final class BodyRewriter {
 		String qualified = routine.qualifiedName();
 		List<RoutineMetadata.Argument> recorded = routine.parameters().stream()
 				.filter(RoutineMetadata.Argument::isIn).toList();
-		StringBuilder code = new StringBuilder("\n    l_penitent_args VARCHAR2(4000);\n  BEGIN\n");
+		StringBuilder code = new StringBuilder("\n    l_penitent_args VARCHAR2(4000);\n");
+		// a BOOLEAN goes into SQL only from Oracle 23ai on: before JSON_ARRAY, PL/SQL writes it as 'true' or 'false'
+		for (int i = 0; i < recorded.size(); i++) {
+			if (recorded.get(i).isBoolean()) {
+				code.append("    l_penitent_flag_").append(i + 1).append(" VARCHAR2(5) := CASE WHEN ")
+						.append(recorded.get(i).name()).append(" THEN 'true' WHEN NOT ").append(recorded.get(i).name())
+						.append(" THEN 'false' END;\n");
+			}
+		}
+		code.append("  BEGIN\n");
 		if (recorded.isEmpty()) {
 			code.append("    l_penitent_args := '[]';\n");
 		} else {
 			StringJoiner arguments = new StringJoiner(", ", "    SELECT JSON_ARRAY(", " NULL ON NULL) INTO l_penitent_args"
 					+ " FROM DUAL;\n");
 			// JSON_ARRAY takes scalars: an object type, a collection or a record is marked, keeping each one's position
-			recorded.forEach(argument -> arguments.add(composite(argument) ? "'" + NOT_RECORDED + "'" : argument.name()));
+			for (int i = 0; i < recorded.size(); i++) {
+				RoutineMetadata.Argument argument = recorded.get(i);
+				arguments.add(composite(argument) ? "'" + NOT_RECORDED + "'"
+						: argument.isBoolean() ? "l_penitent_flag_" + (i + 1) : argument.name());
+			}
 			code.append(arguments);
 		}
 		code.append("    PENITENT_MOCK.record('").append(callKey(routine)).append("', l_penitent_args);\n");

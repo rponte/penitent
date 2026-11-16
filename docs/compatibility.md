@@ -409,7 +409,9 @@ Where the PL/SQL guarantees the value is never `null`, driver 23 works as it is.
 
 ## Mocking PL/SQL in tests
 
-With `penitent-test`, measured on Oracle 23ai only, as [Testing](testing.md#mocking-a-routine) shows.
+With `penitent-test`, measured on Oracle 23ai and 21c, as [Testing](testing.md#mocking-a-routine) shows. A `BOOLEAN`
+argument goes into SQL only from 23ai on, so a call records it as `'true'` or `'false'`, and `verify` compares it as
+that text, on every version.
 
 | Situation | Status |
 |---|---|
@@ -417,6 +419,7 @@ With `penitent-test`, measured on Oracle 23ai only, as [Testing](testing.md#mock
 | A stub raises an application error or a predefined exception, which arrives as `PlsqlRoutineRaisedException` | Validated |
 | A stub of a procedure sets its `OUT` value; matchers `eq`, `any` and `isNull`, the last stub that matches winning; a call mixing matchers and values refused | Validated |
 | `anyInt()`, `anyLong()`, `anyShort()`, `anyByte()`, `anyDouble()`, `anyFloat()` and `anyBoolean()` for parameters of primitive types, in a stub of a function and of a procedure, and in `verify` | Validated |
+| A `BOOLEAN` argument, on 23ai and 21c: a stub matching it by value and with `anyBoolean()`, and `verify` counting its calls by value | Validated |
 | `thenRaise` and `doRaise` of each of the 23 predefined exceptions of `STANDARD`, with its Oracle code, five of them as `PlsqlExecutionException`; of an exception declared in the spec of the mocked package and of another, caught by name; uncaught, as `ORA-06510`; a declared exception that does not exist, reported naming it | Validated |
 | A stub of a standalone function and of a standalone procedure, from an interface with `@PlsqlSchema`: values, matchers, `OUT` values, errors and `verify`; PL/SQL calling them gets the stub, other sessions the real routine; gone with the edition; a script replacing one; a stub and a script on the same routine, one of another schema and a wrapped one, refused | Validated |
 | `doNothing()`, `doThrow()`, `doRaise()` and `doReturn()`: a procedure setting its `OUT` values or raising, compiled once; a function returning, the last stub that matches winning; `verify` after them; `doNothing()` on a function, `doReturn()` on a procedure, a `doXxx().when(mock)` with no call after it, and something that is not a mock, refused | Validated |
@@ -443,7 +446,7 @@ With `penitent-test`, measured on Oracle 23ai only, as [Testing](testing.md#mock
 ## Not measured
 
 - Oracle 18c and older, such as 12c.
-- `penitent-test` on Oracle 21c and 19c, and stubs of booleans and `LocalDateTime`.
+- `penitent-test` on Oracle 19c, and stubs returning a boolean or a `LocalDateTime`.
 - A script that replaces a package spec or a synonym in the test's edition: the tests replace views, package bodies
   and standalone functions.
 - A stub of a standalone routine in a schema that does not edition its type, refused saying what to run: not run by a

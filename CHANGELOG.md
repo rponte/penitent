@@ -38,6 +38,12 @@ All notable changes to this project are listed here. The format follows
   match any value of a parameter of a primitive type, in a stub and in `verify`. `any()` returns `null`, which Java
   unboxes before the call reaches the mock, and failed with a `NullPointerException`.
 
+### Fixed
+
+- `penitent-test`: on Oracle 21c, a stub of a routine with a `BOOLEAN` parameter failed to compile, with
+  `PLS-00382`: the call was recorded through SQL, which takes a `BOOLEAN` only from 23ai on. It is now recorded as
+  `'true'` or `'false'`, and `verify` compares it as that text, on every version. The mocks are now measured on 21c.
+
 ## [0.30.0]
 
 The mocks reach further. A stub answers with object types and collections, a routine that takes or returns a
