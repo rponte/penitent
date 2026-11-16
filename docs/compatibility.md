@@ -417,6 +417,7 @@ With `penitent-test`, measured on Oracle 23ai only, as [Testing](testing.md#mock
 | A stub raises an application error or a predefined exception, which arrives as `PlsqlRoutineRaisedException` | Validated |
 | A stub of a procedure sets its `OUT` value; matchers `eq`, `any` and `isNull`, the last stub that matches winning; a call mixing matchers and values refused | Validated |
 | A routine taking a collection of an object type or an object type: its stub compiles, `any()` matches it in the stub and in `verify`, and the stub answers; a value or `isNull()` on such a parameter refused; a routine taking a `%ROWTYPE`: its stub compiles | Validated |
+| A `%ROWTYPE` in the test's edition, through a subtype compiled there: as an argument, of a real routine and of a stubbed one; as a return value; a collection of them, in and back; in Spring's transaction; again in the next test's edition, with nothing left after it; with drivers 23, 21 and 19 | Validated |
 | Several stubs of the same routine: different arguments each answered; the same arguments twice, the later one wins; a second answer on the same stub replaces the first | Validated |
 | A call no stub matches fails with `ORA-20999`, naming the routine and showing the arguments | Validated |
 | The rest of the package stays real: other routines, private ones, other overloads; a real routine calling the stubbed one, in the same package or another, gets the mock; outside the test's edition, the routine is real | Validated |
@@ -430,15 +431,13 @@ With `penitent-test`, measured on Oracle 23ai only, as [Testing](testing.md#mock
 | Spring: `PlsqlMocks` as a parameter with `@Autowired`; without it, not resolved | Validated |
 | Spring: `@EnablePlsqlMocks` in a transactional test, rolled back as usual, the stub never committing it; without a transaction; several `DataSource`s; the context cached; Spring Boot's `DataSource` | Validated |
 | The core and the JUnit 5 extension without Spring on the classpath | Validated |
-| The log of the mocks, under `io.github.rponte.penitent.mock`: the edition, stubs and verifies at `DEBUG`, the generated PL/SQL at `TRACE`, a leftover edition at `WARN`, nothing at `INFO` | Validated |
+| The log of the mocks, under `io.github.rponte.penitent.mock`: the edition, stubs, verifies and the subtype of each `%ROWTYPE` at `DEBUG`, the generated PL/SQL at `TRACE`, a leftover edition at `WARN`, nothing at `INFO`; a record bound by its subtype's name, in the call log | Validated |
 
 ## Not measured
 
 - Oracle 18c and older, such as 12c.
 - `penitent-test` on Oracle 21c and 19c, and stubs of booleans and `LocalDateTime`.
-- A `%ROWTYPE` argument or return value in a test with mocks, which fails with `ORA-17060` in any session in an
-  edition other than the default one, with drivers 23, 21 and 19, as probes outside the tests show:
-  [issue #31](https://github.com/rponte/penitent/issues/31).
+- A `%ROWTYPE` of a table in a schema without editions, in a test with mocks: the library keeps its own name.
 - Drivers 18.x and older.
 - Resilience4j's `@Retry` on a `@Transactional` method, `@Bulkhead` and `@RateLimiter`.
 - A Jakarta EE container's `DataSource` inside a JTA transaction, with `create` or with `PlsqlPackages.using`.

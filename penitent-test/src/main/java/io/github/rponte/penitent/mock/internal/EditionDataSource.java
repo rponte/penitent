@@ -21,6 +21,7 @@ public final class EditionDataSource implements DataSource {
 	private final DataSource target;
 	private volatile String edition;
 	private volatile String defaultEdition;
+	private volatile RowTypes rowTypes;
 
 	public EditionDataSource(DataSource target) {
 		this.target = target;
@@ -31,9 +32,13 @@ public final class EditionDataSource implements DataSource {
 		return target;
 	}
 
-	/** The edition connections enter from now on, or {@code null} for none. */
-	public void enter(String edition, String defaultEdition) {
+	/**
+	 * The edition connections enter from now on, or {@code null} for none, and the names of the {@code %ROWTYPE}
+	 * records there, which each such connection answers to {@code unwrap(RowTypes.class)}.
+	 */
+	public void enter(String edition, String defaultEdition, RowTypes rowTypes) {
 		this.defaultEdition = defaultEdition;
+		this.rowTypes = rowTypes;
 		this.edition = edition;
 	}
 
@@ -53,6 +58,7 @@ public final class EditionDataSource implements DataSource {
 			return connection;
 		}
 		String back = defaultEdition;
+		RowTypes types = rowTypes;
 		try {
 			execute(connection, "ALTER SESSION SET EDITION = " + current);
 		} catch (SQLException e) {
@@ -61,6 +67,13 @@ public final class EditionDataSource implements DataSource {
 		}
 		return (Connection) Proxy.newProxyInstance(EditionDataSource.class.getClassLoader(),
 				new Class<?>[] { Connection.class }, (proxy, method, args) -> {
+					// local, with no trip to the database: the core asks it of every record it binds
+					if (method.getName().equals("isWrapperFor") && args[0] == RowTypes.class) {
+						return true;
+					}
+					if (method.getName().equals("unwrap") && args[0] == RowTypes.class) {
+						return types;
+					}
 					if (method.getName().equals("close") && !connection.isClosed()) {
 						// ALTER SESSION SET EDITION has to start a transaction: whatever is pending ends first
 						if (!connection.getAutoCommit()) {

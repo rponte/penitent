@@ -19,6 +19,7 @@ CREATE OR REPLACE TYPE freight_item_list_t AS TABLE OF freight_item_t
 
 CREATE OR REPLACE PACKAGE freights AS
   SUBTYPE money IS NUMBER(10,2);
+  TYPE freight_rows_t IS TABLE OF freight_item%ROWTYPE;
 
   FUNCTION calculate(p_origin freight_item.uf%TYPE, p_destination VARCHAR2 DEFAULT 'SP') RETURN money;
   FUNCTION calculate(p_weight NUMBER) RETURN NUMBER;
@@ -31,6 +32,9 @@ CREATE OR REPLACE PACKAGE freights AS
   FUNCTION weigh(p_items freight_item_list_t, p_origin VARCHAR2) RETURN NUMBER;
   PROCEDURE register(p_item freight_item_t);
   FUNCTION describe(p_row freight_item%ROWTYPE) RETURN VARCHAR2;
+  FUNCTION find(p_id NUMBER) RETURN freight_item%ROWTYPE;
+  FUNCTION count_rows(p_rows freight_rows_t) RETURN NUMBER;
+  FUNCTION rows_of(p_count NUMBER) RETURN freight_rows_t;
 END freights;
 /
 
@@ -100,6 +104,31 @@ CREATE OR REPLACE PACKAGE BODY freights AS
   BEGIN
     RETURN p_row.id || '/' || p_row.uf;
   END describe;
+
+  -- give back records, and take and give back collections of them
+  FUNCTION find(p_id NUMBER) RETURN freight_item%ROWTYPE IS
+    l_row freight_item%ROWTYPE;
+  BEGIN
+    l_row.id := p_id;
+    l_row.uf := 'CE';
+    RETURN l_row;
+  END find;
+
+  FUNCTION count_rows(p_rows freight_rows_t) RETURN NUMBER IS
+  BEGIN
+    RETURN p_rows.COUNT;
+  END count_rows;
+
+  FUNCTION rows_of(p_count NUMBER) RETURN freight_rows_t IS
+    l_rows freight_rows_t := freight_rows_t();
+  BEGIN
+    FOR i IN 1 .. p_count LOOP
+      l_rows.EXTEND;
+      l_rows(i).id := i;
+      l_rows(i).uf := 'SP';
+    END LOOP;
+    RETURN l_rows;
+  END rows_of;
 END freights;
 /
 

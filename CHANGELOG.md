@@ -11,6 +11,10 @@ All notable changes to this project are listed here. The format follows
 - `penitent-test`: a stub of a routine that takes an object type, a collection or a record no longer fails to
   compile with `ORA-00939`. Such a parameter is matched with `any()`, and another matcher on it is refused with a
   clear message.
+- `penitent-test`: a routine that takes or returns a `%ROWTYPE`, or a collection of them, can be called in a test with
+  mocks, stubbed or not. It failed with `ORA-17060`, since Oracle cannot describe `TABLE%ROWTYPE` to the driver in the
+  test's edition; the record now binds there by a subtype of it, compiled into the edition. The call log shows the
+  name, at `DEBUG`.
 
 ## [0.29.0]
 

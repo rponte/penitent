@@ -131,10 +131,10 @@ And what it cannot do, in the first version:
   stands for its value, and `JSON_ARRAY` does not take it, so a recorded call holds `"(not recorded)"` in its place,
   keeping the position of the others; another matcher on it is refused before compiling. A stub cannot return one
   yet, nor set it as an `OUT`.
-- **A `%ROWTYPE` cannot be passed nor read from a session in the test's edition,** stub or not: to bind it, the driver
-  asks the database to describe the type (`DBMS_PICKLER`), and in an edition other than the default one the
-  database cannot, so the call fails with `ORA-17060`, with drivers 23, 21 and 19. A package `RECORD` and an object
-  type are described fine (measured with plain JDBC; issue #31, where a way around it is being studied).
+- **A `%ROWTYPE` goes by a subtype compiled in the test's edition.** In the edition, the driver cannot resolve
+  `"SCHEMA".TABLE%ROWTYPE`, so the library compiles a package subtype of it there, the first time a record of that
+  table is bound, and binds the record by the subtype's name; see
+  [A `%ROWTYPE` in the test's edition](#a-rowtype-in-the-tests-edition).
 - **A private routine, declared only in the body, cannot be stubbed.** A stub starts from a method of the interface,
   and a private routine has none. It stays real, and a stubbed routine that called it no longer does.
 - **A wrapped body cannot be parsed,** so nothing in that package can be stubbed; the library refuses it.
@@ -179,6 +179,7 @@ And what it cannot do, in the first version:
 | The test's edition | the database, created before the test and dropped after it | holds the rewritten package bodies, which only sessions in the edition see |
 | The rewritten body | the test's edition | the package's own body, with the stubbed routine replaced by generated code |
 | The wrapped `DataSource` | the application's tests | moves each connection it hands out into the test's edition, and back when it is returned |
+| The subtype of a `%ROWTYPE` | the test's edition, compiled the first time a record of the table is bound | a package `PENITENT_ROW_...` with `SUBTYPE ROW_T IS "SCHEMA".TABLE%ROWTYPE`, by whose name the record binds in the edition |
 | `PlsqlMocks` | the test | creates and drops the edition, compiles the stubs, and counts the calls for `verify` |
 
 ### A test, step by step
@@ -279,6 +280,65 @@ SELECT COUNT(*) FROM PENITENT_MOCK_CALLS
 
 Only a stubbed routine records its calls, which is why `verify` refuses a routine with no stub in the test.
 
+### A `%ROWTYPE` in the test's edition
+
+**The problem.** To bind a record or read one back, the driver asks the database to describe its type by name, with
+`DBMS_PICKLER.GET_TYPE_SHAPE`. In a child edition of a schema with editions enabled, the database does not find
+`"SCHEMA".TABLE%ROWTYPE`, and the call fails with `ORA-17060`, stub or not, in any call of the test. Nothing has to be
+compiled in the edition for it to happen. A package `RECORD`, an object type and a package subtype of the same
+`%ROWTYPE` are all described fine. The failure is on the server: drivers 23, 21 and 19 fail the same way, and so does
+python-oracledb's thin mode, which does not use JDBC at all.
+[Issue #31](https://github.com/rponte/penitent/issues/31) has the measurements.
+
+**The decision.** The test's edition belongs to the test, so the library may create what it needs there:
+
+1. The first time a record of a table is bound on a connection in the test's edition, `penitent-test` compiles, in
+   the edition and on a connection of its own, a package holding one subtype:
+
+   ```sql
+   CREATE OR REPLACE PACKAGE "PLSQL_TEST".PENITENT_ROW_5F2A91C3D4E6_1A2B3C4D AS
+     SUBTYPE ROW_T IS "PLSQL_TEST".FREIGHT_ITEM%ROWTYPE;
+   END PENITENT_ROW_5F2A91C3D4E6_1A2B3C4D;
+   ```
+
+2. From then on, in that test, the record binds by the subtype's name: as an argument, as a value read back, and as
+   an element of a collection. The driver resolves it, and the routine takes it, since it has the same shape.
+3. The package goes with the edition when the test ends. It is never seen outside the edition.
+
+**How the core takes part.** The core does not know about editions. Every name of a composite or a collection that
+it hands the driver goes through an internal extension point, `TypeNameIntegration`, found by `ServiceLoader`, in
+the same way as the integrations of transactions and proxies. `penitent-test` registers one: a connection the wrapped
+`DataSource` hands out in the test's edition answers `unwrap` with the test's subtypes, locally, with no trip to the
+database, and every other connection keeps the names as they are. In production, with no implementation on the
+classpath, nothing changes. The core passes every name, not only those of `%ROWTYPE`, so that another case can be
+handled in the module that needs it without changing the core.
+
+**The details that matter:**
+
+- **One package per table, never recompiled.** Recompiling a package that other connections already described could
+  leave them with a descriptor that no longer matches; a package created once per table, and dropped with the
+  edition, never changes under them.
+- **The name carries the edition's.** A pool keeps its connections from test to test, and the driver keeps the
+  descriptors of a connection. With the edition in the name, a connection never meets a name it described in an
+  earlier test, whose package is gone.
+- **A schema without editions** cannot have editioned objects: the package would be compiled outside the edition, so
+  the library drops it and keeps the record's own name, which resolves there.
+- **The cost** is one package compiled per table and per test, on the first record bound, and the pool needs a
+  connection to spare for it, as for a stub.
+- **The log** shows each subtype at `DEBUG` under `io.github.rponte.penitent.mock`, with its DDL at `TRACE`, and
+  each call that binds a record by another name shows it at `DEBUG` under `io.github.rponte.penitent.call`.
+
+**Left aside:**
+
+- **An anonymous block that builds the record field by field, with scalar binds,** as jOOQ does. It works in the
+  edition, but it changes how the core calls every routine with a record, in production too, for a problem that
+  only tests with mocks have, and a collection of records would need a loop in the block.
+- **Describing the type in the default edition and reusing the descriptor in the test's.** The driver's cache
+  makes it work on a connection that described the type before entering the edition, which is fragile; moving a
+  descriptor to another connection fails on drivers 21 and 19, and driver 23 does not expose it.
+- **One package for every subtype of the test,** recompiled as tables come: fewer objects, but recompiling it could
+  leave other connections with stale descriptors.
+
 ## Measured
 
 A spike, on Oracle 23ai (`gvenzl/oracle-free:23.26.3`), with a package whose spec uses `%TYPE`, a `SUBTYPE`, a
@@ -297,6 +357,17 @@ first:
 | two tests in a row, each with its own edition | both pass, and nothing is left behind |
 | creating, compiling into and dropping an edition | 5 to 22 ms, about 10 ms and about 15 ms |
 | parsing a body with IslandSQL | about 830 ms the first time, while ANTLR warms up, then about 10 ms |
+
+The `%ROWTYPE` spikes, on the same database, with plain JDBC and drivers 23, 21 and 19, in a schema with
+`ENABLE EDITIONS` and in one with `ENABLE EDITIONS FOR PACKAGE`, the same on all of them:
+
+| In a child edition | Result |
+|---|---|
+| a record bound as `"SCHEMA".TABLE%ROWTYPE`, with nothing compiled in the edition | `ORA-17060` |
+| `GET_TYPE_SHAPE` of that name | not found (1001) in the child edition; found in the default one |
+| a record bound as a package subtype of it, or as a package `RECORD` of the same fields | the routine taking `TABLE%ROWTYPE` takes it |
+| the same package compiled only in the edition | works, as an argument, a value read back and the elements of a collection; again after the edition is dropped and created |
+| that package, seen from the default edition | not there |
 
 ## Alternatives considered
 

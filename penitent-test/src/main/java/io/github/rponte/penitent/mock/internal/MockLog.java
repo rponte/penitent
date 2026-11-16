@@ -47,6 +47,12 @@ final class MockLog {
 		}
 	}
 
+	static void aliased(String name, String alias, long start) {
+		if (LOG.isDebugEnabled()) {
+			LOG.debug("{}: {} as {} in {} ms", label("Aliased row type"), name, alias, elapsed(start));
+		}
+	}
+
 	static void generated(String code) {
 		if (LOG.isTraceEnabled()) {
 			LOG.trace("{}: {}", label("-> generated PL/SQL"), code.strip().replace("\n", "\n" + CONTINUATION));

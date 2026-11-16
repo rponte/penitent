@@ -109,6 +109,20 @@ public final class CallLog {
 		}
 	}
 
+	/** A type given to the driver by another name: see {@code TypeNameIntegration}. */
+	public static void typeRenamed(String name, String renamed) {
+		if (CALLS.isDebugEnabled()) {
+			CALLS.debug("-> type name        : {} as {}", name, renamed);
+		}
+	}
+
+	/** Once, when the implementations of {@code TypeNameIntegration} load. */
+	public static void typeNamesFrom(String implementation) {
+		if (CALLS.isDebugEnabled()) {
+			CALLS.debug("Type names from     : {}", implementation);
+		}
+	}
+
 	/**
 	 * At warn, unlike the rest of this log: a value the driver will read wrong, in silence. The call
 	 * itself goes on, since true and false still read right. See {@code NullBooleanOutputs}.

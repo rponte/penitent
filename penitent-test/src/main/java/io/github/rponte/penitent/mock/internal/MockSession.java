@@ -18,15 +18,16 @@ import java.util.UUID;
 import javax.sql.DataSource;
 
 import io.github.rponte.penitent.PlsqlPackages;
+import io.github.rponte.penitent.internal.metadata.CompositeType;
 import io.github.rponte.penitent.internal.metadata.RoutineMetadata;
 import io.github.rponte.penitent.internal.proxy.Views;
 
 /**
- * One test's mocks: its edition, the stubs of each package, compiled into the edition as they come, and the calls
- * recorded, for {@code verify}. Everything that is DDL runs on a connection of its own, outside any transaction of
- * the test, since DDL commits.
+ * One test's mocks: its edition, the stubs of each package, compiled into the edition as they come, the subtypes its
+ * {@code %ROWTYPE} records go by there, and the calls recorded, for {@code verify}. Everything that is DDL runs on a
+ * connection of its own, outside any transaction of the test, since DDL commits.
  */
-public final class MockSession {
+public final class MockSession implements RowTypes {
 
 	/** The version of {@code penitent-mock-schema.sql} this library expects. */
 	static final int SCHEMA_VERSION = 1;
@@ -44,7 +45,8 @@ public final class MockSession {
 	private final Map<Class<?>, Object> describers = new HashMap<>();
 	private final Map<String, String> bodies = new HashMap<>();
 	private final Map<String, List<Stub>> stubsByPackage = new LinkedHashMap<>();
-	private String edition;
+	private final Map<String, String> rowTypes = new HashMap<>();
+	private volatile String edition;
 	private String defaultEdition;
 
 	public MockSession(EditionDataSource dataSource) {
@@ -72,7 +74,7 @@ public final class MockSession {
 		} catch (SQLException e) {
 			throw new IllegalStateException("failed to create the test's edition: " + e.getMessage(), e);
 		}
-		dataSource.enter(edition, defaultEdition);
+		dataSource.enter(edition, defaultEdition, this);
 	}
 
 	public void end() {
@@ -80,10 +82,13 @@ public final class MockSession {
 			return;
 		}
 		String ending = edition;
-		dataSource.enter(null, defaultEdition);
+		dataSource.enter(null, defaultEdition, null);
 		edition = null;
 		stubsByPackage.clear();
 		bodies.clear();
+		synchronized (rowTypes) {
+			rowTypes.clear();
+		}
 		// ended either way: an edition that cannot be dropped now is a leftover, for the next begin to drop
 		ACTIVE.remove(ending);
 		long start = System.nanoTime();
@@ -174,24 +179,95 @@ public final class MockSession {
 		}
 		Map<String, String> generated = new LinkedHashMap<>();
 		String mocked = BodyRewriter.rewrite(pkg, body, List.copyOf(subprograms.values()), generated);
+		List<String> errors;
 		try (Connection connection = connection()) {
-			try {
-				EditionDataSource.execute(connection, "ALTER SESSION SET EDITION = " + edition);
-				EditionDataSource.execute(connection, mocked);
-				List<String> errors = strings(connection, "SELECT LINE || ': ' || TEXT FROM ALL_ERRORS WHERE OWNER = '"
-						+ any.schema() + "' AND NAME = '" + any.packageName() + "' AND TYPE = 'PACKAGE BODY'"
-						+ " ORDER BY SEQUENCE");
-				if (!errors.isEmpty()) {
-					throw new IllegalStateException("the mocked body of " + pkg + " does not compile:\n  "
-							+ String.join("\n  ", errors) + "\n" + mocked);
-				}
-			} finally {
-				EditionDataSource.execute(connection, "ALTER SESSION SET EDITION = " + defaultEdition);
-			}
+			errors = compileInEdition(connection, mocked, any.schema(), any.packageName(), "PACKAGE BODY");
 		} catch (SQLException e) {
 			throw new IllegalStateException("failed to compile the mocked body of " + pkg + ": " + e.getMessage(), e);
 		}
+		if (!errors.isEmpty()) {
+			throw new IllegalStateException("the mocked body of " + pkg + " does not compile:\n  "
+					+ String.join("\n  ", errors) + "\n" + mocked);
+		}
 		return generated.get(BodyRewriter.callKey(any));
+	}
+
+	/** Runs {@code ddl} in the test's edition, and gives the compilation errors of the object it creates. */
+	private List<String> compileInEdition(Connection connection, String ddl, String owner, String name, String type)
+			throws SQLException {
+		try {
+			EditionDataSource.execute(connection, "ALTER SESSION SET EDITION = " + edition);
+			EditionDataSource.execute(connection, ddl);
+			return strings(connection, "SELECT LINE || ': ' || TEXT FROM ALL_ERRORS WHERE OWNER = '" + owner
+					+ "' AND NAME = '" + name + "' AND TYPE = '" + type + "' ORDER BY SEQUENCE");
+		} finally {
+			EditionDataSource.execute(connection, "ALTER SESSION SET EDITION = " + defaultEdition);
+		}
+	}
+
+	// ---------------------------------------------------------------- %ROWTYPE records
+
+	/**
+	 * In a child edition of a schema with editions enabled, the driver cannot resolve {@code "SCHEMA".TABLE%ROWTYPE}
+	 * and fails with {@code ORA-17060}, while it resolves a package subtype of it. So the first time a record of a
+	 * table is bound in the test's edition, a package with that subtype is compiled in the edition, and the record
+	 * goes by the subtype's name from then on; the package goes with the edition. Its name carries the edition's, so
+	 * that no connection of the pool can hold the descriptor of the one of an earlier test. In a schema without
+	 * editions, where the package would not be the edition's, the record resolves as it is, and keeps its name.
+	 */
+	@Override
+	public String nameOf(CompositeType type, String name) {
+		String current = edition;
+		if (current == null) {
+			return name;
+		}
+		synchronized (rowTypes) {
+			String known = rowTypes.get(name);
+			if (known != null) {
+				return known;
+			}
+			long start = System.nanoTime();
+			String pkg = "PENITENT_ROW_" + current.substring(PREFIX.length()) + "_"
+					+ String.format(Locale.ROOT, "%08X", name.toUpperCase(Locale.ROOT).hashCode());
+			String ddl = "CREATE OR REPLACE PACKAGE \"" + type.schema() + "\"." + pkg + " AS\n  SUBTYPE ROW_T IS "
+					+ name + ";\nEND " + pkg + ";";
+			String alias;
+			try (Connection connection = connection()) {
+				List<String> errors = compileInEdition(connection, ddl, type.schema(), pkg, "PACKAGE");
+				if (visibleOutsideTheEdition(connection, type.schema(), pkg)) {
+					// a schema without editions has no editioned objects: the package is not the edition's, and goes
+					EditionDataSource.execute(connection, "DROP PACKAGE \"" + type.schema() + "\"." + pkg);
+					rowTypes.put(name, name);
+					return name;
+				}
+				if (!errors.isEmpty()) {
+					throw new IllegalStateException("the subtype of " + name + " for the test's edition does not"
+							+ " compile:\n  " + String.join("\n  ", errors) + "\n" + ddl);
+				}
+				alias = type.schema() + "." + pkg + ".ROW_T";
+			} catch (SQLException e) {
+				throw new IllegalStateException("failed to compile the subtype of " + name + " for the test's edition: "
+						+ e.getMessage(), e);
+			}
+			rowTypes.put(name, alias);
+			MockLog.aliased(name, alias, start);
+			MockLog.generated(ddl);
+			return alias;
+		}
+	}
+
+	/** Run in the default edition, which does not see what is compiled in the test's edition. */
+	private static boolean visibleOutsideTheEdition(Connection connection, String owner, String name)
+			throws SQLException {
+		try (PreparedStatement select = connection.prepareStatement(
+				"SELECT COUNT(*) FROM ALL_OBJECTS WHERE OWNER = ? AND OBJECT_NAME = ? AND OBJECT_TYPE = 'PACKAGE'")) {
+			select.setString(1, owner);
+			select.setString(2, name);
+			try (ResultSet rows = select.executeQuery()) {
+				rows.next();
+				return rows.getInt(1) > 0;
+			}
+		}
 	}
 
 	/** The body as the database has it, in the default edition. */

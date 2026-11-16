@@ -8,6 +8,7 @@ import io.github.rponte.penitent.PlsqlBoolean;
 import io.github.rponte.penitent.exception.PlsqlMappingException;
 import io.github.rponte.penitent.internal.binding.OracleArrays;
 import io.github.rponte.penitent.internal.binding.TemporaryLobs;
+import io.github.rponte.penitent.internal.binding.TypeNameIntegration;
 import io.github.rponte.penitent.internal.convert.OracleTimeZoneCodec;
 import io.github.rponte.penitent.internal.convert.ScalarCodec;
 import io.github.rponte.penitent.internal.convert.ScalarCodec.ValueConversion;
@@ -98,7 +99,8 @@ final class ValueEncoder {
 						ScalarCodec.encode(element, ValueConversion.from(literals)), connection);
 			}
 		}
-		return OracleArrays.create(connection, type.bindName(), encoded);
+		return OracleArrays.create(connection, TypeNameIntegration.collectionNameOf(connection, type.bindName()),
+				encoded);
 	}
 
 	static Object[] toArray(Object value) {

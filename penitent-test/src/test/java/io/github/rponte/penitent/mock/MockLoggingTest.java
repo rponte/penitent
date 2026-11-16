@@ -35,6 +35,12 @@ class MockLoggingTest {
 	@PlsqlPackage("FREIGHTS")
 	interface Freights {
 		BigDecimal calculate(String pOrigin, String pDestination);
+
+		String describe(FreightItem pRow);
+	}
+
+	/** A row of FREIGHT_ITEM. */
+	record FreightItem(Long id, String uf) {
 	}
 
 	private static DataSource pool;
@@ -108,6 +114,38 @@ class MockLoggingTest {
 		assertThat(lines()).anySatisfy(line -> assertThat(line).matches(
 				"DEBUG Stubbed routine     : PLSQL_TEST\\.FREIGHTS\\.CALCULATE\\('SP', 'CE'\\)"
 						+ " -> RAISE_APPLICATION_ERROR\\(-20200, 'no freight'\\) in \\d+ ms"));
+	}
+
+	@Test
+	@DisplayName("at DEBUG: the subtype a %ROWTYPE record goes by in the edition, once per test, and its DDL at TRACE;"
+			+ " the call log shows the name each call binds")
+	void row_type() {
+		logger().setLevel(Level.TRACE);
+		Logger calls = (Logger) LoggerFactory.getLogger("io.github.rponte.penitent.call");
+		Level callsConfigured = calls.getLevel();
+		calls.setLevel(Level.DEBUG);
+		calls.addAppender(events);
+		try {
+			Freights freights = PlsqlPackages.create(Freights.class, dataSource);
+			try (PlsqlMocks mocks = PlsqlMocks.on(dataSource)) {
+				mocks.begin();
+				freights.describe(new FreightItem(1L, "SP"));
+				freights.describe(new FreightItem(2L, "CE"));
+				freights.calculate("SP", "CE");
+			}
+		} finally {
+			calls.detachAppender(events);
+			calls.setLevel(callsConfigured);
+		}
+
+		String alias = "PLSQL_TEST\\.PENITENT_ROW_\\w+\\.ROW_T";
+		assertThat(lines()).filteredOn(line -> line.contains("Aliased row type")).singleElement().asString()
+				.matches("DEBUG Aliased row type    : \"PLSQL_TEST\"\\.FREIGHT_ITEM%ROWTYPE as " + alias + " in \\d+ ms");
+		assertThat(lines()).anySatisfy(line -> assertThat(line).matches("(?s)TRACE -> generated PL/SQL : CREATE OR"
+				+ " REPLACE PACKAGE \"PLSQL_TEST\"\\.PENITENT_ROW_\\w+ AS\n +SUBTYPE ROW_T IS \"PLSQL_TEST\"\\.FREIGHT_ITEM%ROWTYPE;"
+				+ "\n +END PENITENT_ROW_\\w+;"));
+		assertThat(lines()).filteredOn(line -> line.contains("-> type name")).hasSize(2).allSatisfy(line -> assertThat(line)
+				.matches("DEBUG -> type name        : \"PLSQL_TEST\"\\.FREIGHT_ITEM%ROWTYPE as " + alias));
 	}
 
 	@Test
