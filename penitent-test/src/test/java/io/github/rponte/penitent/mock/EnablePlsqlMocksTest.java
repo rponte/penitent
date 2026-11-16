@@ -41,6 +41,12 @@ class EnablePlsqlMocksTest {
 	@PlsqlPackage("FREIGHTS")
 	public interface Freights {
 		BigDecimal calculate(String pOrigin, String pDestination);
+
+		String describe(FreightItem pRow);
+	}
+
+	/** A row of FREIGHT_ITEM. */
+	public record FreightItem(Long id, String uf) {
 	}
 
 	static DataSource pool;
@@ -111,6 +117,29 @@ class EnablePlsqlMocksTest {
 		TestKit.run(TransactionalSample.class).assertStatistics(stats -> stats.started(1).succeeded(1));
 
 		assertThat(itemsWithId(9100)).as("rolled back with the test").isZero();
+		assertThat(TestKit.editionsLeft(pool)).isZero();
+	}
+
+	/** A transactional test whose routine takes a %ROWTYPE record, on the connection of Spring's transaction. */
+	@ExtendWith(TestKit.OnlyThroughTheTestKit.class)
+	@SpringJUnitConfig(Application.class)
+	@EnablePlsqlMocks
+	@Transactional
+	static class TransactionalRowTypeSample {
+
+		@Autowired Freights freights;
+
+		@Test
+		void takes_the_record() {
+			assertThat(freights.describe(new FreightItem(7L, "SP"))).isEqualTo("7/SP");
+		}
+	}
+
+	@Test
+	@DisplayName("in a transactional test, a %ROWTYPE record binds on the connection of the transaction")
+	void transactional_row_type() {
+		TestKit.run(TransactionalRowTypeSample.class).assertStatistics(stats -> stats.started(1).succeeded(1));
+
 		assertThat(TestKit.editionsLeft(pool)).isZero();
 	}
 

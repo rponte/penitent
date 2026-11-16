@@ -361,10 +361,6 @@ try (PlsqlMocks mocks = PlsqlMocks.on(dataSource)) {
 - **What can be stubbed, so far:** routines declared in a package spec, in the test user's schema, answering with
   scalar values. A parameter of an object type, a collection or a record is matched with `any()` only, and a stub
   cannot return one yet. A private routine has no method to stub it through, and a wrapped body cannot be read.
-- **A routine that takes or returns a `%ROWTYPE` cannot be called in a test with mocks,** stubbed or not: in the
-  test's edition, Oracle cannot describe the type for the driver, and the call fails with `ORA-17060`. A `RECORD`
-  declared in a package and an object type work. [Issue #31](https://github.com/rponte/penitent/issues/31) has the
-  measurements and the way around it being studied.
 
 ## Seeing what the mocks do
 
@@ -392,10 +388,10 @@ DEBUG <- completed        : 3 ms
 DEBUG Ended mocks         : edition PENITENT_MOCK_5F2A91C3D4E6 dropped in 15 ms
 ```
 
-- **At `DEBUG`:** the edition of each test, each stub, with what it answers and to which arguments, and each `verify`
-  that passed.
-- **At `TRACE`:** also the PL/SQL generated for each stub, the first thing to read when a stub does not answer as
-  expected.
+- **At `DEBUG`:** the edition of each test, each stub, with what it answers and to which arguments, each `verify`
+  that passed, and the subtype each `%ROWTYPE` goes by in the test's edition (see [How it works](#how-it-works)).
+- **At `TRACE`:** also the PL/SQL generated for each stub and each subtype, the first thing to read when a stub does
+  not answer as expected.
 - **At `WARN`:** only what is out of the ordinary, such as an edition left by a run that died, dropped when the next
   test begins.
 - **At `INFO`,** the usual default, nothing: the tests stay quiet.
@@ -418,6 +414,19 @@ The stub is not a Java trick: it is PL/SQL, compiled into the database, where on
   back when it is returned. In Spring, the edition begins before the test transaction and ends after it, and the stubs
   compile on a connection of their own, so they never commit the test transaction.
 - **Calls are recorded in a table,** by an autonomous transaction, so `verify` sees them even when the test rolls back.
+- **A `%ROWTYPE` goes by a subtype in the test's edition.** In an edition other than the default one, Oracle cannot
+  describe `TABLE%ROWTYPE` to the driver, and the call would fail with `ORA-17060`. So the first time a record of a
+  table is bound in the test, the library compiles a package with `SUBTYPE ROW_T IS TABLE%ROWTYPE` into the edition,
+  and binds the record by that name, which the driver resolves. The package goes with the edition. In the call log,
+  the call shows it:
+
+  <!-- snippet: untested -->
+  ```text
+  DEBUG Calling routine     : PLSQL_TEST.FREIGHTS.DESCRIBE <- Freights.describe
+  DEBUG -> SQL              : {? = call PLSQL_TEST.FREIGHTS.DESCRIBE(?)}
+  DEBUG -> type name        : "PLSQL_TEST".FREIGHT_ITEM%ROWTYPE as PLSQL_TEST.PENITENT_ROW_5F2A91C3D4E6_1A2B3C4D.ROW_T
+  DEBUG <- completed        : 4 ms
+  ```
 
 [Architecture decision 0001](adr/0001-mocking-plsql-with-editions.md) has the design, the alternatives that were left
 aside, and what was measured to back each choice.

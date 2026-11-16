@@ -54,6 +54,12 @@ class PlsqlMocksTest {
 		void register(FreightItem pItem);
 
 		String describe(FreightItem pRow);
+
+		FreightItem find(BigDecimal pId);
+
+		BigDecimal countRows(List<FreightItem> pRows);
+
+		List<FreightItem> rowsOf(BigDecimal pCount);
 	}
 
 	/** FREIGHT_ITEM_T, and a row of FREIGHT_ITEM. */
@@ -356,6 +362,60 @@ class PlsqlMocksTest {
 		Freights mock = mocks.mock(Freights.class);
 
 		assertThatCode(() -> when(mock.describe(any())).thenReturn("stubbed")).doesNotThrowAnyException();
+	}
+
+	@Test
+	@DisplayName("in the test's edition, a real routine takes a %ROWTYPE record")
+	void record_argument_in_the_edition() {
+		assertThat(freights.describe(new FreightItem(7L, "SP"))).isEqualTo("7/SP");
+	}
+
+	@Test
+	@DisplayName("in the test's edition, a stubbed routine that takes a %ROWTYPE record answers as stubbed")
+	void record_argument_of_a_stub() {
+		Freights mock = mocks.mock(Freights.class);
+
+		when(mock.describe(any())).thenReturn("stubbed");
+
+		assertThat(freights.describe(new FreightItem(7L, "SP"))).isEqualTo("stubbed");
+	}
+
+	@Test
+	@DisplayName("in the test's edition, a real routine gives back a %ROWTYPE record")
+	void record_returned_in_the_edition() {
+		assertThat(freights.find(new BigDecimal("9"))).isEqualTo(new FreightItem(9L, "CE"));
+	}
+
+	@Test
+	@DisplayName("in the test's edition, a collection of %ROWTYPE records goes in and comes back")
+	void record_collection_in_the_edition() {
+		assertThat(freights.countRows(List.of(new FreightItem(1L, "SP"), new FreightItem(2L, "CE"))))
+				.isEqualByComparingTo("2");
+		assertThat(freights.rowsOf(new BigDecimal("2")))
+				.containsExactly(new FreightItem(1L, "SP"), new FreightItem(2L, "SP"));
+	}
+
+	@Test
+	@DisplayName("a %ROWTYPE record works again in the next test's edition, and nothing of it is left after the mocks end")
+	void record_in_the_next_edition() throws Exception {
+		assertThat(freights.describe(new FreightItem(1L, "SP"))).isEqualTo("1/SP");
+		mocks.end();
+		assertThat(helperPackages()).isZero();
+
+		mocks.begin();
+		assertThat(freights.describe(new FreightItem(2L, "CE"))).isEqualTo("2/CE");
+		assertThat(realFreights.describe(new FreightItem(3L, "SP"))).isEqualTo("3/SP");
+	}
+
+	/** The packages the mocks create for %ROWTYPE records, as the default edition sees them. */
+	private static int helperPackages() throws Exception {
+		try (java.sql.Connection connection = pool.getConnection();
+				java.sql.Statement statement = connection.createStatement();
+				java.sql.ResultSet rows = statement.executeQuery(
+						"SELECT COUNT(*) FROM ALL_OBJECTS WHERE OBJECT_NAME LIKE 'PENITENT\\_ROW\\_%' ESCAPE '\\'")) {
+			rows.next();
+			return rows.getInt(1);
+		}
 	}
 
 	@Test

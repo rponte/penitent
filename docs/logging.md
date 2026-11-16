@@ -40,6 +40,8 @@ DEBUG <- completed        : 4 ms
   [How Penitent works](concepts.md#what-happens-in-a-call).
 - **Values are shown as the database sees them:** an OBJECT shows up with its type name and its attributes, in the
   type's order, in both directions.
+- **`-> type name`** only shows up when a type is bound by another name, which happens in a test with mocks, for a
+  `%ROWTYPE`: see [Testing](testing.md#how-it-works).
 
 ## Many parameters, and collections
 

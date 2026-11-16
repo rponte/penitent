@@ -193,10 +193,6 @@ public record BlockMetadata(String sql, List<String> placeholders, String result
 		public boolean isCollection() {
 			return collection != null;
 		}
-
-		public String qualifiedBindName() {
-			return isCollection() ? collection.bindName() : composite.qualifiedBindName();
-		}
 	}
 
 	/**

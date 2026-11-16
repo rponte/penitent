@@ -20,6 +20,7 @@ import io.github.rponte.penitent.exception.PlsqlFailure;
 import io.github.rponte.penitent.exception.PlsqlMappingException;
 import io.github.rponte.penitent.internal.binding.JavaProperties;
 import io.github.rponte.penitent.internal.binding.OracleArrays;
+import io.github.rponte.penitent.internal.binding.TypeNameIntegration;
 import io.github.rponte.penitent.internal.convert.AppliedConverter;
 import io.github.rponte.penitent.internal.convert.ConverterLookup;
 import io.github.rponte.penitent.internal.convert.ScalarCodec.ValueConversion;
@@ -176,7 +177,14 @@ final class BlockCall {
 					+ " is a composite type; declare its record or JavaBean, not " + returned.getSimpleName());
 		}
 		statement.registerOutParameter(position, declared.isCollection() ? Types.ARRAY : Types.STRUCT,
-				declared.qualifiedBindName());
+				bindNameOf(declared, sessionTypes.connection));
+	}
+
+	/** The declared type's name, as the connection names it: see {@code TypeNameIntegration}. */
+	private static String bindNameOf(BlockMetadata.DeclaredType declared, Connection connection) throws SQLException {
+		return declared.isCollection()
+				? TypeNameIntegration.collectionNameOf(connection, declared.collection().bindName())
+				: TypeNameIntegration.compositeNameOf(connection, declared.composite());
 	}
 
 	/**
@@ -254,7 +262,7 @@ final class BlockCall {
 		int sqlType = type.isCollection() ? Types.ARRAY : Types.STRUCT;
 		if (value == null) {
 			log.sent(name, null);
-			statement.setNull(position, sqlType, type.qualifiedBindName());
+			statement.setNull(position, sqlType, bindNameOf(type, connection));
 			return;
 		}
 		Object bindable = type.isCollection()

@@ -86,17 +86,19 @@ public final class TypeBinding {
 	}
 
 	private final Class<?> javaType;
+	private final CompositeType type;
 	private final String oracleTypeName;
 	private final List<Attribute> attributes;
 	private final Constructor<?> recordConstructor;
 	private final java.util.concurrent.ConcurrentMap<String, TypeBinding> nested = new java.util.concurrent.ConcurrentHashMap<>();
 	private final PlsqlConverters converters;
 
-	private TypeBinding(Class<?> javaType, String oracleTypeName, List<Attribute> attributes,
+	private TypeBinding(Class<?> javaType, CompositeType type, List<Attribute> attributes,
 			Constructor<?> recordConstructor, PlsqlConverters converters) {
 		this.converters = converters;
 		this.javaType = javaType;
-		this.oracleTypeName = oracleTypeName;
+		this.type = type;
+		this.oracleTypeName = type.qualifiedBindName();
 		this.attributes = attributes;
 		this.recordConstructor = recordConstructor;
 	}
@@ -208,7 +210,7 @@ public final class TypeBinding {
 		}
 
 		Constructor<?> ctor = javaType.isRecord() ? JavaProperties.canonicalConstructor(javaType) : null;
-		return new TypeBinding(javaType, type.qualifiedBindName(), List.copyOf(bound), ctor, converters);
+		return new TypeBinding(javaType, type, List.copyOf(bound), ctor, converters);
 	}
 
 	/** A composite attribute has its own attributes, and the converter applies to those. */
@@ -374,7 +376,8 @@ public final class TypeBinding {
 			values[attribute.attrNo() - 1] = encodeAttribute(attribute, read(source, attribute), connection);
 		}
 		try {
-			return connection.createStruct(oracleTypeName, ScalarCodec.forComposite(values));
+			return connection.createStruct(TypeNameIntegration.compositeNameOf(connection, type),
+					ScalarCodec.forComposite(values));
 		} catch (IllegalArgumentException | ClassCastException e) {
 			// the driver converts the value right here, and does not say which attribute it was
 			throw new PlsqlMappingException("a value does not fit in " + oracleTypeName + ": " + e.getMessage()
@@ -441,7 +444,8 @@ public final class TypeBinding {
 						ScalarCodec.encode(source[i], attribute.conversion()), connection);
 			}
 		}
-		return OracleArrays.create(connection, collection.bindName(), encoded);
+		return OracleArrays.create(connection, TypeNameIntegration.collectionNameOf(connection, collection.bindName()),
+				encoded);
 	}
 
 	/**

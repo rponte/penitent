@@ -18,6 +18,7 @@ import io.github.rponte.penitent.PlsqlSchema;
 import io.github.rponte.penitent.exception.PlsqlFailure;
 import io.github.rponte.penitent.exception.PlsqlMappingException;
 import io.github.rponte.penitent.internal.Caches;
+import io.github.rponte.penitent.internal.binding.TypeNameIntegration;
 import io.github.rponte.penitent.internal.convert.AppliedConverter;
 import io.github.rponte.penitent.internal.convert.ScalarCodec;
 import io.github.rponte.penitent.internal.log.CallLog;
@@ -207,7 +208,7 @@ final class RoutineCall {
 
 			int offset = expectsResult ? 1 : 0;
 			if (expectsResult) {
-				registerOut(statement, 1, routine.returnValue().orElseThrow(), routine.schema());
+				registerOut(statement, 1, routine.returnValue().orElseThrow(), routine.schema(), connection);
 			}
 			java.lang.reflect.Parameter[] javaParameters = method.getParameters();
 			for (int i = 0; i < args.length; i++) {
@@ -224,7 +225,7 @@ final class RoutineCall {
 								toDatabase(((PlsqlOut<?>) args[i]).get(), method, javaParameters[i], parameter, routine),
 								parameter, literals, routine.schema(), connection, log);
 					}
-					registerOut(statement, position, parameter, routine.schema());
+					registerOut(statement, position, parameter, routine.schema(), connection);
 				} else {
 					bindValue(statement, position, toDatabase(args[i], method, javaParameters[i], parameter, routine),
 							parameter, literals, routine.schema(), connection, log);
@@ -292,10 +293,11 @@ final class RoutineCall {
 		}
 	}
 
-	private static void registerOut(CallableStatement statement, int position, Argument argument, String schema)
-			throws SQLException {
+	private static void registerOut(CallableStatement statement, int position, Argument argument, String schema,
+			Connection connection) throws SQLException {
 		if (argument.isStruct() || argument.isCollection()) {
-			statement.registerOutParameter(position, Jdbc.sqlTypeOf(argument), bindTypeNameOf(argument, schema));
+			statement.registerOutParameter(position, Jdbc.sqlTypeOf(argument),
+					bindTypeNameOf(argument, schema, connection));
 		} else {
 			// the form with a type name is for named types: with an empty name, a RAW yields ORA-17012
 			statement.registerOutParameter(position, Jdbc.sqlTypeOf(argument));
@@ -307,7 +309,7 @@ final class RoutineCall {
 		Object bindable = encoder.encode(value, parameter, literals, schema, connection);
 		log.sent(parameter.name(), bindable);
 		if (bindable == null) {
-			bindNull(statement, position, parameter, schema);
+			bindNull(statement, position, parameter, schema, connection);
 		} else if (parameter.isBoolean() && bindable instanceof Boolean) {
 			statement.setObject(position, bindable, Jdbc.ORACLE_PLSQL_BOOLEAN);
 		} else {
@@ -319,20 +321,24 @@ final class RoutineCall {
 	 * A null needs its type: that is what Oracle uses to resolve the version of an overloaded
 	 * routine, and without the name a composite or a collection yields {@code PLS-00306}.
 	 */
-	private static void bindNull(CallableStatement statement, int position, Argument target, String schema)
-			throws SQLException {
+	private static void bindNull(CallableStatement statement, int position, Argument target, String schema,
+			Connection connection) throws SQLException {
 		if (target.isStruct() || target.isCollection()) {
-			statement.setNull(position, Jdbc.sqlTypeOf(target), bindTypeNameOf(target, schema));
+			statement.setNull(position, Jdbc.sqlTypeOf(target), bindTypeNameOf(target, schema, connection));
 		} else {
 			statement.setNull(position, Jdbc.sqlTypeOf(target));
 		}
 	}
 
-	/** The type name to bind: from the dictionary for a composite, empty for everything else. */
-	private static String bindTypeNameOf(Argument argument, String schema) {
+	/**
+	 * The type name to bind: from the dictionary for a composite or a collection, as the connection names it (see
+	 * {@code TypeNameIntegration}), and empty for everything else.
+	 */
+	private static String bindTypeNameOf(Argument argument, String schema, Connection connection) throws SQLException {
 		if (argument.isStruct()) {
-			return argument.compositeType(schema).qualifiedBindName();
+			return TypeNameIntegration.compositeNameOf(connection, argument.compositeType(schema));
 		}
-		return argument.isCollection() ? argument.collectionBindName() : argument.typeName();
+		return argument.isCollection() ? TypeNameIntegration.collectionNameOf(connection, argument.collectionBindName())
+				: argument.typeName();
 	}
 }
