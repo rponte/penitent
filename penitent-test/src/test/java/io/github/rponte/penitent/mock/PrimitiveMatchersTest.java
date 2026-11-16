@@ -8,6 +8,8 @@ import static io.github.rponte.penitent.mock.PlsqlMocks.anyFloat;
 import static io.github.rponte.penitent.mock.PlsqlMocks.anyInt;
 import static io.github.rponte.penitent.mock.PlsqlMocks.anyLong;
 import static io.github.rponte.penitent.mock.PlsqlMocks.anyShort;
+import static io.github.rponte.penitent.mock.PlsqlMocks.doNothing;
+import static io.github.rponte.penitent.mock.PlsqlMocks.doThrow;
 import static io.github.rponte.penitent.mock.PlsqlMocks.eq;
 import static io.github.rponte.penitent.mock.PlsqlMocks.times;
 import static io.github.rponte.penitent.mock.PlsqlMocks.verify;
@@ -147,7 +149,7 @@ class PrimitiveMatchersTest {
 	@Test
 	@DisplayName("a procedure taking an int, stubbed for any operation, with the other argument matched by value")
 	void procedure() {
-		when(() -> mocks.mock(Flags.class).integrate(anyInt(), eq("VERBA"))).thenThrow(-20300, "not integrated");
+		doThrow(-20300, "not integrated").when(mocks.mock(Flags.class)).integrate(anyInt(), eq("VERBA"));
 
 		assertThatThrownBy(() -> real(Flags.class).integrate(781, "VERBA"))
 				.isInstanceOf(PlsqlRoutineRaisedException.class)
@@ -160,7 +162,7 @@ class PrimitiveMatchersTest {
 	@DisplayName("verify counts the calls with any int, as a stub matches them")
 	void verify_with_any_int() {
 		Flags mock = mocks.mock(Flags.class);
-		when(() -> mock.integrate(anyInt(), any()));
+		doNothing().when(mock).integrate(anyInt(), any());
 
 		real(Flags.class).integrate(781, "VERBA");
 		real(Flags.class).integrate(201, "VERBA");

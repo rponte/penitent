@@ -1,6 +1,8 @@
 package io.github.rponte.penitent.mock;
 
 import static io.github.rponte.penitent.mock.PlsqlMocks.any;
+import static io.github.rponte.penitent.mock.PlsqlMocks.doNothing;
+import static io.github.rponte.penitent.mock.PlsqlMocks.doThrow;
 import static io.github.rponte.penitent.mock.PlsqlMocks.eq;
 import static io.github.rponte.penitent.mock.PlsqlMocks.isNull;
 import static io.github.rponte.penitent.mock.PlsqlMocks.never;
@@ -222,7 +224,7 @@ class PlsqlMocksTest {
 	void out_parameter() {
 		Freights mock = mocks.mock(Freights.class);
 
-		when(() -> mock.quote(eq("CE"), out(new BigDecimal("99.99"))));
+		doNothing().when(mock).quote(eq("CE"), out(new BigDecimal("99.99")));
 
 		PlsqlOut<BigDecimal> value = new PlsqlOut<>();
 		freights.quote("CE", value);
@@ -355,7 +357,7 @@ class PlsqlMocksTest {
 	void object_parameter() {
 		Freights mock = mocks.mock(Freights.class);
 
-		when(() -> mock.register(any())).thenThrow(-20300, "not registered");
+		doThrow(-20300, "not registered").when(mock).register(any());
 
 		assertThatThrownBy(() -> freights.register(new FreightItem(1L, "SP")))
 				.isInstanceOfSatisfying(PlsqlRoutineRaisedException.class, e -> assertThat(e.getCode()).isEqualTo(20300));
@@ -443,7 +445,7 @@ class PlsqlMocksTest {
 	void composite_parameter_matched_by_value() {
 		Freights mock = mocks.mock(Freights.class);
 
-		assertThatThrownBy(() -> when(() -> mock.register(new FreightItem(1L, "SP"))))
+		assertThatThrownBy(() -> doNothing().when(mock).register(new FreightItem(1L, "SP")))
 				.isInstanceOf(IllegalStateException.class)
 				.hasMessageContaining("P_ITEM")
 				.hasMessageContaining("any()");

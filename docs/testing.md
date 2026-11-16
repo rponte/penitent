@@ -237,13 +237,19 @@ when(freights.calculate("SP", "XX")).thenThrow(-20200, "Cannot calculate freight
 when(freights.calculate("SP", "AM")).thenRaise("NO_DATA_FOUND");
 ```
 
-**Set `OUT` parameters.** A procedure returns nothing, so its call goes in a lambda, and `out(value)` stands for the
-`PlsqlOut` argument, with the value the stub sets:
+**Stub a procedure.** A procedure returns nothing, so its stub takes the `doXxx()` family, as in Mockito: the answer
+first, then the call on the mock. `doNothing()` makes it return, setting the `OUT` values given with `out(value)`, in
+place of the `PlsqlOut` arguments; `doThrow` and `doRaise` make it raise:
 
 <!-- snippet: testing/procedure -->
 ```java
-when(() -> freights.quote(eq("CE"), out(new BigDecimal("99.99"))));
+doNothing().when(freights).quote(eq("CE"), out(new BigDecimal("99.99")));
+doThrow(-20200, "No quote for XX").when(freights).quote(eq("XX"), any());
 ```
+
+`doReturn(value)` stubs a function the same way, for a test that prefers one style throughout:
+`doReturn(new BigDecimal("24.90")).when(freights).calculate("SP", "CE")` is `when(...).thenReturn(...)` turned
+around. A `doXxx().when(mock)` with no call after it stubs nothing, and is refused at the next call on the library.
 
 **Return an object type or a collection.** `thenReturn` takes the same Java types the application calls the routine
 with, mapped the same way, `@PlsqlType`, `@PlsqlAttr` and the converters of the attributes included. For a function

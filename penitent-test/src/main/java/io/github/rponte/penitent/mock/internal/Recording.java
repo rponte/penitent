@@ -5,19 +5,55 @@ import java.util.List;
 
 /**
  * What the current thread is in the middle of, as in Mockito: the matchers given for the call being made, the last
- * call made on a mock, for {@code when}, and a verification waiting for its call.
+ * call made on a mock, for {@code when}, a verification waiting for its call, and the answer of a {@code doXxx()}
+ * waiting for its call.
  */
 public final class Recording {
 
 	private static final ThreadLocal<List<Matcher>> MATCHERS = ThreadLocal.withInitial(ArrayList::new);
 	private static final ThreadLocal<Invocation> LAST = new ThreadLocal<>();
 	private static final ThreadLocal<Verification> VERIFICATION = new ThreadLocal<>();
+	private static final ThreadLocal<Pending> PENDING = new ThreadLocal<>();
 
 	/** A verification of {@code mock}, waiting for the call to verify. */
 	public record Verification(Object mock, int times) {
 	}
 
+	/** The answer of {@code doXxx().when(mock)}, as {@code label} shows it, waiting for the call made on {@code mock}. */
+	public record Pending(Object mock, Stub.Action action, String label) {
+	}
+
 	private Recording() {
+	}
+
+	/** Takes the answer of a {@code doXxx()}, for the next call on its mock; one still waiting is refused first. */
+	public static void pending(Pending pending) {
+		refusePending();
+		PENDING.set(pending);
+	}
+
+	/** The answer waiting for a call of {@code mock}, taken; {@code null} when there is none. */
+	static Pending takePending(Object mock) {
+		Pending pending = PENDING.get();
+		if (pending == null || pending.mock() != mock) {
+			return null;
+		}
+		PENDING.remove();
+		return pending;
+	}
+
+	/**
+	 * Refuses the answer of a {@code doXxx().when(mock)} that no call on the mock followed: the stub was never made,
+	 * and the routine would run its real code.
+	 */
+	public static void refusePending() {
+		Pending pending = PENDING.get();
+		if (pending != null) {
+			reset();
+			throw new IllegalStateException(pending.label() + ".when(mock) was not followed by a call on the mock, so"
+					+ " nothing was stubbed: write the call right after it, as in " + pending.label()
+					+ ".when(mock).routine(...)");
+		}
 	}
 
 	public static void matcher(Matcher matcher) {
@@ -83,5 +119,6 @@ public final class Recording {
 		MATCHERS.get().clear();
 		LAST.remove();
 		VERIFICATION.remove();
+		PENDING.remove();
 	}
 }
