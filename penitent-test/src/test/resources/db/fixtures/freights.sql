@@ -17,9 +17,26 @@ CREATE OR REPLACE TYPE freight_item_t AS OBJECT (
 CREATE OR REPLACE TYPE freight_item_list_t AS TABLE OF freight_item_t
 /
 
+-- a collection of scalars, and an object type with an object type and collections as attributes
+CREATE OR REPLACE TYPE freight_tags_t AS TABLE OF VARCHAR2(20)
+/
+
+CREATE OR REPLACE TYPE freight_codes_v AS VARRAY(5) OF NUMBER
+/
+
+CREATE OR REPLACE TYPE freight_shipment_t AS OBJECT (
+  code  VARCHAR2(10),
+  item  freight_item_t,
+  items freight_item_list_t,
+  tags  freight_tags_t,
+  codes freight_codes_v
+)
+/
+
 CREATE OR REPLACE PACKAGE freights AS
   SUBTYPE money IS NUMBER(10,2);
   TYPE freight_rows_t IS TABLE OF freight_item%ROWTYPE;
+  TYPE freight_ids_t IS TABLE OF NUMBER INDEX BY PLS_INTEGER;
 
   FUNCTION calculate(p_origin freight_item.uf%TYPE, p_destination VARCHAR2 DEFAULT 'SP') RETURN money;
   FUNCTION calculate(p_weight NUMBER) RETURN NUMBER;
@@ -36,6 +53,13 @@ CREATE OR REPLACE PACKAGE freights AS
   FUNCTION count_rows(p_rows freight_rows_t) RETURN NUMBER;
   FUNCTION rows_of(p_count NUMBER) RETURN freight_rows_t;
   FUNCTION describe_region(p_region plsql_registry.region%ROWTYPE) RETURN VARCHAR2;
+  FUNCTION item_of(p_id NUMBER) RETURN freight_item_t;
+  FUNCTION items_of(p_uf VARCHAR2) RETURN freight_item_list_t;
+  FUNCTION shipment_of(p_code VARCHAR2) RETURN freight_shipment_t;
+  FUNCTION tags_of(p_uf VARCHAR2) RETURN freight_tags_t;
+  PROCEDURE load_item(p_id NUMBER, p_item OUT freight_item_t);
+  FUNCTION count_items_of(p_uf VARCHAR2) RETURN NUMBER;
+  FUNCTION ids_of(p_uf VARCHAR2) RETURN freight_ids_t;
 END freights;
 /
 
@@ -136,6 +160,45 @@ CREATE OR REPLACE PACKAGE BODY freights AS
   BEGIN
     RETURN p_region.id || '/' || p_region.uf;
   END describe_region;
+
+  -- give back object types and collections, which stubs answer with
+  FUNCTION item_of(p_id NUMBER) RETURN freight_item_t IS
+  BEGIN
+    RETURN freight_item_t(p_id, 'XX');
+  END item_of;
+
+  FUNCTION items_of(p_uf VARCHAR2) RETURN freight_item_list_t IS
+  BEGIN
+    RETURN freight_item_list_t(freight_item_t(1, p_uf));
+  END items_of;
+
+  FUNCTION shipment_of(p_code VARCHAR2) RETURN freight_shipment_t IS
+  BEGIN
+    RETURN freight_shipment_t(p_code, NULL, NULL, NULL, NULL);
+  END shipment_of;
+
+  FUNCTION tags_of(p_uf VARCHAR2) RETURN freight_tags_t IS
+  BEGIN
+    RETURN freight_tags_t(p_uf);
+  END tags_of;
+
+  PROCEDURE load_item(p_id NUMBER, p_item OUT freight_item_t) IS
+  BEGIN
+    p_item := freight_item_t(p_id, 'XX');
+  END load_item;
+
+  -- calls items_of from PL/SQL
+  FUNCTION count_items_of(p_uf VARCHAR2) RETURN NUMBER IS
+  BEGIN
+    RETURN items_of(p_uf).COUNT;
+  END count_items_of;
+
+  FUNCTION ids_of(p_uf VARCHAR2) RETURN freight_ids_t IS
+    l_ids freight_ids_t;
+  BEGIN
+    l_ids(1) := 1;
+    RETURN l_ids;
+  END ids_of;
 END freights;
 /
 

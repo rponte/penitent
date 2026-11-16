@@ -129,8 +129,9 @@ And what it cannot do, in the first version:
 
 - **An argument of an object type, a collection or a record is matched with `any()` only.** No PL/SQL literal
   stands for its value, and `JSON_ARRAY` does not take it, so a recorded call holds `"(not recorded)"` in its place,
-  keeping the position of the others; another matcher on it is refused before compiling. A stub cannot return one
-  yet, nor set it as an `OUT`.
+  keeping the position of the others; another matcher on it is refused before compiling. A stub can return an object
+  type or a collection, and set one as an `OUT`, but not a `RECORD`, a `%ROWTYPE` or an `INDEX BY`, which have no
+  constructor; see [An object type or a collection in a stub](#an-object-type-or-a-collection-in-a-stub).
 - **A `%ROWTYPE` goes by a subtype compiled in the test's edition.** In the edition, the driver cannot resolve
   `"SCHEMA".TABLE%ROWTYPE`, so the library compiles a package subtype of it there, the first time a record of that
   table is bound, and binds the record by the subtype's name; see
@@ -259,6 +260,34 @@ FUNCTION calculate(p_origin freight_item.uf%TYPE, p_destination VARCHAR2 DEFAULT
 - **No stub that matches** raises `ORA-20999`, with the arguments, so a missing stub never passes unnoticed.
 - **The routine's real code is gone,** in this edition: what it called, it no longer calls. Every other routine of
   the body stays as written.
+
+### An object type or a collection in a stub
+
+A stub's answer is PL/SQL in the generated body, so a value of an object type or a collection has to be written as
+its constructor:
+
+```sql
+RETURN "PLSQL_TEST"."FREIGHT_ITEM_LIST_T"("PLSQL_TEST"."FREIGHT_ITEM_T"(1, 'SP'), "PLSQL_TEST"."FREIGHT_ITEM_T"(2, 'CE'));
+```
+
+**How it is written.** The mocks do not map the Java value themselves. The core encodes it as a call would send it to
+the routine, through an internal entry point of the interface's handler, into the driver's `Struct` or `Array`, with
+the same mapping the application uses: `@PlsqlType`, `@PlsqlAttr`, the converters of the attributes, and the
+attributes in the order the dictionary declares them. The mocks then write what the driver holds: each `Struct` as
+the constructor of its type, each `Array` as the constructor of its collection, by the names the driver gives, owner
+included, in quotes. A value that does not fit the type fails there, with the message the application would get,
+before anything is compiled.
+
+**When.** Once per stub, when it is made, on a connection of the mocks' own; the stub keeps the PL/SQL written, which
+the body and the log both show.
+
+**What has no constructor,** and is refused before compiling: a `RECORD` and a `%ROWTYPE`, before qualified
+expressions, and an `INDEX BY` collection. A method-level converter, `@PlsqlConvert` on the method, does not apply to
+the value returned by a stub.
+
+**Left aside:** mapping the Java value again in the mocks, from the dictionary. It would be a second mapping to keep
+in step with the core's, and the first difference between them would be a stub that answers something the
+application could never receive.
 
 ### What `verify` reads
 

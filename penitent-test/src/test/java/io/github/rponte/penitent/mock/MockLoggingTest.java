@@ -49,7 +49,12 @@ class MockLoggingTest {
 		String describe(@PlsqlType("freight_item%ROWTYPE") FreightItem row);
 	}
 
-	/** A row of FREIGHT_ITEM. */
+	@PlsqlPackage("FREIGHTS")
+	interface Items {
+		FreightItem itemOf(BigDecimal pId);
+	}
+
+	/** A row of FREIGHT_ITEM, and FREIGHT_ITEM_T. */
 	record FreightItem(Long id, String uf) {
 	}
 
@@ -181,6 +186,19 @@ class MockLoggingTest {
 						+ " PLSQL_TEST\\.PENITENT_ROW_\\w{12}_1\\.ROW_T in \\d+ ms"),
 				line -> assertThat(line).matches("DEBUG Aliased row type    : \"PLSQL_REGISTRY\"\\.REGION%ROWTYPE as"
 						+ " PLSQL_TEST\\.PENITENT_ROW_\\w{12}_2\\.ROW_T in \\d+ ms"));
+	}
+
+	@Test
+	@DisplayName("at DEBUG: a stub that returns an object type shows its constructor")
+	void composite_stub() {
+		logger().setLevel(Level.DEBUG);
+		try (PlsqlMocks mocks = PlsqlMocks.on(dataSource)) {
+			mocks.begin();
+			when(mocks.mock(Items.class).itemOf(BigDecimal.ONE)).thenReturn(new FreightItem(1L, "SP"));
+		}
+
+		assertThat(lines()).anySatisfy(line -> assertThat(line).matches("DEBUG Stubbed routine     :"
+				+ " PLSQL_TEST\\.FREIGHTS\\.ITEM_OF\\(1\\) -> RETURN \"PLSQL_TEST\"\\.\"FREIGHT_ITEM_T\"\\(1, 'SP'\\) in \\d+ ms"));
 	}
 
 	@Test

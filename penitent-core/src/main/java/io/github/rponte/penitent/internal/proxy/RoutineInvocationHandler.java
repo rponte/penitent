@@ -34,6 +34,7 @@ public final class RoutineInvocationHandler implements InvocationHandler {
 	private final PlsqlExceptionTranslator translator;
 	private final RoutineCall routines;
 	private final BlockCall blocks;
+	private final ValueEncoder encoder;
 
 	/** @param defaultBind the bind of an interface that does not declare one */
 	public RoutineInvocationHandler(Class<?> type, DataSource dataSource, PlsqlExceptionTranslator translator,
@@ -42,7 +43,7 @@ public final class RoutineInvocationHandler implements InvocationHandler {
 		this.connections = new Connections.FromDataSource(dataSource);
 		this.translator = translator;
 		TypeCache types = new TypeCache(converters);
-		ValueEncoder encoder = new ValueEncoder(types);
+		this.encoder = new ValueEncoder(types);
 		ValueDecoder decoder = new ValueDecoder(types);
 		this.routines = new RoutineCall(type, defaultBind, types, encoder, decoder);
 		this.blocks = new BlockCall(types, encoder, decoder);
@@ -54,6 +55,7 @@ public final class RoutineInvocationHandler implements InvocationHandler {
 		this.translator = original.translator;
 		this.routines = original.routines;
 		this.blocks = original.blocks;
+		this.encoder = original.encoder;
 	}
 
 	public Class<?> type() {
@@ -129,6 +131,24 @@ public final class RoutineInvocationHandler implements InvocationHandler {
 			throw translator.translate(e.failure());
 		} catch (SQLException e) {
 			throw translator.translate(new PlsqlFailure(null, e, PlsqlFailure.Phase.CONNECTION));
+		}
+	}
+
+	/**
+	 * {@code value} as a call of {@code method} would send it to {@code target}, on {@code connection}: a
+	 * {@code Struct} for an object type, an {@code Array} for a collection, and the driver's value for a scalar.
+	 * For a tool that writes the value elsewhere, such as the mocks of {@code penitent-test}, which write it as
+	 * PL/SQL; {@code target} may be the routine's return value, which a call never sends.
+	 */
+	public Object encode(Method method, RoutineMetadata.Argument target, Object value, Connection connection) {
+		try {
+			return encoder.encode(value, target, null, routines.describeOnce(method, connection).schema(), connection);
+		} catch (PlsqlMappingException e) {
+			throw MappingMessages.of(method, e);
+		} catch (SqlFailure e) {
+			throw translator.translate(e.failure());
+		} catch (SQLException e) {
+			throw translator.translate(new PlsqlFailure(null, e, PlsqlFailure.Phase.PREPARATION));
 		}
 	}
 

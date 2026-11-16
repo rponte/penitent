@@ -244,9 +244,7 @@ public final class PlsqlMocks implements AutoCloseable {
 		}
 
 		private void then(Stub.Action action) {
-			Stub stub = new Stub(invocation, action);
-			invocation.mock().session().stub(stub, current);
-			current = stub;
+			current = invocation.mock().session().stub(new Stub(invocation, action), current);
 		}
 	}
 }
