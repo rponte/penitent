@@ -1,7 +1,9 @@
 package io.github.rponte.penitent.mock;
 
+import java.io.InputStream;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Proxy;
+import java.nio.file.Path;
 import java.util.Map;
 import java.util.Objects;
 import java.util.WeakHashMap;
@@ -15,6 +17,7 @@ import io.github.rponte.penitent.mock.internal.Matcher;
 import io.github.rponte.penitent.mock.internal.MockHandler;
 import io.github.rponte.penitent.mock.internal.MockSession;
 import io.github.rponte.penitent.mock.internal.Recording;
+import io.github.rponte.penitent.mock.internal.ScriptSources;
 import io.github.rponte.penitent.mock.internal.Scripts;
 import io.github.rponte.penitent.mock.internal.Stub;
 
@@ -112,6 +115,36 @@ public final class PlsqlMocks implements AutoCloseable {
 	@Override
 	public void close() {
 		end();
+	}
+
+	/**
+	 * Applies the script at {@code location} in the test's edition: a view, a package, its body, a function, a
+	 * procedure or a synonym replaced with {@code CREATE OR REPLACE}, which only the test sees, and which go with the
+	 * edition. The location is on the classpath, as {@code /mocks/freight-items-v.sql} or with {@code classpath:}, or
+	 * on the file system, with {@code file:}; SQL is given to {@link #applyScriptText}. PL/SQL ends on a line holding
+	 * only {@code /}, and SQL with {@code ;} or such a line. Every statement is checked before any runs, and the
+	 * script runs on a connection of the mocks' own, so it commits nothing of the test's transaction.
+	 */
+	public void applyScript(String location) {
+		session.applyScript(ScriptSources.read(location), location);
+	}
+
+	/** {@link #applyScript(String)}, for a script on the file system. */
+	public void applyScript(Path file) {
+		Objects.requireNonNull(file, "file");
+		session.applyScript(ScriptSources.read(file), file.toString());
+	}
+
+	/** {@link #applyScript(String)}, for a script read from {@code script}, as UTF-8, which is left open. */
+	public void applyScript(InputStream script) {
+		Objects.requireNonNull(script, "script");
+		session.applyScript(ScriptSources.read(script), "the script's stream");
+	}
+
+	/** {@link #applyScript(String)}, for a script given as text, in the same format as a file. */
+	public void applyScriptText(String script) {
+		Objects.requireNonNull(script, "script");
+		session.applyScript(script, "the script text");
 	}
 
 	/** A mock of {@code type}, an interface of Penitent: its calls are only recorded, for {@link #when} and {@link #verify}. */

@@ -53,6 +53,16 @@ final class MockLog {
 		}
 	}
 
+	static void applied(PlsqlScript.Statement statement, long start) {
+		if (LOG.isDebugEnabled()) {
+			LOG.debug("{}: {}, statement {}, {} in {} ms", label("Applied SQL"), statement.source(), statement.number(),
+					statement.object(), elapsed(start));
+		}
+		if (LOG.isTraceEnabled()) {
+			LOG.trace("{}: {}", label("-> applied SQL"), statement.sql().strip().replace("\n", "\n" + CONTINUATION));
+		}
+	}
+
 	static void generated(String code) {
 		if (LOG.isTraceEnabled()) {
 			LOG.trace("{}: {}", label("-> generated PL/SQL"), code.strip().replace("\n", "\n" + CONTINUATION));

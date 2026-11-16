@@ -6,9 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 
 import javax.sql.DataSource;
@@ -30,7 +28,8 @@ public final class Scripts {
 	}
 
 	public static void apply(String script, DataSource dataSource, String schema) {
-		List<String> statements = statementsOf(read(script).replace("${schema}", schema));
+		List<String> statements = PlsqlScript.parse(read(script).replace("${schema}", schema), script).stream()
+				.map(PlsqlScript.Statement::sql).toList();
 		try (Connection connection = dataSource.getConnection(); Statement statement = connection.createStatement()) {
 			for (String sql : statements) {
 				try {
@@ -44,37 +43,6 @@ public final class Scripts {
 		} catch (SQLException e) {
 			throw new IllegalStateException("failed to apply " + script + ": " + e.getMessage(), e);
 		}
-	}
-
-	static List<String> statementsOf(String script) {
-		List<String> statements = new ArrayList<>();
-		StringBuilder current = new StringBuilder();
-		boolean plsql = false;
-		for (String line : script.lines().toList()) {
-			String trimmed = line.trim();
-			if (current.isEmpty() && (trimmed.isEmpty() || trimmed.startsWith("--"))) {
-				continue;
-			}
-			if (current.isEmpty()) {
-				plsql = trimmed.toUpperCase(Locale.ROOT).matches("CREATE( OR REPLACE)? (PACKAGE|PROCEDURE|FUNCTION|TYPE|TRIGGER)\\b.*")
-						|| trimmed.toUpperCase(Locale.ROOT).matches("(BEGIN|DECLARE)\\b.*");
-			}
-			if (plsql && trimmed.equals("/")) {
-				statements.add(current.toString().strip());
-				current.setLength(0);
-				continue;
-			}
-			current.append(line).append('\n');
-			if (!plsql && trimmed.endsWith(";")) {
-				String sql = current.toString().strip();
-				statements.add(sql.substring(0, sql.length() - 1));
-				current.setLength(0);
-			}
-		}
-		if (!current.toString().isBlank()) {
-			statements.add(current.toString().strip());
-		}
-		return statements;
 	}
 
 	private static String read(String script) {

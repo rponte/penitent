@@ -182,6 +182,17 @@ class DocsTestingTest {
 		}
 
 		@Test
+		@DisplayName("testing.md: a view replaced by a script in the test's edition")
+		void script() {
+			// snippet: testing/apply-script
+			mocks.applyScript("/mocks/freight-items-v.sql");
+			// end-snippet
+
+			assertThat(new JdbcTemplate(dataSource).queryForObject("SELECT COUNT(*) FROM freight_items_v WHERE uf = 'SP'",
+					Integer.class)).isEqualTo(2);
+		}
+
+		@Test
 		@DisplayName("testing.md: a procedure with OUT")
 		void procedure() {
 			// snippet: testing/procedure

@@ -41,6 +41,11 @@ CREATE OR REPLACE TYPE freight_shipment_t AS OBJECT (
 )
 /
 
+-- a view, which a test replaces in its edition
+CREATE OR REPLACE VIEW freight_items_v AS
+  SELECT id, uf FROM freight_item
+/
+
 CREATE OR REPLACE PACKAGE freights AS
   SUBTYPE money IS NUMBER(10,2);
   TYPE freight_rows_t IS TABLE OF freight_item%ROWTYPE;
@@ -69,6 +74,7 @@ CREATE OR REPLACE PACKAGE freights AS
   FUNCTION count_items_of(p_uf VARCHAR2) RETURN NUMBER;
   FUNCTION ids_of(p_uf VARCHAR2) RETURN freight_ids_t;
   FUNCTION event_of(p_id NUMBER) RETURN freight_event_t;
+  FUNCTION count_view_items(p_uf VARCHAR2) RETURN NUMBER;
 END freights;
 /
 
@@ -213,6 +219,14 @@ CREATE OR REPLACE PACKAGE BODY freights AS
   BEGIN
     RETURN freight_event_t(p_id, NULL, NULL);
   END event_of;
+
+  -- reads the view
+  FUNCTION count_view_items(p_uf VARCHAR2) RETURN NUMBER IS
+    l_count NUMBER;
+  BEGIN
+    SELECT COUNT(*) INTO l_count FROM freight_items_v WHERE uf = p_uf;
+    RETURN l_count;
+  END count_view_items;
 END freights;
 /
 
