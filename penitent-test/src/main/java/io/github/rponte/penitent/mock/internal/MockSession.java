@@ -217,7 +217,9 @@ public final class MockSession implements RowTypes {
 	 * the package goes with the edition. It is compiled in the schema of the mocks, whose packages have editions, and
 	 * never in the table's, which may have none, and where nothing is written: the subtype takes the grant on the
 	 * table that the routine taking the record already needs. Its name carries the edition's, so that no connection
-	 * of the pool can hold the descriptor of the one of an earlier test.
+	 * of the pool can hold the descriptor of the one of an earlier test, and a number, in the order the test binds
+	 * the tables. The name comes from the core as the dictionary has it, whichever way the code wrote it, so one
+	 * table is one name here.
 	 */
 	@Override
 	public String nameOf(CompositeType type, String name) {
@@ -231,8 +233,8 @@ public final class MockSession implements RowTypes {
 				return known;
 			}
 			long start = System.nanoTime();
-			String pkg = "PENITENT_ROW_" + current.substring(PREFIX.length()) + "_"
-					+ String.format(Locale.ROOT, "%08X", name.toUpperCase(Locale.ROOT).hashCode());
+			// numbered as the tables come: no two tables of a test share a package, and none is compiled twice
+			String pkg = "PENITENT_ROW_" + current.substring(PREFIX.length()) + "_" + (rowTypes.size() + 1);
 			String ddl = "CREATE OR REPLACE PACKAGE \"" + schema + "\"." + pkg + " AS\n  SUBTYPE ROW_T IS "
 					+ name + ";\nEND " + pkg + ";";
 			String alias;

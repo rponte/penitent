@@ -417,14 +417,16 @@ The stub is not a Java trick: it is PL/SQL, compiled into the database, where on
 - **A `%ROWTYPE` goes by a subtype in the test's edition.** In an edition other than the default one, Oracle cannot
   describe `TABLE%ROWTYPE` to the driver, and the call would fail with `ORA-17060`. So the first time a record of a
   table is bound in the test, the library compiles a package with `SUBTYPE ROW_T IS TABLE%ROWTYPE` into the edition,
-  in the schema of the mocks, never in the table's, and binds the record by that name, which the driver resolves. The
-  package goes with the edition. In the call log, the call shows it:
+  in the schema of the mocks, never in the table's, and binds the record by that name, which the driver resolves. Each
+  table gets a package of its own, `PENITENT_ROW_` and the edition, numbered in the order the test binds the tables,
+  which goes with the edition. The prefix `PENITENT_` is the library's: name no object of the schema with it. In the
+  call log, the call shows it:
 
   <!-- snippet: untested -->
   ```text
   DEBUG Calling routine     : PLSQL_TEST.FREIGHTS.DESCRIBE <- Freights.describe
   DEBUG -> SQL              : {? = call PLSQL_TEST.FREIGHTS.DESCRIBE(?)}
-  DEBUG -> type name        : "PLSQL_TEST".FREIGHT_ITEM%ROWTYPE as PLSQL_TEST.PENITENT_ROW_5F2A91C3D4E6_1A2B3C4D.ROW_T
+  DEBUG -> type name        : "PLSQL_TEST".FREIGHT_ITEM%ROWTYPE as PLSQL_TEST.PENITENT_ROW_5F2A91C3D4E6_1.ROW_T
   DEBUG <- completed        : 4 ms
   ```
 
