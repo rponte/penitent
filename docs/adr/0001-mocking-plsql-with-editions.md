@@ -283,7 +283,9 @@ the body and the log both show.
 
 **What has no constructor,** and is refused before compiling: a `RECORD` and a `%ROWTYPE`, before qualified
 expressions, and an `INDEX BY` collection. A method-level converter, `@PlsqlConvert` on the method, does not apply to
-the value returned by a stub.
+the value returned by a stub: the entry point encodes the value for its Oracle type, and that converter runs before
+it, in the call. What the tests do not cover yet, such as dates, LOBs and collections declared in a package, is listed
+in the compatibility page, under "Not measured".
 
 **Left aside:** mapping the Java value again in the mocks, from the dictionary. It would be a second mapping to keep
 in step with the core's, and the first difference between them would be a stub that answers something the
