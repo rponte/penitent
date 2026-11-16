@@ -1,5 +1,6 @@
 package io.github.rponte.penitent.mock;
 
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -63,12 +64,27 @@ public final class PlsqlMockExtension implements BeforeEachCallback, AfterEachCa
 		PlsqlMocks mocks = PlsqlMocks.on(dataSource.get());
 		mocks.begin();
 		current = mocks;
-		// the class's first, then the method's; a failure here still ends the mocks, in afterEach
-		List<PlsqlMockScript> scripts = new ArrayList<>(
-				AnnotationSupport.findRepeatableAnnotations(context.getRequiredTestClass(), PlsqlMockScript.class));
+		// the classes' first, the outermost first, then the method's; a failure here still ends the mocks, in afterEach
+		List<PlsqlMockScript> scripts = new ArrayList<>();
+		for (Class<?> type : enclosingFirst(context.getRequiredTestClass())) {
+			scripts.addAll(AnnotationSupport.findRepeatableAnnotations(type, PlsqlMockScript.class));
+		}
 		scripts.addAll(AnnotationSupport.findRepeatableAnnotations(context.getRequiredTestMethod(), PlsqlMockScript.class));
 		AnnotatedScripts.apply(mocks, scripts, context.getRequiredTestClass().getSimpleName() + "."
 				+ context.getRequiredTestMethod().getName());
+	}
+
+	/**
+	 * The test class and, for a {@code @Nested} one, the classes that enclose it, the outermost first: JUnit finds the
+	 * annotations of a class and its superclasses, not of the classes around it, which Spring does.
+	 */
+	private static List<Class<?>> enclosingFirst(Class<?> testClass) {
+		List<Class<?>> classes = new ArrayList<>();
+		for (Class<?> type = testClass; type != null; type = Modifier.isStatic(type.getModifiers()) ? null
+				: type.getEnclosingClass()) {
+			classes.add(0, type);
+		}
+		return classes;
 	}
 
 	@Override

@@ -11,6 +11,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -168,5 +173,81 @@ class PlsqlMockScriptExtensionTest {
 				.isInstanceOf(IllegalStateException.class)
 				.hasMessageContaining("value")
 				.hasMessageContaining("scripts");
+	}
+
+	// ---------------------------------------------------------------- where the annotation is found
+
+	/** The script on a superclass of the test class. */
+	@PlsqlMockScript("/mocks/freight-items-v.sql")
+	abstract static class ViewBase {
+
+		@RegisterExtension
+		static PlsqlMockExtension mocks = PlsqlMockExtension.on(() -> dataSource);
+	}
+
+	@ExtendWith(TestKit.OnlyThroughTheTestKit.class)
+	static class FromSuperclass extends ViewBase {
+
+		@Test
+		void sees_it() {
+			assertThat(PlsqlPackages.create(Freights.class, dataSource).countViewItems("SP")).isEqualByComparingTo("2");
+		}
+	}
+
+	@Test
+	@DisplayName("JUnit 5: on a superclass of the test class")
+	void junit_superclass() {
+		TestKit.run(FromSuperclass.class).assertStatistics(stats -> stats.started(1).succeeded(1));
+	}
+
+	/** An annotation of the project's own, holding the script. */
+	@Retention(RetentionPolicy.RUNTIME)
+	@Target({ ElementType.TYPE, ElementType.METHOD })
+	@PlsqlMockScript("/mocks/freight-items-v.sql")
+	@interface WithFreightItems {
+	}
+
+	@ExtendWith(TestKit.OnlyThroughTheTestKit.class)
+	static class AsMetaAnnotation {
+
+		@RegisterExtension
+		static PlsqlMockExtension mocks = PlsqlMockExtension.on(() -> dataSource);
+
+		@Test
+		@WithFreightItems
+		void sees_it() {
+			assertThat(PlsqlPackages.create(Freights.class, dataSource).countViewItems("SP")).isEqualByComparingTo("2");
+		}
+	}
+
+	@Test
+	@DisplayName("JUnit 5: as a meta-annotation, on an annotation of the project's own")
+	void junit_meta_annotation() {
+		TestKit.run(AsMetaAnnotation.class).assertStatistics(stats -> stats.started(1).succeeded(1));
+	}
+
+	/** The script on the class that encloses a @Nested one. */
+	@ExtendWith(TestKit.OnlyThroughTheTestKit.class)
+	@PlsqlMockScript("/mocks/freight-items-v.sql")
+	static class Enclosing {
+
+		@RegisterExtension
+		static PlsqlMockExtension mocks = PlsqlMockExtension.on(() -> dataSource);
+
+		@Nested
+		class Inner {
+
+			@Test
+			void sees_it() {
+				assertThat(PlsqlPackages.create(Freights.class, dataSource).countViewItems("SP"))
+						.isEqualByComparingTo("2");
+			}
+		}
+	}
+
+	@Test
+	@DisplayName("JUnit 5: on the class enclosing a @Nested test class")
+	void junit_enclosing_class() {
+		TestKit.run(Enclosing.class).assertStatistics(stats -> stats.started(1).succeeded(1));
 	}
 }

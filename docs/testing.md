@@ -344,8 +344,9 @@ void sees_the_items_of_the_script() {
 }
 ```
 
-On the test class, it applies to every test, before the method's own. It may be repeated, and each one applies in its
-order. `value`, or its alias `scripts`, holds locations, and `scriptText` a script as text, applied after them; one
+On the test class, it applies to every test, before the method's own; it is also found on a superclass, on the class
+around a `@Nested` one, the outermost first, and on an annotation of your own that carries it. It may be repeated, and
+each one applies in its order. `value`, or its alias `scripts`, holds locations, and `scriptText` a script as text, applied after them; one
 that holds neither is refused. In a Spring test without `@EnablePlsqlMocks`, it is refused rather than ignored. With
 any other test framework, which has no extension, call `applyScript` in the test's setup.
 
