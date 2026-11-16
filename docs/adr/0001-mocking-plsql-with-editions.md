@@ -111,10 +111,11 @@ verify(pkg).calculaFrete("SP", "CE");
 | strict | spy: the real logic when no stub matches |
 | JUnit 5, Spring Test | mocking SQL views, which editions can also do |
 
-Since then: the `doXxx()` family for procedures, which compiles a stub once where a lambda compiled it twice,
-object types and collections in a stub, as values returned and as `OUT`
-([An object type or a collection in a stub](#an-object-type-or-a-collection-in-a-stub)), and views, standalone
-routines and synonyms replaced by a script ([Scripts in the test's edition](#scripts-in-the-tests-edition)).
+Since then: stubs of standalone functions and procedures, rewritten whole, in a schema that editions them, which the
+admin script now enables; the `doXxx()` family for procedures, which compiles a stub once where a lambda compiled it
+twice, object types and collections in a stub, as values returned and as `OUT` ([An object type or a collection in a
+stub](#an-object-type-or-a-collection-in-a-stub)), and views, standalone routines and synonyms replaced by a script
+([Scripts in the test's edition](#scripts-in-the-tests-edition)).
 
 ### How a mock behaves
 
@@ -573,7 +574,8 @@ And in the tests of `penitent-test`, in the session of the test user, whose sche
   views, standalone functions and procedures, synonyms, triggers, object types. A script now replaces views,
   packages, standalone routines and synonyms in the test's edition, as
   [Scripts in the test's edition](#scripts-in-the-tests-edition) records, and the admin script enables editions for
-  views besides packages. Still open: triggers and object types, and an API of its own for views. Object types need
+  views and standalone routines besides packages, which stubs also reach. Still open: triggers and object types, and an
+API of its own for views. Object types need
   care: enabling editions for a type that a table uses fails (`ORA-38819`), and forcing it leaves the table invalid,
   as an earlier measurement showed.
 

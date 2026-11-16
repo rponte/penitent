@@ -280,6 +280,32 @@ CREATE OR REPLACE PACKAGE BODY safe_checkout AS
 END safe_checkout;
 /
 
+-- standalone routines, outside any package: their real code fails, so a test passes only through a stub
+CREATE OR REPLACE FUNCTION tax_rate(p_uf VARCHAR2) RETURN NUMBER IS
+BEGIN
+  RAISE_APPLICATION_ERROR(-20400, 'the real tax_rate reads a table the tests do not have');
+END tax_rate;
+/
+
+CREATE OR REPLACE PROCEDURE notify_tax_office(p_invoice NUMBER) IS
+BEGIN
+  RAISE_APPLICATION_ERROR(-20401, 'the real notify_tax_office calls the tax office');
+END notify_tax_office;
+/
+
+CREATE OR REPLACE PROCEDURE quote_tax(p_uf IN VARCHAR2, p_rate OUT NUMBER) IS
+BEGIN
+  RAISE_APPLICATION_ERROR(-20402, 'the real quote_tax calls the tax office');
+END quote_tax;
+/
+
+-- calls tax_rate from PL/SQL
+CREATE OR REPLACE FUNCTION invoice_total(p_value NUMBER, p_uf VARCHAR2) RETURN NUMBER IS
+BEGIN
+  RETURN p_value * (1 + tax_rate(p_uf));
+END invoice_total;
+/
+
 -- a package whose body is wrapped, which the mocks cannot read
 BEGIN
   DBMS_DDL.CREATE_WRAPPED(q'[
@@ -288,5 +314,12 @@ BEGIN
     CREATE OR REPLACE PACKAGE BODY wrapped_one AS
       FUNCTION secret RETURN NUMBER IS BEGIN RETURN 42; END secret;
     END wrapped_one;]');
+END;
+/
+
+-- a standalone function whose source is wrapped
+BEGIN
+  DBMS_DDL.CREATE_WRAPPED(q'[
+    CREATE OR REPLACE FUNCTION wrapped_rate RETURN NUMBER IS BEGIN RETURN 1; END wrapped_rate;]');
 END;
 /

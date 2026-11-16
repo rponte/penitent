@@ -30,6 +30,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import io.github.rponte.penitent.PlsqlOut;
 import io.github.rponte.penitent.PlsqlPackage;
 import io.github.rponte.penitent.PlsqlPackages;
+import io.github.rponte.penitent.PlsqlSchema;
 import io.github.rponte.penitent.exception.PlsqlRoutineRaisedException;
 import io.github.rponte.penitent.mock.PlsqlMocks;
 import io.github.rponte.penitent.mock.TestDatabase;
@@ -129,6 +130,15 @@ class DocsTestingTest {
 		// end-snippet
 	}
 
+	// snippet: testing/standalone-interface
+	@PlsqlSchema
+	public interface Taxes {
+
+	    // CREATE FUNCTION tax_rate(p_uf VARCHAR2) RETURN NUMBER, outside any package
+	    BigDecimal taxRate(String pUf);
+	}
+	// end-snippet
+
 	// snippet: testing/composite-interface
 	@PlsqlPackage("FREIGHTS")
 	public interface FreightItems {
@@ -199,6 +209,18 @@ class DocsTestingTest {
 
 			assertThat(new JdbcTemplate(dataSource).queryForObject("SELECT COUNT(*) FROM freight_items_v WHERE uf = 'SP'",
 					Integer.class)).isEqualTo(2);
+		}
+
+		@Test
+		@DisplayName("testing.md: a stub of a standalone function")
+		void standalone() {
+			Taxes taxes = mocks.mock(Taxes.class);
+
+			// snippet: testing/standalone-stub
+			when(taxes.taxRate("SP")).thenReturn(new BigDecimal("0.18"));
+			// end-snippet
+
+			assertThat(PlsqlPackages.create(Taxes.class, dataSource).taxRate("SP")).isEqualByComparingTo("0.18");
 		}
 
 		@Test

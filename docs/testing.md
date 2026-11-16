@@ -288,6 +288,28 @@ constructor in PL/SQL, so a stub cannot return them yet: it can `thenReturn(null
 declared on the method, `@PlsqlConvert` on it, does not apply to what a stub returns; those of the attributes do. The
 [compatibility page](compatibility.md#not-measured) lists what the tests of this do not cover yet.
 
+**Stub a standalone routine.** A function or procedure outside any package is stubbed the same way, from the
+interface with `@PlsqlSchema` the application calls it through:
+
+<!-- snippet: testing/standalone-interface -->
+```java
+@PlsqlSchema
+public interface Taxes {
+
+    // CREATE FUNCTION tax_rate(p_uf VARCHAR2) RETURN NUMBER, outside any package
+    BigDecimal taxRate(String pUf);
+}
+```
+
+<!-- snippet: testing/standalone-stub -->
+```java
+when(taxes.taxRate("SP")).thenReturn(new BigDecimal("0.18"));
+```
+
+A standalone routine is a unit of its own, so its stub is the whole routine. It needs its schema to edition
+functions and procedures, as `penitent-mock-admin.sql` does; without that, the stub is refused, saying what a DBA has
+to run, since compiling it would replace the real routine for every session.
+
 **Match arguments.** A plain value matches itself; `eq`, `any` and `isNull` work as in Mockito. A parameter of a
 primitive type, such as `int`, takes `anyInt()`, and likewise `anyLong()`, `anyShort()`, `anyByte()`, `anyDouble()`,
 `anyFloat()` and `anyBoolean()`: `any()` returns `null`, which Java unboxes before the call reaches the mock, failing
@@ -465,7 +487,8 @@ try (PlsqlMocks mocks = PlsqlMocks.on(dataSource)) {
 - **The pool needs one connection to spare,** for the mocks' own work, besides those the test holds.
 - **In Spring, inject `DataSource`, not the pool's type,** such as `HikariDataSource`: the bean is wrapped. Use
   `unwrap` to reach the pool.
-- **What can be stubbed, so far:** routines declared in a package spec, in the test user's schema, answering with
+- **What can be stubbed, so far:** routines declared in a package spec, and standalone functions and procedures, in
+  the test user's schema, answering with
   scalars, object types and collections. A parameter of an object type, a collection or a record is matched with
   `any()` only, and a stub cannot return a `RECORD`, a `%ROWTYPE` or an `INDEX BY` yet. A private routine has no
   method to stub it through, and a wrapped body cannot be read.
@@ -513,11 +536,11 @@ The stub is not a Java trick: it is PL/SQL, compiled into the database, where on
   [edition-based redefinition](https://docs.oracle.com/en/database/oracle/oracle-database/23/adfns/editions.html)
   lets a session see its own version of a package body, while every other session keeps seeing the real one. Each
   test gets an edition of its own, created before it and dropped after it.
-- **Only the stubbed routine is rewritten.** The library reads the package body the database has, parses it, and
-  replaces the stubbed routine's code with generated code that records the call, checks the stubs and answers. Every
-  other routine, and the routine's own declaration, stay as written, and the result is compiled into the test's
-  edition. A stub made after the package was used recompiles it, which is what discards the package's state in the
-  sessions that ran it.
+- **Only the stubbed routine is rewritten,** or, for a standalone function or procedure, the routine itself. The
+  library reads the package body the database has, parses it, and replaces the stubbed routine's code with generated
+  code that records the call, checks the stubs and answers. Every other routine, and the routine's own declaration,
+  stay as written, and the result is compiled into the test's edition. A stub made after the package was used
+  recompiles it, which is what discards the package's state in the sessions that ran it.
 - **The connections enter the edition through the `DataSource`.** An edition belongs to a session, and a pool reuses
   its sessions, so the wrapped `DataSource` moves each connection into the test's edition when it hands it out, and
   back when it is returned. In Spring, the edition begins before the test transaction and ends after it, and the stubs
@@ -553,10 +576,11 @@ or a container init script:
 
 | Script | Run by | What it does |
 |---|---|---|
-| `penitent-mock-admin.sql` | a DBA | enables editions for the schema's packages and views, and grants `CREATE ANY EDITION` and `DROP ANY EDITION` |
+| `penitent-mock-admin.sql` | a DBA | enables editions for the schema's packages, views, functions and procedures, and grants `CREATE ANY EDITION` and `DROP ANY EDITION` |
 | `penitent-mock-schema.sql` | the schema that owns the packages | creates the table `PENITENT_MOCK_CALLS` and the package `PENITENT_MOCK`, which record the calls |
 
-> **Only on a test database.** `ENABLE EDITIONS` cannot be undone. The admin script limits it to packages and views,
+> **Only on a test database.** `ENABLE EDITIONS` cannot be undone. The admin script limits it to packages, views and
+> standalone routines,
 > so tables and object types are left as they are, but it is still a change for good to the schema. A materialized
 > view that reads one of the schema's views makes the views' statement fail with `ORA-38819`: the packages are
 > enabled anyway, by a statement of their own, and a script replacing a view is refused with what to do.

@@ -6,12 +6,17 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- `penitent-test`: `penitent-mock-admin.sql` also enables editions for functions and procedures, each in a statement
+  of its own, for stubs of standalone routines. A schema prepared before keeps working for stubs of packages; a stub of
+  a standalone routine there is refused, saying what a DBA has to run.
+
 ### Removed
 
 - The call log's `Type names from` line, which named the internal class that gives types other names in a test with
   mocks. It showed up once, at the first call that built a composite value, as if it were about that call; each call
   that binds a type by another name still shows it, with `-> type name`.
-
 - `penitent-test`: `thenRaise(String)` and `doRaise(String)`, replaced by `thenRaise(PlsqlError)` and
   `doRaise(PlsqlError)`: `thenRaise("NO_DATA_FOUND")` becomes `thenRaise(PredefinedError.NO_DATA_FOUND)`.
 - `penitent-test`: `when(Runnable)`, the lambda that stubbed a procedure, replaced by the `doXxx()` family:
@@ -19,6 +24,9 @@ All notable changes to this project are listed here. The format follows
   becomes `doThrow(code, message).when(m).p(...)`.
 
 ### Added
+
+- `penitent-test`: stubs of standalone functions and procedures, outside any package, from an interface with
+  `@PlsqlSchema`, with the same API as a routine of a package. The whole routine is rewritten in the test's edition.
 
 - `penitent-test`: `PlsqlError`, the exception a stub raises: an Oracle predefined exception, from the enum
   `PredefinedError`, with its code, or an exception a package declares in its spec, from `PlsqlError.declared`, which

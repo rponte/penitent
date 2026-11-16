@@ -101,7 +101,10 @@ public final class TestDatabase {
 						+ oracle.defaultTablespace(),
 				"CREATE TABLE " + REGISTRY + ".REGION (ID NUMBER PRIMARY KEY, UF VARCHAR2(2))",
 				// directly, not through a role: a package compiles only with direct grants
-				"GRANT SELECT ON " + REGISTRY + ".REGION TO " + OracleUnderTest.USER);
+				"GRANT SELECT ON " + REGISTRY + ".REGION TO " + OracleUnderTest.USER,
+				// a standalone function of another schema, which the mocks refuse to stub
+				"CREATE FUNCTION " + REGISTRY + ".REGION_RATE RETURN NUMBER IS BEGIN RETURN 1; END;",
+				"GRANT EXECUTE ON " + REGISTRY + ".REGION_RATE TO " + OracleUnderTest.USER);
 	}
 
 	/** The statements of {@code db/fixtures/freights.sql}, each ended by a line holding only a slash. */

@@ -256,7 +256,8 @@ public final class MockSession implements RowTypes {
 		String mocked = BodyRewriter.rewrite(pkg, body, List.copyOf(subprograms.values()), generated);
 		List<String> errors;
 		try (Connection connection = connection()) {
-			errors = compileInEdition(connection, mocked, any.schema(), any.packageName(), "PACKAGE BODY");
+			requireEditioned(any, connection);
+			errors = compileInEdition(connection, mocked, any.schema(), unitName(any), unitType(any));
 		} catch (SQLException e) {
 			throw new IllegalStateException("failed to compile the mocked body of " + pkg + ": " + e.getMessage(), e);
 		}
@@ -322,7 +323,7 @@ public final class MockSession implements RowTypes {
 					throw new IllegalStateException(statement.where() + ": " + statement.object() + " does not compile:\n  "
 							+ String.join("\n  ", errors) + "\n" + statement.sql());
 				}
-				if (statement.type().startsWith("PACKAGE")) {
+				if (rewritable(statement)) {
 					scriptedPackages.add(schema + "." + statement.name());
 				}
 				MockLog.applied(statement, start);
@@ -332,10 +333,16 @@ public final class MockSession implements RowTypes {
 		}
 	}
 
+	/** What a stub rewrites too: a package, or a standalone function or procedure. */
+	private static boolean rewritable(PlsqlScript.Statement statement) {
+		return statement.type().startsWith("PACKAGE") || statement.type().equals("FUNCTION")
+				|| statement.type().equals("PROCEDURE");
+	}
+
 	/** A script replacing a package with stubs would undo them, and the stubs would count nothing. */
 	private void requireNoStubs(PlsqlScript.Statement statement) {
 		String pkg = schema + "." + statement.name();
-		if (statement.type().startsWith("PACKAGE") && stubsByPackage.containsKey(pkg)) {
+		if (rewritable(statement) && stubsByPackage.containsKey(pkg)) {
 			throw new IllegalStateException(statement.where() + ": " + pkg + " has stubs in this test, and replacing it"
 					+ " with a script would undo them: a package has stubs or is replaced by a script in a test, not both");
 		}
@@ -399,14 +406,15 @@ public final class MockSession implements RowTypes {
 		}
 	}
 
-	/** The body as the database has it, in the default edition. */
+	/** The package body, or the standalone routine, as the database has it, in the default edition. */
 	private String source(RoutineMetadata routine) {
 		String pkg = packageOf(routine);
 		try (Connection connection = connection();
 				PreparedStatement select = connection.prepareStatement("SELECT TEXT FROM ALL_SOURCE WHERE OWNER = ?"
-						+ " AND NAME = ? AND TYPE = 'PACKAGE BODY' ORDER BY LINE")) {
+						+ " AND NAME = ? AND TYPE = ? ORDER BY LINE")) {
 			select.setString(1, routine.schema());
-			select.setString(2, routine.packageName());
+			select.setString(2, unitName(routine));
+			select.setString(3, unitType(routine));
 			StringBuilder text = new StringBuilder();
 			try (ResultSet rows = select.executeQuery()) {
 				while (rows.next()) {
@@ -414,11 +422,13 @@ public final class MockSession implements RowTypes {
 				}
 			}
 			if (text.isEmpty()) {
-				throw new IllegalStateException(pkg + " has no package body to mock, or it cannot be read from ALL_SOURCE");
+				throw new IllegalStateException(pkg + " has no " + unitType(routine).toLowerCase(Locale.ROOT)
+						+ " to mock, or it cannot be read from ALL_SOURCE");
 			}
 			String firstLine = text.toString().lines().findFirst().orElse("").toUpperCase(Locale.ROOT);
 			if (firstLine.matches(".*\\bWRAPPED\\s*$")) {
-				throw new IllegalStateException(pkg + " has a wrapped body, which cannot be parsed, so it cannot be mocked");
+				throw new IllegalStateException(pkg + " has a wrapped source, which cannot be parsed, so it cannot be"
+						+ " mocked");
 			}
 			return "CREATE OR REPLACE " + text;
 		} catch (SQLException e) {
@@ -582,12 +592,47 @@ public final class MockSession implements RowTypes {
 		return byParameter;
 	}
 
+	/**
+	 * The unit the stub rewrites, as {@code SCHEMA.NAME}: the package of a routine of a package, or the routine
+	 * itself, when it is standalone.
+	 */
 	private static String packageOf(RoutineMetadata routine) {
-		if (routine.packageName() == null) {
-			throw new IllegalStateException(routine.qualifiedName() + " is not in a package: the mocks only rewrite"
-					+ " routines of packages yet");
+		return routine.schema() + "." + unitName(routine);
+	}
+
+	private static String unitName(RoutineMetadata routine) {
+		return routine.packageName() != null ? routine.packageName() : routine.routineName();
+	}
+
+	/** {@code PACKAGE BODY}, or {@code FUNCTION} or {@code PROCEDURE} for a standalone routine. */
+	private static String unitType(RoutineMetadata routine) {
+		if (routine.packageName() != null) {
+			return "PACKAGE BODY";
 		}
-		return routine.schema() + "." + routine.packageName();
+		return routine.returnValue().isPresent() ? "FUNCTION" : "PROCEDURE";
+	}
+
+	/**
+	 * A standalone routine is compiled into the edition only if its schema editions its type: otherwise the
+	 * {@code CREATE OR REPLACE} would replace the real routine, for every session, for good. Packages are checked by
+	 * {@code begin()}; standalone routines are not required there, so that a schema without them keeps working.
+	 */
+	private void requireEditioned(RoutineMetadata routine, Connection connection) throws SQLException {
+		if (routine.packageName() != null) {
+			return;
+		}
+		String type = unitType(routine);
+		if (!routine.schema().equals(schema)) {
+			throw new IllegalStateException(routine.qualifiedName() + " is a standalone " + type + " of the schema "
+					+ routine.schema() + ", and the mocks stub standalone routines of the schema of the mocks only, "
+					+ schema + ", whose editions can be checked");
+		}
+		if (!strings(connection, "SELECT OBJECT_TYPE FROM USER_EDITIONED_TYPES").contains(type)) {
+			throw new IllegalStateException(routine.qualifiedName() + " is a standalone " + type + ", and " + schema
+					+ " does not edition its " + type + " objects, so its stub would replace the real one for every"
+					+ " session, for good. On a test database, a DBA can run ALTER USER " + schema
+					+ " ENABLE EDITIONS FOR " + type + ", which cannot be undone, or apply penitent-mock-admin.sql again");
+		}
 	}
 
 	private void requireBegun() {
