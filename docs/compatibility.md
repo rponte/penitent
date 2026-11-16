@@ -438,6 +438,15 @@ With `penitent-test`, measured on Oracle 23ai only, as [Testing](testing.md#mock
 
 - Oracle 18c and older, such as 12c.
 - `penitent-test` on Oracle 21c and 19c, and stubs of booleans and `LocalDateTime`.
+- A stub that returns an object type or a collection, in cases its tests do not cover:
+  - a method-level converter, `@PlsqlConvert` on the method: it does not apply to the value a stub returns, only the
+    converters of the attributes do;
+  - a collection declared in a package (`TYPE ... IS TABLE OF` or `VARRAY` in a spec), rather than in the schema;
+  - attributes or elements of `DATE`, `TIMESTAMP`, `TIMESTAMP WITH TIME ZONE`, `BOOLEAN`, `RAW`, `CLOB` and `BLOB`:
+    the tests cover numbers and text; a value the mocks cannot write is refused before compiling, naming its Java
+    class;
+  - a collection of collections;
+  - what a stub with a large value costs to compile.
 - Drivers 18.x and older.
 - Resilience4j's `@Retry` on a `@Transactional` method, `@Bulkhead` and `@RateLimiter`.
 - A Jakarta EE container's `DataSource` inside a JTA transaction, with `create` or with `PlsqlPackages.using`.

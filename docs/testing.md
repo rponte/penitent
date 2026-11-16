@@ -270,7 +270,9 @@ when(freightItems.itemsOf("SP")).thenReturn(List.of(new FreightItem(1L, "SP"), n
 The stub answers with `FREIGHT_ITEM_LIST_T(FREIGHT_ITEM_T(1, 'SP'), FREIGHT_ITEM_T(2, 'CE'))`, to Java and to PL/SQL
 alike. Object types nest, collections can be empty, attributes and elements can be `null`, and an `OUT` of an object type
 or a collection is set the same way, with `out(value)`. A `RECORD`, a `%ROWTYPE` and an `INDEX BY` have no constructor
-in PL/SQL, so a stub cannot return them yet: it can `thenReturn(null)` or `thenThrow`.
+in PL/SQL, so a stub cannot return them yet: it can `thenReturn(null)` or `thenThrow`. A converter declared on the
+method, `@PlsqlConvert` on it, does not apply to what a stub returns; those of the attributes do. The
+[compatibility page](compatibility.md#not-measured) lists what the tests of this do not cover yet.
 
 **Match arguments.** A plain value matches itself; `eq`, `any` and `isNull` work as in Mockito. When several stubs
 match a call, the last one wins, so write the general ones first:
