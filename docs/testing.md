@@ -2,8 +2,8 @@
 
 Code that calls PL/SQL is best tested against a real Oracle: the routine, the SQL inside it and the data it reads are
 where most of the behavior lives. Penitent's interfaces are plain Java, so a test calls them as the application does,
-and checks what comes back. This page starts there, and then shows how to stub a single routine, for the cases where
-the real one is out of your hands.
+and checks what comes back. This page starts there, and then shows how to stub a single routine, or replace a view or
+a package, for the cases where the real one is out of your hands.
 
 ## Testing code that calls PL/SQL
 
@@ -124,8 +124,9 @@ inserted. [Transactions and connections](transactions.md) has the details, with 
 
 Sometimes the real routine is the problem, not the thing to test. A package that calls a web service through
 `UTL_HTTP`, reads another system over a database link, or belongs to a team whose test data you cannot shape; an
-error that is hard to provoke for real, such as a timeout or a rule deep inside another package. For those, stub that
-one routine, and keep everything else real.
+error that is hard to provoke for real, such as a timeout or a rule deep inside another package; a view over another
+system's tables. For those, stub that one routine, or [replace that view](#replacing-a-view-or-a-package), and keep
+everything else real.
 
 ## Mocking a routine
 
@@ -268,10 +269,10 @@ when(freightItems.itemsOf("SP")).thenReturn(List.of(new FreightItem(1L, "SP"), n
 ```
 
 The stub answers with `FREIGHT_ITEM_LIST_T(FREIGHT_ITEM_T(1, 'SP'), FREIGHT_ITEM_T(2, 'CE'))`, to Java and to PL/SQL
-alike. Object types nest, collections can be empty, attributes and elements can be `null`, and an `OUT` of an object type
-or a collection is set the same way, with `out(value)`. A `RECORD`, a `%ROWTYPE` and an `INDEX BY` have no constructor
-in PL/SQL, so a stub cannot return them yet: it can `thenReturn(null)` or `thenThrow`. A converter declared on the
-method, `@PlsqlConvert` on it, does not apply to what a stub returns; those of the attributes do. The
+alike. Object types nest, collections can be empty, attributes and elements can be `null`, and an `OUT` of an object
+type or a collection is set the same way, with `out(value)`. A `RECORD`, a `%ROWTYPE` and an `INDEX BY` have no
+constructor in PL/SQL, so a stub cannot return them yet: it can `thenReturn(null)` or `thenThrow`. A converter
+declared on the method, `@PlsqlConvert` on it, does not apply to what a stub returns; those of the attributes do. The
 [compatibility page](compatibility.md#not-measured) lists what the tests of this do not cover yet.
 
 **Match arguments.** A plain value matches itself; `eq`, `any` and `isNull` work as in Mockito. When several stubs
@@ -292,9 +293,11 @@ when(freights.calculate(eq("SP"), isNull())).thenReturn(new BigDecimal("15.00"))
 | for the same arguments, made twice | the last one: a later stub replaces an earlier one, as in Mockito |
 | a general one, such as `(eq("SP"), any())`, and a specific one, such as `(eq("SP"), isNull())` | the last one that matches: make the general ones first |
 
-Each stub recompiles the package, in about ten milliseconds, so make them all before the code under test runs, as
-[Things to keep in mind](#things-to-keep-in-mind) explains. Unlike Mockito, `thenReturn` does not chain, so one stub
-cannot answer differently on the first call and on the second, yet.
+Each stub recompiles the package: a small one in ten to twenty milliseconds, while a body of about a thousand lines
+took 270 to 425 ms per stub in a real project, and the first stub of a JVM adds about a second, while the parser warms
+up. Make them all before the code under test runs, as [Things to keep in mind](#things-to-keep-in-mind) explains.
+Unlike Mockito, `thenReturn` does not chain, so one stub cannot answer differently on the first call and on the
+second, yet.
 
 ### Verifying calls
 
@@ -346,9 +349,9 @@ void sees_the_items_of_the_script() {
 
 On the test class, it applies to every test, before the method's own; it is also found on a superclass, on the class
 around a `@Nested` one, the outermost first, and on an annotation of your own that carries it. It may be repeated, and
-each one applies in its order. `value`, or its alias `scripts`, holds locations, and `scriptText` a script as text, applied after them; one
-that holds neither is refused. In a Spring test without `@EnablePlsqlMocks`, it is refused rather than ignored. With
-any other test framework, which has no extension, call `applyScript` in the test's setup.
+each one applies in its order. `value`, or its alias `scripts`, holds locations, and `scriptText` a script as text,
+applied after them; one that holds neither is refused. In a Spring test without `@EnablePlsqlMocks`, it is refused
+rather than ignored. With any other test framework, which has no extension, call `applyScript` in the test's setup.
 
 - **Where the script comes from:** the classpath, as above or with `classpath:`; the file system, with `file:` or a
   `Path`; an `InputStream`, which stays open; or text, with `applyScriptText`, in the same format as a file.
@@ -362,6 +365,8 @@ any other test framework, which has no extension, call `applyScript` in the test
   schema that does not edition the type, a `CREATE OR REPLACE` would replace the real object for good.
 - **A package has stubs or is replaced by a script in a test, not both:** a stub rewrites the body as the default
   edition has it, so one would undo the other.
+- **A statement that does not compile stops the script there,** with its errors, as a stub's would be; the statements
+  before it stay applied until the edition goes.
 
 ### With JUnit 5, without Spring
 
@@ -431,8 +436,9 @@ try (PlsqlMocks mocks = PlsqlMocks.on(dataSource)) {
   lives in the database, so it is the code under test, or the application's interface, that gets the stubbed answer.
   A call on the mock that is neither stubbed nor verified, such as `freights.calculate("SP", "CE")` on its own, fails
   the test, saying so, at the next call on a mock or when the test ends.
-- **Stub first, then act.** Make the stubs of a package before the test calls it. A stub made after the package was
-  used fails the next call there once, with `ORA-04068`; see [How it works](#how-it-works).
+- **Stub and apply scripts first, then act.** Make the stubs of a package, and apply the scripts that replace one,
+  before the test calls it. A package recompiled after it was used fails the next call there once, with `ORA-04068`;
+  see [How it works](#how-it-works).
 - **A call no stub matches fails,** with `ORA-20999`, naming the routine and showing the arguments, so a missing stub
   never passes unnoticed. Use `any()` for a stub that should answer every call.
 - **A stubbed routine runs none of its real code.** What that code would have called, it no longer calls.
@@ -502,6 +508,9 @@ The stub is not a Java trick: it is PL/SQL, compiled into the database, where on
   back when it is returned. In Spring, the edition begins before the test transaction and ends after it, and the stubs
   compile on a connection of their own, so they never commit the test transaction.
 - **Calls are recorded in a table,** by an autonomous transaction, so `verify` sees them even when the test rolls back.
+- **A script runs in the edition too.** `applyScript` and `@PlsqlMockScript` read the script as SQL*Plus does, check
+  every statement against what the edition can hold, and only then compile each one into the test's edition, on a
+  connection of the mocks' own, as a stub's body is.
 - **A `%ROWTYPE` goes by a subtype in the test's edition.** In an edition other than the default one, Oracle cannot
   describe `TABLE%ROWTYPE` to the driver, and the call would fail with `ORA-17060`. So the first time a record of a
   table is bound in the test, the library compiles a package with `SUBTYPE ROW_T IS TABLE%ROWTYPE` into the edition,

@@ -111,6 +111,10 @@ verify(pkg).calculaFrete("SP", "CE");
 | strict | spy: the real logic when no stub matches |
 | JUnit 5, Spring Test | mocking SQL views, which editions can also do |
 
+Since then: object types and collections in a stub, as values returned and as `OUT`
+([An object type or a collection in a stub](#an-object-type-or-a-collection-in-a-stub)), and views, standalone
+routines and synonyms replaced by a script ([Scripts in the test's edition](#scripts-in-the-tests-edition)).
+
 ### How a mock behaves
 
 What a test can count on, each case backed by a test of the module:
@@ -565,10 +569,12 @@ And in the tests of `penitent-test`, in the session of the test user, whose sche
     aside as more than the first version needs.
 
 - **Mocking more than packages.** In legacy schemas, PL/SQL is often coupled to other objects through the database:
-  views, standalone functions and procedures, synonyms, triggers, object types. Editions can redefine all of them, so
-  the mocks are meant to grow beyond packages, and `ENABLE EDITIONS FOR PACKAGE` in the admin script will widen with
-  them. Object types need care: enabling editions for a type that a table uses fails (`ORA-38819`), and forcing it
-  leaves the table invalid, as an earlier measurement showed.
+  views, standalone functions and procedures, synonyms, triggers, object types. A script now replaces views,
+  packages, standalone routines and synonyms in the test's edition, as
+  [Scripts in the test's edition](#scripts-in-the-tests-edition) records, and the admin script enables editions for
+  views besides packages. Still open: triggers and object types, and an API of its own for views. Object types need
+  care: enabling editions for a type that a table uses fails (`ORA-38819`), and forcing it leaves the table invalid,
+  as an earlier measurement showed.
 
 - Oracle 21c and 19c, including whether `ADMIN` can enable editions on the Autonomous Database image used for 19c.
 - Spy mode: running the original body, as a nested block, when no stub matches.

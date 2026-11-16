@@ -39,7 +39,8 @@ import io.github.rponte.penitent.mock.internal.Stub;
  * <p>Each test gets an edition of its own, and a stubbed routine is rewritten in it, in the package body the
  * database has: every other routine of the package stays real, and other PL/SQL that calls the routine sees the
  * mock too. Connections handed out by the {@code DataSource} of {@link #wrap} run in the test's edition while it
- * lasts. Architecture decision 0001 has the design.
+ * lasts. A stub answers with scalars, object types and collections. {@link #applyScript} replaces a whole view or
+ * package in the edition too, for what a stub cannot reach. Architecture decision 0001 has the design.
  *
  * <p>The schema needs the scripts {@code penitent-mock-admin.sql} and {@code penitent-mock-schema.sql}, shipped
  * in this module, applied once: {@link #begin} checks them, and {@link #prepare} applies them.

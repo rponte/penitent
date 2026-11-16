@@ -10,14 +10,17 @@ The items below are in three groups: what comes next, what waits for a real use 
 ### Mocking PL/SQL in tests
 
 `penitent-test` stubs a routine of a package in an integration test, in the style of Mockito, from the interface the
-application already has, as [Testing](testing.md#mocking-a-routine) shows, measured on Oracle 23ai. Still open, as
-[architecture decision 0001](adr/0001-mocking-plsql-with-editions.md) details:
+application already has, answering with scalars, object types and collections, and replaces a view, a package, a
+standalone routine or a synonym with a script, as [Testing](testing.md#mocking-a-routine) shows, measured on Oracle
+23ai. Still open, as [architecture decision 0001](adr/0001-mocking-plsql-with-editions.md) details:
 
 - **Oracle 21c and 19c,** including whether the Autonomous Database image used for 19c lets editions be enabled.
 - **A stub made after the test used the package,** which now fails the next call once: retrying it in tests, or a
   body that reads its stubs from a table and needs no recompilation.
-- **More than packages:** views, standalone routines, synonyms, triggers and object types, which legacy PL/SQL is often
-  coupled to; and values beyond scalars: object types, collections and cursors.
+- **More than scripts can replace:** triggers and object types, which legacy PL/SQL is often coupled to; an API of its
+  own for views, rather than a script; a stub of a standalone routine; and stubs that return a `RECORD`, a
+  `%ROWTYPE`, an `INDEX BY` or a cursor.
+- **The cost of a stub in a large package,** which reads, parses and recompiles the whole body each time.
 - **Spy mode,** running the real code when no stub matches, and **several pools of the same database** sharing the
   mocks.
 

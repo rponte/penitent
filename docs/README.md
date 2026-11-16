@@ -145,6 +145,7 @@ Every page uses the same orders package, so the examples build on each other.
 | check every interface against the database | [Validation](validation.md) |
 | use Spring transactions, or inject interfaces as beans | [Spring and Spring Boot](spring.md) |
 | test code that calls PL/SQL, or stub a routine as with Mockito | [Testing](testing.md) |
+| replace a view or a package in a test, with a script | [Testing](testing.md#replacing-a-view-or-a-package) |
 | see the SQL and the values of each call | [Logging](logging.md) |
 | understand an error message | [Troubleshooting](troubleshooting.md) |
 
