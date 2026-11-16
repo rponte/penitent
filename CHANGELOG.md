@@ -8,6 +8,10 @@ All notable changes to this project are listed here. The format follows
 
 ### Removed
 
+- The call log's `Type names from` line, which named the internal class that gives types other names in a test with
+  mocks. It showed up once, at the first call that built a composite value, as if it were about that call; each call
+  that binds a type by another name still shows it, with `-> type name`.
+
 - `penitent-test`: `thenRaise(String)` and `doRaise(String)`, replaced by `thenRaise(PlsqlError)` and
   `doRaise(PlsqlError)`: `thenRaise("NO_DATA_FOUND")` becomes `thenRaise(PredefinedError.NO_DATA_FOUND)`.
 - `penitent-test`: `when(Runnable)`, the lambda that stubbed a procedure, replaced by the `doXxx()` family:

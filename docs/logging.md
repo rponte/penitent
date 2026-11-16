@@ -41,7 +41,8 @@ DEBUG <- completed        : 4 ms
 - **Values are shown as the database sees them:** an OBJECT shows up with its type name and its attributes, in the
   type's order, in both directions.
 - **`-> type name`** only shows up when a type is bound by another name, which happens in a test with mocks, for a
-  `%ROWTYPE`: see [Testing](testing.md#how-it-works).
+  `%ROWTYPE`: see [Testing](testing.md#how-it-works). It is how to tell whether a call bound a type by another name:
+  each call that does shows it.
 
 ## Many parameters, and collections
 

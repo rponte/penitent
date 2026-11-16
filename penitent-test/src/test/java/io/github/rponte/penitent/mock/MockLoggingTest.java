@@ -165,6 +165,8 @@ class MockLoggingTest {
 				+ "\n +END PENITENT_ROW_\\w+;"));
 		assertThat(lines()).filteredOn(line -> line.contains("-> type name")).hasSize(2).allSatisfy(line -> assertThat(line)
 				.matches("DEBUG -> type name        : \"PLSQL_TEST\"\\.FREIGHT_ITEM%ROWTYPE as " + alias));
+		// which integration renamed it is no news to the reader: the line of each renaming, above, says what happened
+		assertThat(lines()).noneMatch(line -> line.contains("Type names"));
 	}
 
 	@Test

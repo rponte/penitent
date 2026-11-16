@@ -72,12 +72,6 @@ public interface TypeNameIntegration {
 				.map(ServiceLoader.Provider::get)
 				.toList();
 
-		static {
-			for (TypeNameIntegration integration : ALL) {
-				CallLog.typeNamesFrom(integration.getClass().getName());
-			}
-		}
-
 		private Loaded() {
 		}
 	}
