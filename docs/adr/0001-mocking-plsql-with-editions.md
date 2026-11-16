@@ -327,10 +327,12 @@ that reads one of the schema's views makes it fail with `ORA-38819` (measured), 
 `FORCE` gets past it, but leaves the materialized view `INVALID` (measured), so the library never uses it.
 
 **The annotation, `@PlsqlMockScript`,** applies the scripts once the test's edition begins, before `@BeforeEach`: the
-class's first, then the method's, each one's locations (`value`, or its alias `scripts`), then its `scriptText`. The
-attributes say what a value is, as Spring's `@Sql` does, so nothing is guessed from the content. In a Spring test
-without `@EnablePlsqlMocks`, the listener that would apply it refuses it, since ignoring it would let the test run
-against the real objects.
+class's first, then the method's. It is found on a superclass and as a meta-annotation, and on the classes around a
+`@Nested` one, the outermost first: Spring looks there, and JUnit's `AnnotationSupport` does not, so the extension
+walks them itself (measured: without it, the enclosing class's script was ignored). Each annotation applies its
+locations (`value`, or its alias `scripts`), then its `scriptText`. The attributes say what a value is, as Spring's
+`@Sql` does, so nothing is guessed from the content. In a Spring test without `@EnablePlsqlMocks`, the listener that
+would apply it refuses it, since ignoring it would let the test run against the real objects.
 
 **Left aside:**
 
