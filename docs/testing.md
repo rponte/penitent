@@ -228,14 +228,21 @@ Freights freights = mocks.mock(Freights.class);
 measured; booleans and `LocalDateTime` are written as PL/SQL too, but not measured yet.
 
 **Raise an error.** `thenThrow` raises an application error, as `RAISE_APPLICATION_ERROR` does, and `thenRaise` one of
-Oracle's predefined exceptions, by name. Both reach the code under test as a real error would, a
+Oracle's predefined exceptions, from the enum `PredefinedError`. Both reach the code under test as a real error would, a
 `PlsqlRoutineRaisedException`:
 
 <!-- snippet: testing/errors -->
 ```java
 when(freights.calculate("SP", "XX")).thenThrow(-20200, "Cannot calculate freight to XX");
-when(freights.calculate("SP", "AM")).thenRaise("NO_DATA_FOUND");
+when(freights.calculate("SP", "AM")).thenRaise(NO_DATA_FOUND);
 ```
+
+`thenRaise` also raises an exception a package declares in its spec, such as `no_quote EXCEPTION;`, which the PL/SQL
+that calls the routine catches by name, as in `WHEN freight_errors.no_quote THEN`:
+`thenRaise(PlsqlError.declared("FREIGHT_ERRORS", "NO_QUOTE"))`. Whether it exists is known only when the stub compiles,
+and a wrong name is reported as the likely mistake. Five predefined exceptions stand for a failure of the session or
+the server, and reach Java as a `PlsqlExecutionException`, as from the real routine: `LOGIN_DENIED`, `NOT_LOGGED_ON`,
+`PROGRAM_ERROR`, `STORAGE_ERROR` and `TIMEOUT_ON_RESOURCE`.
 
 **Stub a procedure.** A procedure returns nothing, so its stub takes the `doXxx()` family, as in Mockito: the answer
 first, then the call on the mock. `doNothing()` makes it return, setting the `OUT` values given with `out(value)`, in

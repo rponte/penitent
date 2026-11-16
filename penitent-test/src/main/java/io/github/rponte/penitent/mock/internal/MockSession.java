@@ -261,10 +261,28 @@ public final class MockSession implements RowTypes {
 			throw new IllegalStateException("failed to compile the mocked body of " + pkg + ": " + e.getMessage(), e);
 		}
 		if (!errors.isEmpty()) {
-			throw new IllegalStateException("the mocked body of " + pkg + " does not compile:\n  "
-					+ String.join("\n  ", errors) + "\n" + mocked);
+			throw new IllegalStateException(undeclaredRaise(pkg, errors) + "the mocked body of " + pkg
+					+ " does not compile:\n  " + String.join("\n  ", errors) + "\n" + mocked);
 		}
 		return generated.get(BodyRewriter.callKey(any));
+	}
+
+	/**
+	 * The likely mistake, when the errors name an exception a stub raises: the dictionary does not list declared
+	 * exceptions, so a wrong name shows up only here, as {@code PLS-00302} for an exception the package does not
+	 * declare, or {@code PLS-00201} for a package that does not exist.
+	 */
+	private String undeclaredRaise(String pkg, List<String> errors) {
+		for (Stub stub : stubsByPackage.get(pkg)) {
+			if (stub.action() instanceof Stub.Raise raise && raise.name().contains(".")
+					&& errors.stream().map(error -> error.toUpperCase(Locale.ROOT)).anyMatch(error ->
+							error.contains(raise.name()) || error.contains("'"
+									+ raise.name().substring(raise.name().lastIndexOf('.') + 1) + "'"))) {
+				return raise.name() + ", which a stub raises, is not declared: check that the package declares it in"
+						+ " its spec, by this name. ";
+			}
+		}
+		return "";
 	}
 
 	/** Runs {@code ddl} in the test's edition, and gives the compilation errors of the object it creates. */

@@ -90,7 +90,7 @@ final class MockLog {
 		if (action instanceof Stub.ApplicationError error) {
 			return "RAISE_APPLICATION_ERROR(" + error.code() + ", " + PlsqlLiterals.of(error.message()) + ")";
 		}
-		return "RAISE " + ((Stub.Predefined) action).name();
+		return "RAISE " + ((Stub.Raise) action).name();
 	}
 
 	private static String label(String label) {
