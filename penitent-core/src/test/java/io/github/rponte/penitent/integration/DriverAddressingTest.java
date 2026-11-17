@@ -39,6 +39,9 @@ import oracle.jdbc.OracleDriver;
  * name the library uses.
  * <li>A package collection binds as an {@link Array} by {@code PACKAGE.TYPE}; the name alone is
  * {@code ORA-17074}. Its elements are the RECORD or the {@code %ROWTYPE} above.
+ * <li>A name is read with its exact case, without quotes: {@code PLSQL_TEST.Mixed_T} is the type created as
+ * {@code "Mixed_T"}, not {@code MIXED_T}. A name that needs quotes for more than its case, such as one with a space,
+ * resolves on every driver only with every part in quotes; {@code QuotedTypeNamesTest} shows the library binding it.
  * </ul>
  *
  * <p>The failures are compared by error code, which every driver version keeps: before driver 23, the
@@ -152,6 +155,54 @@ class DriverAddressingTest extends OracleIntegrationTest {
 	@DisplayName("the collection name without the package does not resolve")
 	void collection_without_package_does_not_resolve() {
 		assertThat(failureOnNewConnection("ECHO_RECORDS", Types.ARRAY, "MINI_ITEM_LIST")).isEqualTo(INVALID_NAME_PATTERN);
+	}
+
+	@Test
+	@DisplayName("a type's name is read with its exact case, unquoted: Mixed_T is the quoted \"Mixed_T\", not MIXED_T")
+	void exact_case_of_an_object_type() throws SQLException {
+		assertThat(structOnNewConnection("PLSQL_TEST.Mixed_T", BigDecimal.ONE, "one").getSQLTypeName())
+				.isEqualTo("PLSQL_TEST.Mixed_T");
+		assertThat(structOnNewConnection("PLSQL_TEST.MIXED_T", "code").getSQLTypeName())
+				.isEqualTo("PLSQL_TEST.MIXED_T");
+	}
+
+	@Test
+	@DisplayName("so is a %ROWTYPE's table, and a package RECORD's name: each reaches the type of that exact case")
+	void exact_case_of_a_rowtype_and_a_record() throws SQLException {
+		assertThat(structOnNewConnection("\"PLSQL_TEST\".Mixed%ROWTYPE", BigDecimal.ONE, "one").getAttributes())
+				.hasSize(2);
+		assertThat(structOnNewConnection("\"PLSQL_TEST\".MIXED%ROWTYPE", "code").getAttributes()).hasSize(1);
+		assertThat(structOnNewConnection("PLSQL_TEST.FIXTURE_QUOTED.Mixed_Rec", BigDecimal.ONE, "one").getAttributes())
+				.hasSize(2);
+		assertThat(structOnNewConnection("PLSQL_TEST.FIXTURE_QUOTED.MIXED_REC", "code").getAttributes()).hasSize(1);
+		assertThat(structOnNewConnection("PLSQL_TEST.Mixed_Pkg.ITEM_REC", BigDecimal.ONE, "one").getAttributes())
+				.hasSize(2);
+	}
+
+	/** A {@link Struct} of {@code typeName}, made on a connection that never resolved anything. */
+	private static Struct structOnNewConnection(String typeName, Object... attributes) throws SQLException {
+		try (HikariDataSource fresh = newPool(); Connection connection = fresh.getConnection()) {
+			Struct struct = connection.createStruct(typeName, attributes);
+			// read inside the connection: the attributes are not kept once it closes
+			Object[] values = struct.getAttributes();
+			String name = struct.getSQLTypeName();
+			return new Struct() {
+				@Override
+				public String getSQLTypeName() {
+					return name;
+				}
+
+				@Override
+				public Object[] getAttributes() {
+					return values;
+				}
+
+				@Override
+				public Object[] getAttributes(java.util.Map<String, Class<?>> map) {
+					return values;
+				}
+			};
+		}
 	}
 
 	@FunctionalInterface

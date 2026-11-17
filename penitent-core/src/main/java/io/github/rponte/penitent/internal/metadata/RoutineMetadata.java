@@ -77,8 +77,12 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 		 * different identifier, resolved in {@link #elementTypeOf}.
 		 */
 		public String collectionBindName() {
-			String local = typeSubname != null ? typeName + "." + typeSubname : typeName;
-			return typeOwner != null ? typeOwner + "." + local : local;
+			if (typeOwner != null) {
+				// with every part in quotes when one of them needs quotes, as CompositeType.qualified explains
+				return typeSubname != null ? CompositeType.qualified(typeOwner, typeName, typeSubname)
+						: CompositeType.qualified(typeOwner, null, typeName);
+			}
+			return typeSubname != null ? typeName + "." + typeSubname : typeName;
 		}
 
 		/**
@@ -745,7 +749,7 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 					+ (container == null ? typeName : container + "." + typeName) + " in " + schema
 					+ " does not exist or is not visible to this user");
 		}
-		String bindName = schema + "." + (container == null ? typeName : container + "." + typeName);
+		String bindName = CompositeType.qualified(schema, container, typeName);
 		String elementOwner = elements.get(0)[0];
 		String elementContainer = elements.get(0)[1];
 		String elementName = elements.get(0)[2];

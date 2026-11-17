@@ -25,4 +25,25 @@ class CompositeTypeTest {
 		assertThat(new CompositeType(Kind.ROWTYPE, "PLSQL_TEST", null, "FIXTURE_ITEM", "FIXTURE_ITEM%ROWTYPE")
 				.qualifiedBindName()).isEqualTo("\"PLSQL_TEST\".FIXTURE_ITEM%ROWTYPE");
 	}
+
+	@Test
+	@DisplayName("a name with a part that needs quotes: every part in quotes, the only spelling every driver resolves")
+	void name_that_needs_quotes() {
+		assertThat(new CompositeType(Kind.OBJECT, "PLSQL_TEST", null, "Two Words_T", "Two Words_T").qualifiedBindName())
+				.isEqualTo("\"PLSQL_TEST\".\"Two Words_T\"");
+		assertThat(new CompositeType(Kind.PLSQL_RECORD, "PLSQL_TEST", "PKG", "Mixed_Rec", "PKG.Mixed_Rec")
+				.qualifiedBindName()).isEqualTo("\"PLSQL_TEST\".\"PKG\".\"Mixed_Rec\"");
+		assertThat(new CompositeType(Kind.PLSQL_RECORD, "PLSQL_TEST", "Mixed_Pkg", "ITEM_REC", "Mixed_Pkg.ITEM_REC")
+				.qualifiedBindName()).isEqualTo("\"PLSQL_TEST\".\"Mixed_Pkg\".\"ITEM_REC\"");
+		assertThat(new CompositeType(Kind.ROWTYPE, "PLSQL_TEST", null, "Two Words", "Two Words%ROWTYPE")
+				.qualifiedBindName()).isEqualTo("\"PLSQL_TEST\".\"Two Words\"%ROWTYPE");
+	}
+
+	@Test
+	@DisplayName("a collection's name follows the same rule")
+	void collection_name() {
+		assertThat(CompositeType.qualified("PLSQL_TEST", "PKG", "ITEM_LIST")).isEqualTo("PLSQL_TEST.PKG.ITEM_LIST");
+		assertThat(CompositeType.qualified("PLSQL_TEST", null, "Two Words_List"))
+				.isEqualTo("\"PLSQL_TEST\".\"Two Words_List\"");
+	}
 }
