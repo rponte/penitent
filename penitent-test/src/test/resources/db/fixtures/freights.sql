@@ -342,6 +342,18 @@ CREATE TABLE "Freight Box" (id NUMBER PRIMARY KEY, uf VARCHAR2(2))
 CREATE OR REPLACE VIEW freight_item_v AS SELECT id, uf FROM freight_item
 /
 
+-- a table with a virtual and an invisible column, and one with an object type and a VARRAY as columns
+CREATE TABLE freight_parcel (
+  id NUMBER PRIMARY KEY,
+  weight NUMBER,
+  double_weight NUMBER GENERATED ALWAYS AS (weight * 2) VIRTUAL,
+  secret VARCHAR2(5) INVISIBLE
+)
+/
+
+CREATE TABLE freight_bundle (id NUMBER PRIMARY KEY, item freight_item_t, codes freight_codes_v)
+/
+
 CREATE OR REPLACE PACKAGE freight_records AS
   TYPE quote_t IS RECORD (uf VARCHAR2(2), value NUMBER);
   TYPE leg_t IS RECORD (origin VARCHAR2(2), quote quote_t);
@@ -370,8 +382,10 @@ CREATE OR REPLACE PACKAGE freight_records AS
   FUNCTION crate_of(p_id NUMBER) RETURN "Crate"%ROWTYPE;
   FUNCTION describe_box(p_box "Freight Box"%ROWTYPE) RETURN VARCHAR2;
   FUNCTION box_of(p_id NUMBER) RETURN "Freight Box"%ROWTYPE;
-  -- a %ROWTYPE of a view
+  -- a %ROWTYPE of a view, of a table with virtual and invisible columns, and of one with composite columns
   FUNCTION item_view_of(p_id NUMBER) RETURN freight_item_v%ROWTYPE;
+  FUNCTION parcel_of(p_id NUMBER) RETURN freight_parcel%ROWTYPE;
+  FUNCTION bundle_of(p_id NUMBER) RETURN freight_bundle%ROWTYPE;
   -- a RECORD holding an INDEX BY
   FUNCTION route_of(p_name VARCHAR2) RETURN route_t;
 END freight_records;
@@ -469,6 +483,16 @@ CREATE OR REPLACE PACKAGE BODY freight_records AS
   BEGIN
     RAISE_APPLICATION_ERROR(-20410, 'the real item_view_of');
   END item_view_of;
+
+  FUNCTION parcel_of(p_id NUMBER) RETURN freight_parcel%ROWTYPE IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20410, 'the real parcel_of');
+  END parcel_of;
+
+  FUNCTION bundle_of(p_id NUMBER) RETURN freight_bundle%ROWTYPE IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20410, 'the real bundle_of');
+  END bundle_of;
 
   FUNCTION route_of(p_name VARCHAR2) RETURN route_t IS
   BEGIN
