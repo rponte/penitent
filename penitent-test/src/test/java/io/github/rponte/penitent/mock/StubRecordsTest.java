@@ -45,6 +45,10 @@ class StubRecordsTest {
 	record Item(Long id, String uf) {
 	}
 
+	/** ROUTE_T: a RECORD holding an INDEX BY. */
+	record Route(String name, List<String> ufs) {
+	}
+
 	/** FREIGHT_NOTE%ROWTYPE, whose column "Note Text" needs quotes. */
 	record Note(Long id, @io.github.rponte.penitent.PlsqlAttr("Note Text") String noteText) {
 	}
@@ -80,6 +84,12 @@ class StubRecordsTest {
 		String describeBox(Item pBox);
 
 		Item boxOf(BigDecimal pId);
+
+		Item itemViewOf(BigDecimal pId);
+
+		Route routeOf(String pName);
+
+		void settle(String pUf, LocalDate pDay, PlsqlOut<Quote> pQuote);
 	}
 
 	/** SETTLE(P_UF, P_DAY, P_QUOTE OUT), bound by name, with the Java arguments in another order. */
@@ -246,6 +256,40 @@ class StubRecordsTest {
 		assertThat(records.crateOf(BigDecimal.ONE)).isEqualTo(new Item(1L, "SP"));
 		assertThat(records.describeBox(new Item(4L, "BA"))).isEqualTo("4/BA");
 		assertThat(records.boxOf(BigDecimal.ONE)).isEqualTo(new Item(2L, "CE"));
+	}
+
+	@Test
+	@DisplayName("a stub returns a %ROWTYPE of a view")
+	void rowtype_of_a_view() {
+		when(mocks.mock(Records.class).itemViewOf(BigDecimal.ONE)).thenReturn(new Item(1L, "SP"));
+
+		assertThat(records.itemViewOf(BigDecimal.ONE)).isEqualTo(new Item(1L, "SP"));
+	}
+
+	@Test
+	@DisplayName("a RECORD holding an INDEX BY is refused by the core, as a call would be: the driver writes it from 0")
+	void record_holding_an_index_by_refused() {
+		Records mock = mocks.mock(Records.class);
+
+		assertThatThrownBy(() -> when(mock.routeOf("north")).thenReturn(new Route("north", List.of("SP", "RJ"))))
+				.isInstanceOf(io.github.rponte.penitent.exception.PlsqlMappingException.class)
+				.hasMessageContaining("UFS of PLSQL_TEST.FREIGHT_RECORDS.ROUTE_T is INDEX BY");
+	}
+
+	@Test
+	@DisplayName("one routine stubbed through an interface bound by position and another bound by name is refused, and"
+			+ " the first stub still answers")
+	void stubbed_through_both_bindings_refused() {
+		doNothing().when(mocks.mock(Records.class)).settle(eq("SP"), any(), out(new Quote(BigDecimal.ONE, "SP")));
+
+		assertThatThrownBy(() -> doNothing().when(mocks.mock(ByName.class)).settle(out(CE), any(), eq("CE")))
+				.isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("PLSQL_TEST.FREIGHT_RECORDS.SETTLE")
+				.hasMessageContaining("[P_UF, P_DAY, P_QUOTE] and [P_QUOTE, P_DAY, P_UF]")
+				.hasMessageContaining("stub a routine through one interface in a test");
+		PlsqlOut<Quote> quote = new PlsqlOut<>();
+		records.settle("SP", LocalDate.of(2026, 11, 17), quote);
+		assertThat(quote.get()).isEqualTo(new Quote(BigDecimal.ONE, "SP"));
 	}
 
 	@Test

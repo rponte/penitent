@@ -47,6 +47,9 @@ All notable changes to this project are listed here. The format follows
 
 ### Fixed
 
+- `penitent-test`: a routine stubbed in one test through two interfaces that bind it differently, by position and by
+  name or in another order, lost the stubs of the first interface without a word. It is now refused with a clear
+  message, and the stubs made before it still answer.
 - `penitent-test`: a stub of a routine bound by name failed to find the routine in the body, when the Java method
   declared its parameters in another order than the routine, or left out one with a `DEFAULT`.
 - An OBJECT, a package RECORD, a `%ROWTYPE` or a collection whose name needs quotes for more than its case, such as

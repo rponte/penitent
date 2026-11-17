@@ -515,7 +515,9 @@ try (PlsqlMocks mocks = PlsqlMocks.on(dataSource)) {
   scalars, object types, collections, records of a package, `%ROWTYPE` records and `INDEX BY` collections. A
   parameter of an object type, a collection or a record is matched with `any()` only, and a stub cannot return a
   cursor yet ([#63](https://github.com/rponte/penitent/issues/63)). A private routine has no
-  method to stub it through, and a wrapped body cannot be read.
+  method to stub it through, and a wrapped body cannot be read. A routine is stubbed through one interface in a
+  test: two that bind it differently, by position and by name, are refused
+  ([#87](https://github.com/rponte/penitent/issues/87)).
 
 ## Seeing what the mocks do
 

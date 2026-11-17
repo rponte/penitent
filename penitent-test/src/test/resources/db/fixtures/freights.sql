@@ -338,6 +338,10 @@ CREATE TABLE "Crate" (id NUMBER PRIMARY KEY, uf VARCHAR2(2))
 CREATE TABLE "Freight Box" (id NUMBER PRIMARY KEY, uf VARCHAR2(2))
 /
 
+-- a view, whose %ROWTYPE a stub returns
+CREATE OR REPLACE VIEW freight_item_v AS SELECT id, uf FROM freight_item
+/
+
 CREATE OR REPLACE PACKAGE freight_records AS
   TYPE quote_t IS RECORD (uf VARCHAR2(2), value NUMBER);
   TYPE leg_t IS RECORD (origin VARCHAR2(2), quote quote_t);
@@ -345,6 +349,7 @@ CREATE OR REPLACE PACKAGE freight_records AS
   TYPE quotes_by_index_t IS TABLE OF quote_t INDEX BY PLS_INTEGER;
   TYPE ufs_t IS TABLE OF VARCHAR2(2) INDEX BY PLS_INTEGER;
   TYPE ufs_by_key_t IS TABLE OF VARCHAR2(2) INDEX BY VARCHAR2(2);
+  TYPE route_t IS RECORD (name VARCHAR2(10), ufs ufs_t);
 
   FUNCTION quote_of(p_uf VARCHAR2) RETURN quote_t;
   PROCEDURE quote(p_uf VARCHAR2, p_quote OUT quote_t);
@@ -365,6 +370,10 @@ CREATE OR REPLACE PACKAGE freight_records AS
   FUNCTION crate_of(p_id NUMBER) RETURN "Crate"%ROWTYPE;
   FUNCTION describe_box(p_box "Freight Box"%ROWTYPE) RETURN VARCHAR2;
   FUNCTION box_of(p_id NUMBER) RETURN "Freight Box"%ROWTYPE;
+  -- a %ROWTYPE of a view
+  FUNCTION item_view_of(p_id NUMBER) RETURN freight_item_v%ROWTYPE;
+  -- a RECORD holding an INDEX BY
+  FUNCTION route_of(p_name VARCHAR2) RETURN route_t;
 END freight_records;
 /
 
@@ -455,6 +464,16 @@ CREATE OR REPLACE PACKAGE BODY freight_records AS
   BEGIN
     RAISE_APPLICATION_ERROR(-20410, 'the real box_of');
   END box_of;
+
+  FUNCTION item_view_of(p_id NUMBER) RETURN freight_item_v%ROWTYPE IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20410, 'the real item_view_of');
+  END item_view_of;
+
+  FUNCTION route_of(p_name VARCHAR2) RETURN route_t IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20410, 'the real route_of');
+  END route_of;
 END freight_records;
 /
 
