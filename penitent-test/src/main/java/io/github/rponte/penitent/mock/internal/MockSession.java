@@ -628,15 +628,15 @@ public final class MockSession implements RowTypes {
 	}
 
 	/**
-	 * The type a recorded argument is read back with: its own, for numbers, timestamps and intervals; a {@code DATE}
-	 * as a {@code TIMESTAMP}, since {@code RETURNING DATE} drops its time; a {@code TIMESTAMP WITH LOCAL TIME ZONE} as
-	 * {@code WITH TIME ZONE}, which {@code RETURNING} takes; and a {@code CLOB} for text, LOBs, bytes and booleans,
-	 * which the recording keeps as text.
+	 * The type a recorded argument is read back with: its own, for numbers, dates, timestamps and intervals, a
+	 * {@code DATE} with {@code PRESERVE TIME}, since {@code RETURNING DATE} truncates the time by default, as Oracle
+	 * documents and 19c, 21c and 23ai do; a {@code TIMESTAMP WITH LOCAL TIME ZONE} as {@code WITH TIME ZONE}, which
+	 * {@code RETURNING} takes; and a {@code CLOB} for text, LOBs, bytes and booleans, which the recording keeps as text.
 	 */
 	private static String jsonType(RoutineMetadata.Argument parameter) {
 		String type = parameter.dataType();
 		if (type.equals("DATE")) {
-			return "TIMESTAMP";
+			return "DATE PRESERVE TIME";
 		}
 		if (type.startsWith("TIMESTAMP")) {
 			return type.contains("TIME ZONE") ? "TIMESTAMP WITH TIME ZONE" : "TIMESTAMP";
