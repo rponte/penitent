@@ -41,6 +41,10 @@ All notable changes to this project are listed here. The format follows
 
 ### Fixed
 
+- An OBJECT, a package RECORD, a `%ROWTYPE` or a collection whose name needs quotes for more than its case, such as
+  `CREATE TYPE "Two Words_T"`, failed with `ORA-17060` or `ORA-17074`: on driver 23 for every form, and on drivers 21
+  and 19 for a `%ROWTYPE`. Such a name is now bound with every part in quotes, the owner included, which every driver
+  resolves. A mixed-case name, such as `"Mixed"`, already bound, since the driver reads a name with its exact case.
 - `penitent-test`: on Oracle 21c, a stub of a routine with a `BOOLEAN` parameter failed to compile, with
   `PLS-00382`: the call was recorded through SQL, which takes a `BOOLEAN` only from 23ai on. It is now recorded as
   `'true'` or `'false'`, and `verify` compares it as that text, on every version. The mocks are now measured on 21c.

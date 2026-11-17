@@ -178,6 +178,7 @@ Where the PL/SQL guarantees the value is never `null`, driver 23 works as it is.
 | `null` in place of a whole OBJECT | Validated |
 | `null` in place of a RECORD or `%ROWTYPE` | Validated: a RECORD is never null in PL/SQL, and comes back with null fields |
 | Driver addressing, probed without the library: RECORD as `PACKAGE.TYPE`, `%ROWTYPE` as `TABLE%ROWTYPE`, package collection as `PACKAGE.TYPE`, and the names that fail (`ORA-17060`, `ORA-17074`) | Validated |
+| Names that need quotes, created as `CREATE TABLE "Mixed"` or `CREATE TYPE "Two Words_T"`: a `%ROWTYPE`, an OBJECT, a package RECORD, a RECORD of a package with such a name, a schema collection and a package collection of a `%ROWTYPE`, through an interface and a block's `@PlsqlType`, each next to an unquoted namesake of another shape, which they do not reach | Validated: such a name is bound with every part in quotes, the one spelling drivers 23, 21 and 19 all resolve |
 | JavaBean without a default constructor, when reading | Not supported, with a clear error |
 | JavaBean without a setter, when reading | Not supported, with a clear error |
 
@@ -470,6 +471,8 @@ that text, on every version.
 - A Jakarta EE container's `DataSource` inside a JTA transaction, with `create` or with `PlsqlPackages.using`.
 - `XMLTYPE`, `JSON`, `LONG`, `REF` and nested cursors.
 - Synonyms with a `db link`, which are currently ignored during resolution.
+- A name with a double quote or a dot inside its quotes, such as `"a.b"`, in a composite type or a collection.
+- In `penitent-test`, a `%ROWTYPE` of a table whose name needs quotes, in the test's edition.
 - A `default` method of a non-public interface on the module path: the package must be open to the library, and
   otherwise the call is a `PlsqlMappingException` saying so.
 - A block type (`@PlsqlType` on a parameter, `resultType`) in another schema or reached through a synonym: it is

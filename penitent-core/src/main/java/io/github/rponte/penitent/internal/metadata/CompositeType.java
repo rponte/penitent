@@ -41,10 +41,41 @@ public record CompositeType(Kind kind, String schema, String container, String s
 	 * resolves it, and {@code "SCHEMA"."TABLE%ROWTYPE"} is a type that does not exist; a name that already
 	 * starts with a quote goes as it is, and the database reads the suffix. Driver 23 accepts both
 	 * spellings. The owner comes from the dictionary with its exact case, which the quotes keep.
-	 * {@code DriverAddressingTest} pins each driver's behavior.
+	 *
+	 * <p>A name with a part that needs quotes, such as {@code "Two Words_T"}, has every part in quotes, the owner
+	 * included, as {@link #qualified} does: that is the one spelling every driver resolves. A plain name keeps the
+	 * spelling above. {@code DriverAddressingTest} pins each driver's behavior.
 	 */
 	public String qualifiedBindName() {
-		return kind == Kind.ROWTYPE ? "\"" + schema + "\"." + bindName : schema + "." + bindName;
+		if (kind == Kind.ROWTYPE) {
+			return ordinary(schema) && ordinary(simpleName) ? "\"" + schema + "\"." + bindName
+					: quoted(schema) + "." + quoted(simpleName) + "%ROWTYPE";
+		}
+		return qualified(schema, container, simpleName);
+	}
+
+	/**
+	 * {@code owner.container.name}, without the container when it is null, as the driver addresses an object type,
+	 * a package RECORD or a collection. The parts come from the dictionary with their exact case. Plain, they go as
+	 * they are. When one of them needs quotes, every one goes in quotes. Before driver 23, the driver puts in quotes
+	 * a name that does not start with one, as a whole, and driver 23 reads an unquoted part as it is, so neither a
+	 * name without quotes nor one with quotes on that part alone resolves on every driver.
+	 */
+	public static String qualified(String owner, String container, String name) {
+		boolean plain = ordinary(owner) && (container == null || ordinary(container)) && ordinary(name);
+		if (plain) {
+			return owner + "." + (container == null ? "" : container + ".") + name;
+		}
+		return quoted(owner) + "." + (container == null ? "" : quoted(container) + ".") + quoted(name);
+	}
+
+	/** An identifier that SQL reads the same without quotes: upper case, starting with a letter. */
+	private static boolean ordinary(String part) {
+		return part.matches("[A-Z][A-Z0-9_$#]*");
+	}
+
+	private static String quoted(String part) {
+		return "\"" + part + "\"";
 	}
 
 	@Override
