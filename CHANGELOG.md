@@ -47,6 +47,11 @@ All notable changes to this project are listed here. The format follows
 
 ### Fixed
 
+- A `%ROWTYPE` of a table with an invisible column failed to bind, asking the Java type to cover that column, which
+  PL/SQL leaves out of a `%ROWTYPE`. It is left out now.
+- A `%ROWTYPE` with a column of an object type or a collection failed to bind, with `ORA-17059` when sending it and a
+  conversion error when reading it: its columns were all taken as scalars. Such a column now binds as the attribute
+  of an object type does.
 - `penitent-test`: a routine stubbed in one test through two interfaces that bind it differently, by position and by
   name or in another order, lost the stubs of the first interface without a word. It is now refused with a clear
   message, and the stubs made before it still answer.

@@ -300,15 +300,18 @@ public final class TypeBinding {
 									rs.getString("attr_type_owner"), rs.getString("attr_type_name"))),
 					type.schema(), type.container(), type.simpleName());
 
-			// %ROWTYPE: the "attributes" are the table's columns, in declared order
+			// %ROWTYPE: the "attributes" are the table's columns, in declared order. An invisible column has no
+			// COLUMN_ID, and PL/SQL leaves it out of a %ROWTYPE; a column of an object type or a collection has its
+			// type's owner, and is one in the record too
 			case ROWTYPE -> dictionary.query("""
-					select column_id, column_name, data_type
+					select column_id, column_name, data_type, data_type_owner
 					  from all_tab_columns
-					 where owner = ? and table_name = ?
+					 where owner = ? and table_name = ? and column_id is not null
 					 order by column_id
 					""",
 					(rs, n) -> new OracleAttribute(rs.getInt("column_id"), rs.getString("column_name"),
-							rs.getString("data_type"), new Shape.Scalar()),
+							rs.getString("data_type"), shapeOf(dictionary, type.schema(), null,
+									rs.getString("data_type_owner"), rs.getString("data_type"))),
 					type.schema(), type.simpleName());
 		};
 
