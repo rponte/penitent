@@ -59,7 +59,17 @@ final class BodyRewriter {
 		}
 		Map<ParserRuleContext, Subprogram> found = new LinkedHashMap<>();
 		for (Subprogram subprogram : subprograms) {
-			found.put(definitionOf(document, qualifiedPackage, subprogram.routine()), subprogram);
+			Subprogram other = found.put(definitionOf(document, qualifiedPackage, subprogram.routine()), subprogram);
+			if (other != null) {
+				// each interface binds its own parameters, and the calls are recorded by them: one list per routine
+				throw new IllegalStateException(subprogram.routine().qualifiedName() + " is stubbed in this test"
+						+ " through interfaces that bind it differently, " + other.routine().parameters().stream()
+								.map(RoutineMetadata.Argument::name).toList()
+						+ " and " + subprogram.routine().parameters().stream().map(RoutineMetadata.Argument::name)
+								.toList()
+						+ ", by position and by name or in another order: stub a routine through one interface in"
+						+ " a test");
+			}
 		}
 		// from the end of the text backwards, so that each replacement leaves the positions before it valid
 		List<ParserRuleContext> definitions = new ArrayList<>(found.keySet());
