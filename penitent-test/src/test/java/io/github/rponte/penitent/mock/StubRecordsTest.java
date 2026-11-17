@@ -72,6 +72,14 @@ class StubRecordsTest {
 		Note noteOf(BigDecimal pId);
 
 		String describe(String pUf, BigDecimal pId);
+
+		String describeCrate(Item pCrate);
+
+		Item crateOf(BigDecimal pId);
+
+		String describeBox(Item pBox);
+
+		Item boxOf(BigDecimal pId);
 	}
 
 	/** SETTLE(P_UF, P_DAY, P_QUOTE OUT), bound by name, with the Java arguments in another order. */
@@ -225,6 +233,19 @@ class StubRecordsTest {
 
 		assertThat(records.itemOf(BigDecimal.ONE)).isEqualTo(new Item(1L, "SP"));
 		assertThat(records.noteOf(BigDecimal.valueOf(2))).isEqualTo(note);
+	}
+
+	@Test
+	@DisplayName("in the test's edition, a %ROWTYPE of a table whose name needs quotes binds, and a stub returns one")
+	void rowtype_of_a_table_whose_name_needs_quotes() {
+		Records mock = mocks.mock(Records.class);
+		when(mock.crateOf(BigDecimal.ONE)).thenReturn(new Item(1L, "SP"));
+		when(mock.boxOf(BigDecimal.ONE)).thenReturn(new Item(2L, "CE"));
+
+		assertThat(records.describeCrate(new Item(3L, "RJ"))).isEqualTo("3/RJ");
+		assertThat(records.crateOf(BigDecimal.ONE)).isEqualTo(new Item(1L, "SP"));
+		assertThat(records.describeBox(new Item(4L, "BA"))).isEqualTo("4/BA");
+		assertThat(records.boxOf(BigDecimal.ONE)).isEqualTo(new Item(2L, "CE"));
 	}
 
 	@Test

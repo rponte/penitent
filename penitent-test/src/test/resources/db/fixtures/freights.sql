@@ -331,6 +331,13 @@ CREATE TABLE freight_note (
 )
 /
 
+-- tables whose names need quotes: mixed case, and a space
+CREATE TABLE "Crate" (id NUMBER PRIMARY KEY, uf VARCHAR2(2))
+/
+
+CREATE TABLE "Freight Box" (id NUMBER PRIMARY KEY, uf VARCHAR2(2))
+/
+
 CREATE OR REPLACE PACKAGE freight_records AS
   TYPE quote_t IS RECORD (uf VARCHAR2(2), value NUMBER);
   TYPE leg_t IS RECORD (origin VARCHAR2(2), quote quote_t);
@@ -353,6 +360,11 @@ CREATE OR REPLACE PACKAGE freight_records AS
   FUNCTION note_of(p_id NUMBER) RETURN freight_note%ROWTYPE;
   -- calls quote_of and item_of, as PL/SQL that uses a stub would
   FUNCTION describe(p_uf VARCHAR2, p_id NUMBER) RETURN VARCHAR2;
+  -- a %ROWTYPE of a table whose name needs quotes: the describe ones are real, the others fail
+  FUNCTION describe_crate(p_crate "Crate"%ROWTYPE) RETURN VARCHAR2;
+  FUNCTION crate_of(p_id NUMBER) RETURN "Crate"%ROWTYPE;
+  FUNCTION describe_box(p_box "Freight Box"%ROWTYPE) RETURN VARCHAR2;
+  FUNCTION box_of(p_id NUMBER) RETURN "Freight Box"%ROWTYPE;
 END freight_records;
 /
 
@@ -423,6 +435,26 @@ CREATE OR REPLACE PACKAGE BODY freight_records AS
   BEGIN
     RETURN l_quote.uf || '=' || l_quote.value || ', ' || l_item.id || '/' || l_item.uf;
   END describe;
+
+  FUNCTION describe_crate(p_crate "Crate"%ROWTYPE) RETURN VARCHAR2 IS
+  BEGIN
+    RETURN p_crate.id || '/' || p_crate.uf;
+  END describe_crate;
+
+  FUNCTION crate_of(p_id NUMBER) RETURN "Crate"%ROWTYPE IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20410, 'the real crate_of');
+  END crate_of;
+
+  FUNCTION describe_box(p_box "Freight Box"%ROWTYPE) RETURN VARCHAR2 IS
+  BEGIN
+    RETURN p_box.id || '/' || p_box.uf;
+  END describe_box;
+
+  FUNCTION box_of(p_id NUMBER) RETURN "Freight Box"%ROWTYPE IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20410, 'the real box_of');
+  END box_of;
 END freight_records;
 /
 
