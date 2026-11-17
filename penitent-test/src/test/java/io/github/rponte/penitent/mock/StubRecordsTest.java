@@ -216,6 +216,18 @@ class StubRecordsTest {
 	}
 
 	@Test
+	@DisplayName("stubs of %ROWTYPE records of two tables in one test: each table has its own LITERAL_T")
+	void rowtypes_of_two_tables() {
+		Records mock = mocks.mock(Records.class);
+		Note note = new Note(2L, "fragile");
+		when(mock.itemOf(BigDecimal.ONE)).thenReturn(new Item(1L, "SP"));
+		when(mock.noteOf(BigDecimal.valueOf(2))).thenReturn(note);
+
+		assertThat(records.itemOf(BigDecimal.ONE)).isEqualTo(new Item(1L, "SP"));
+		assertThat(records.noteOf(BigDecimal.valueOf(2))).isEqualTo(note);
+	}
+
+	@Test
 	@DisplayName("PL/SQL calling the routines gets the stubbed RECORD and %ROWTYPE")
 	void called_from_plsql() {
 		Records mock = mocks.mock(Records.class);
