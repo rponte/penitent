@@ -135,14 +135,33 @@ public final class RoutineInvocationHandler implements InvocationHandler {
 	}
 
 	/**
-	 * {@code value} as a call of {@code method} would send it to {@code target}, on {@code connection}: a
-	 * {@code Struct} for an object type, an {@code Array} for a collection, and the driver's value for a scalar.
-	 * For a tool that writes the value elsewhere, such as the mocks of {@code penitent-test}, which write it as
-	 * PL/SQL; {@code target} may be the routine's return value, which a call never sends.
+	 * {@code value} as the return value of {@code method}, encoded as a call would decode it backwards, on
+	 * {@code connection}: through the method's converter and {@code @PlsqlBoolean}, to a {@code Struct} for an object
+	 * type, an {@code Array} for a collection, and the driver's value for a scalar, without the temporary LOB a call
+	 * would bind. For a tool that writes the value elsewhere, such as the mocks of {@code penitent-test}, which write
+	 * it as PL/SQL.
 	 */
-	public Object encode(Method method, RoutineMetadata.Argument target, Object value, Connection connection) {
+	public Object encodeReturn(Method method, Object value, Connection connection) {
+		return encoded(() -> routines.encodeReturn(method, value, connection), method);
+	}
+
+	/**
+	 * {@code value}, given for the {@code index}-th Java parameter of {@code method}, as a call would send it to the
+	 * Oracle parameter that Java parameter binds, by position or by name, with its converter and
+	 * {@code @PlsqlBoolean}; as {@link #encodeReturn} for the rest.
+	 */
+	public Object encodeParameter(Method method, int index, Object value, Connection connection) {
+		return encoded(() -> routines.encodeParameter(method, index, value, connection), method);
+	}
+
+	@FunctionalInterface
+	private interface Encoding {
+		Object run() throws SQLException;
+	}
+
+	private Object encoded(Encoding encoding, Method method) {
 		try {
-			return encoder.encode(value, target, null, routines.describeOnce(method, connection).schema(), connection);
+			return encoding.run();
 		} catch (PlsqlMappingException e) {
 			throw MappingMessages.of(method, e);
 		} catch (SqlFailure e) {

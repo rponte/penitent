@@ -301,9 +301,12 @@ it (`PLS-00306`, `PLS-00222`), while a `RECORD` of the same fields is assigned t
 these forms apart by the name the driver gives each value, read in the dictionary: a type of a package, with
 `ALL_PLSQL_COLL_TYPES.INDEX_BY` for an `INDEX BY`; an object type or a collection of the schema, in `ALL_TYPES`; and a
 table otherwise, which the driver names for its `%ROWTYPE`, since a table and a type of one schema cannot share a
-name. A method-level converter, `@PlsqlConvert` on the method, does not apply to
-the value returned by a stub: the entry point encodes the value for its Oracle type, and that converter runs before
-it, in the call. What the tests do not cover yet, such as dates, LOBs and collections declared in a package, is listed
+name. Every value of a stub, a scalar or a composite, returned or set as an `OUT`, is encoded by the core as a call
+would send it, through two internal entry points of `RoutineInvocationHandler`: `encodeReturn`, with the method's
+converter and `@PlsqlBoolean`, an `Optional` unwrapped; and `encodeParameter`, for the Oracle parameter a Java
+parameter binds, by position or by name, with that parameter's converter and `@PlsqlBoolean`. Both leave out the
+temporary LOB a call binds a text or bytes for a LOB through, since the mocks write the value, and do not send it.
+What the tests do not cover yet, such as dates, LOBs and collections declared in a package, is listed
 in the compatibility page, under "Not measured".
 
 **Left aside:** mapping the Java value again in the mocks, from the dictionary. It would be a second mapping to keep

@@ -307,9 +307,13 @@ PL/SQL has no constructor for these, so the stub writes a qualified expression: 
 `"PLSQL_TEST"."FREIGHTS"."QUOTE_T"('CE', 24.9)`, in the order of its fields, whatever the order of the Java ones; an
 `INDEX BY` with named indexes from 1, `"PLSQL_TEST"."FREIGHTS"."IDS_T"(1 => 10, 2 => 20)`, which Java reads back as
 the same `List`; and a `%ROWTYPE` as a `RECORD` of the table's columns, which the mocks declare in the test's edition
-and Oracle assigns to the `%ROWTYPE`. An `INDEX BY VARCHAR2` is refused, as a call would refuse it. A converter
-declared on the method, `@PlsqlConvert` on it, does not apply to what a stub returns; those of the attributes do. The
+and Oracle assigns to the `%ROWTYPE`. An `INDEX BY VARCHAR2` is refused, as a call would refuse it. The
 [compatibility page](compatibility.md#not-measured) lists what the tests of this do not cover yet.
+
+**Every value goes through the application's mapping.** What a stub returns, and what it sets as an `OUT`, is
+encoded as a call would send it: through the converter and `@PlsqlBoolean` of the method, for the value returned,
+or of the parameter, for an `OUT`. So `thenReturn(Uf.CE)` answers `'CE'`, a `UUID` answers its text, `true` answers
+`'Y'` on a method with `@PlsqlBoolean`, and an `Optional` answers its value, or `NULL` when empty.
 
 **Stub a standalone routine.** A function or procedure outside any package is stubbed the same way, from the
 interface with `@PlsqlSchema` the application calls it through:

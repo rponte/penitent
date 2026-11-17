@@ -27,6 +27,9 @@ All notable changes to this project are listed here. The format follows
 
 ### Added
 
+- `penitent-test`: a stub's value, returned or set as an `OUT`, goes through the application's mapping, as a call
+  would send it: an enum, a `UUID`, a `java.util.Date`, a `java.sql.Timestamp`, an `Optional` and a converter on the
+  method or the parameter, which were refused or not applied, now work.
 - `penitent-test`: a stub can return a `RECORD` of a package, a `%ROWTYPE` and an `INDEX BY PLS_INTEGER`, and set
   one as an `OUT`, which were refused for having no constructor in PL/SQL. They are written as qualified expressions:
   an `INDEX BY` with named indexes, and a `%ROWTYPE` as a `RECORD` of the table's columns that the mocks declare in
@@ -47,6 +50,9 @@ All notable changes to this project are listed here. The format follows
 
 ### Fixed
 
+- `penitent-test`: a stub that returned a `Boolean` for a routine mapped with `@PlsqlBoolean`, or as `1` or `0`,
+  generated a body that did not compile, writing `TRUE` where a `VARCHAR2` or a `NUMBER` was due. A stub that
+  returned `NaN` or an infinity failed with a `NumberFormatException`. Both are written as a call would send them now.
 - A `%ROWTYPE` of a table with an invisible column failed to bind, asking the Java type to cover that column, which
   PL/SQL leaves out of a `%ROWTYPE`. It is left out now.
 - A `%ROWTYPE` with a column of an object type or a collection failed to bind, with `ORA-17059` when sending it and a

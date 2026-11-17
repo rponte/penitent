@@ -24,6 +24,21 @@ final class ValueEncoder {
 		this.types = types;
 	}
 
+	/**
+	 * As {@link #encode}, without the temporary LOB that a call binds a text or bytes for a {@code CLOB} or a
+	 * {@code BLOB} through: for a tool that writes the value elsewhere, and not to the driver.
+	 */
+	Object encodeForWriting(Object value, Argument target, PlsqlBoolean literals, String schema, Connection connection)
+			throws SQLException {
+		if (value == null || target.isStruct() || target.isCollection()) {
+			return encode(value, target, literals, schema, connection);
+		}
+		if (value instanceof Boolean flag) {
+			return encodeBoolean(flag, target, literals);
+		}
+		return ScalarCodec.encode(value, ValueConversion.DEFAULT);
+	}
+
 	Object encode(Object value, Argument target, PlsqlBoolean literals, String schema, Connection connection)
 			throws SQLException {
 
