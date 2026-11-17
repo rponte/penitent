@@ -162,7 +162,8 @@ class MockLoggingTest {
 				.matches("DEBUG Aliased row type    : \"PLSQL_TEST\"\\.FREIGHT_ITEM%ROWTYPE as " + alias + " in \\d+ ms");
 		assertThat(lines()).anySatisfy(line -> assertThat(line).matches("(?s)TRACE -> generated PL/SQL : CREATE OR"
 				+ " REPLACE PACKAGE \"PLSQL_TEST\"\\.PENITENT_ROW_\\w+ AS\n +SUBTYPE ROW_T IS \"PLSQL_TEST\"\\.FREIGHT_ITEM%ROWTYPE;"
-				+ "\n +END PENITENT_ROW_\\w+;"));
+				+ "\n +TYPE LITERAL_T IS RECORD \\(\"ID\" \"PLSQL_TEST\"\\.\"FREIGHT_ITEM\"\\.\"ID\"%TYPE, \"UF\""
+				+ " \"PLSQL_TEST\"\\.\"FREIGHT_ITEM\"\\.\"UF\"%TYPE\\);\n +END PENITENT_ROW_\\w+;"));
 		assertThat(lines()).filteredOn(line -> line.contains("-> type name")).hasSize(2).allSatisfy(line -> assertThat(line)
 				.matches("DEBUG -> type name        : \"PLSQL_TEST\"\\.FREIGHT_ITEM%ROWTYPE as " + alias));
 		// which integration renamed it is no news to the reader: the line of each renaming, above, says what happened

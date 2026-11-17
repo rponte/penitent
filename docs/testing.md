@@ -283,8 +283,31 @@ when(freightItems.itemsOf("SP")).thenReturn(List.of(new FreightItem(1L, "SP"), n
 
 The stub answers with `FREIGHT_ITEM_LIST_T(FREIGHT_ITEM_T(1, 'SP'), FREIGHT_ITEM_T(2, 'CE'))`, to Java and to PL/SQL
 alike. Object types nest, collections can be empty, attributes and elements can be `null`, and an `OUT` of an object
-type or a collection is set the same way, with `out(value)`. A `RECORD`, a `%ROWTYPE` and an `INDEX BY` have no
-constructor in PL/SQL, so a stub cannot return them yet: it can `thenReturn(null)` or `thenThrow`. A converter
+type or a collection is set the same way, with `out(value)`.
+
+A `RECORD` of a package, a `%ROWTYPE` and an `INDEX BY` are stubbed the same way, from the record the application
+maps them to:
+
+<!-- snippet: testing/record-interface -->
+```java
+@PlsqlPackage("FREIGHTS")
+public interface FreightRows {
+
+    // FUNCTION find(p_id NUMBER) RETURN freight_item%ROWTYPE
+    FreightItem find(BigDecimal pId);
+}
+```
+
+<!-- snippet: testing/record-stub -->
+```java
+when(freightRows.find(BigDecimal.ONE)).thenReturn(new FreightItem(1L, "SP"));
+```
+
+PL/SQL has no constructor for these, so the stub writes a qualified expression: a `RECORD` as
+`"PLSQL_TEST"."FREIGHTS"."QUOTE_T"('CE', 24.9)`, in the order of its fields, whatever the order of the Java ones; an
+`INDEX BY` with named indexes from 1, `"PLSQL_TEST"."FREIGHTS"."IDS_T"(1 => 10, 2 => 20)`, which Java reads back as
+the same `List`; and a `%ROWTYPE` as a `RECORD` of the table's columns, which the mocks declare in the test's edition
+and Oracle assigns to the `%ROWTYPE`. An `INDEX BY VARCHAR2` is refused, as a call would refuse it. A converter
 declared on the method, `@PlsqlConvert` on it, does not apply to what a stub returns; those of the attributes do. The
 [compatibility page](compatibility.md#not-measured) lists what the tests of this do not cover yet.
 
@@ -489,8 +512,9 @@ try (PlsqlMocks mocks = PlsqlMocks.on(dataSource)) {
   `unwrap` to reach the pool.
 - **What can be stubbed, so far:** routines declared in a package spec, and standalone functions and procedures, in
   the test user's schema, answering with
-  scalars, object types and collections. A parameter of an object type, a collection or a record is matched with
-  `any()` only, and a stub cannot return a `RECORD`, a `%ROWTYPE` or an `INDEX BY` yet. A private routine has no
+  scalars, object types, collections, records of a package, `%ROWTYPE` records and `INDEX BY` collections. A
+  parameter of an object type, a collection or a record is matched with `any()` only, and a stub cannot return a
+  cursor yet ([#63](https://github.com/rponte/penitent/issues/63)). A private routine has no
   method to stub it through, and a wrapped body cannot be read.
 
 ## Seeing what the mocks do

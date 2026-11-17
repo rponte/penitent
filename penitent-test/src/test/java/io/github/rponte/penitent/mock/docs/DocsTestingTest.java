@@ -152,6 +152,15 @@ class DocsTestingTest {
 	}
 	// end-snippet
 
+	// snippet: testing/record-interface
+	@PlsqlPackage("FREIGHTS")
+	public interface FreightRows {
+
+	    // FUNCTION find(p_id NUMBER) RETURN freight_item%ROWTYPE
+	    FreightItem find(BigDecimal pId);
+	}
+	// end-snippet
+
 	/** The stubbing examples, each in a test of its own. */
 	@Nested
 	class Stubbing {
@@ -198,6 +207,20 @@ class DocsTestingTest {
 
 			assertThat(PlsqlPackages.create(FreightItems.class, dataSource).itemsOf("SP"))
 					.containsExactly(new FreightItem(1L, "SP"), new FreightItem(2L, "CE"));
+		}
+
+		@Test
+		@DisplayName("testing.md: a stub that returns a %ROWTYPE")
+		void record() {
+			FreightRows freightRows = mocks.mock(FreightRows.class);
+
+			// snippet: testing/record-stub
+			when(freightRows.find(BigDecimal.ONE)).thenReturn(new FreightItem(1L, "SP"));
+			// end-snippet
+
+			// the real routine answers 'CE'
+			assertThat(PlsqlPackages.create(FreightRows.class, dataSource).find(BigDecimal.ONE))
+					.isEqualTo(new FreightItem(1L, "SP"));
 		}
 
 		@Test

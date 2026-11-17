@@ -8,6 +8,8 @@ All notable changes to this project are listed here. The format follows
 
 ### Changed
 
+- `penitent-test`: the package the mocks compile in the test's edition for a `%ROWTYPE` declares `LITERAL_T` next to
+  `ROW_T`, which the generated PL/SQL in the log shows.
 - `penitent-test`: `penitent-mock-admin.sql` also enables editions for functions and procedures, each in a statement
   of its own, for stubs of standalone routines. A schema prepared before keeps working for stubs of packages; a stub of
   a standalone routine there is refused, saying what a DBA has to run.
@@ -25,6 +27,10 @@ All notable changes to this project are listed here. The format follows
 
 ### Added
 
+- `penitent-test`: a stub can return a `RECORD` of a package, a `%ROWTYPE` and an `INDEX BY PLS_INTEGER`, and set
+  one as an `OUT`, which were refused for having no constructor in PL/SQL. They are written as qualified expressions:
+  an `INDEX BY` with named indexes, and a `%ROWTYPE` as a `RECORD` of the table's columns that the mocks declare in
+  the test's edition, which Oracle assigns to it. A collection of records, which was refused too, works as well.
 - `penitent-test`: the mocks are measured on Oracle 19c, on the Autonomous Database Free, with no change: its `ADMIN`
   runs `penitent-mock-admin.sql`, and the module's tests, skipped on 19c until now, pass there.
 - `penitent-test`: stubs of standalone functions and procedures, outside any package, from an interface with
@@ -41,6 +47,8 @@ All notable changes to this project are listed here. The format follows
 
 ### Fixed
 
+- `penitent-test`: a stub of a routine bound by name failed to find the routine in the body, when the Java method
+  declared its parameters in another order than the routine, or left out one with a `DEFAULT`.
 - An OBJECT, a package RECORD, a `%ROWTYPE` or a collection whose name needs quotes for more than its case, such as
   `CREATE TYPE "Two Words_T"`, failed with `ORA-17060` or `ORA-17074`: on driver 23 for every form, and on drivers 21
   and 19 for a `%ROWTYPE`. Such a name is now bound with every part in quotes, the owner included, which every driver
