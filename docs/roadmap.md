@@ -12,9 +12,8 @@ The items below are in three groups: what comes next, what waits for a real use 
 `penitent-test` stubs a routine of a package in an integration test, in the style of Mockito, from the interface the
 application already has, answering with scalars, object types and collections, and replaces a view, a package, a
 standalone routine or a synonym with a script, as [Testing](testing.md#mocking-a-routine) shows, measured on Oracle
-23ai and 21c. Still open, as [architecture decision 0001](adr/0001-mocking-plsql-with-editions.md) details:
+23ai, 21c and 19c. Still open, as [architecture decision 0001](adr/0001-mocking-plsql-with-editions.md) details:
 
-- **Oracle 19c,** including whether the Autonomous Database image used for 19c lets editions be enabled.
 - **A stub made after the test used the package,** which now fails the next call once: retrying it in tests, or a
   body that reads its stubs from a table and needs no recompilation.
 - **More than scripts can replace:** triggers and object types, which legacy PL/SQL is often coupled to; an API of its

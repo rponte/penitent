@@ -25,9 +25,10 @@ All notable changes to this project are listed here. The format follows
 
 ### Added
 
+- `penitent-test`: the mocks are measured on Oracle 19c, on the Autonomous Database Free, with no change: its `ADMIN`
+  runs `penitent-mock-admin.sql`, and the module's tests, skipped on 19c until now, pass there.
 - `penitent-test`: stubs of standalone functions and procedures, outside any package, from an interface with
   `@PlsqlSchema`, with the same API as a routine of a package. The whole routine is rewritten in the test's edition.
-
 - `penitent-test`: `PlsqlError`, the exception a stub raises: an Oracle predefined exception, from the enum
   `PredefinedError`, with its code, or an exception a package declares in its spec, from `PlsqlError.declared`, which
   the PL/SQL that calls the routine catches by name. A name that does not exist is reported as the likely mistake.

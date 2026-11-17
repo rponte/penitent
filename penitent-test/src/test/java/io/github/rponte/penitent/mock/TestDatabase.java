@@ -6,8 +6,6 @@ import java.sql.Statement;
 
 import javax.sql.DataSource;
 
-import org.junit.jupiter.api.Assumptions;
-
 import com.zaxxer.hikari.HikariDataSource;
 
 /**
@@ -33,8 +31,6 @@ public final class TestDatabase {
 
 	/** The pool of the test user, as an application has it: not wrapped. */
 	public static synchronized DataSource pool() {
-		// measured on Oracle 23ai and 21c, so far: 19c, on the Autonomous Database image, is still open (issue #53)
-		Assumptions.assumeFalse(IMAGE.contains("adb-free"), "the mocks are not measured on Oracle 19c yet");
 		if (pool == null) {
 			oracle = OracleUnderTest.start(IMAGE);
 			pool = newPool(OracleUnderTest.USER);
@@ -47,8 +43,9 @@ public final class TestDatabase {
 
 	/**
 	 * {@link #pool()}, reached on first use, for a static field of a sample class: JUnit reads such a field, to find
-	 * the extension in it, before it decides to skip the class, and the pool aborts the class on another database than
-	 * Oracle 23ai. {@code equals}, {@code hashCode} and {@code toString} answer without it.
+	 * the extension in it, before it decides to skip the class, as the samples are skipped outside the test kit, so
+	 * the database starts only for a class that runs. {@code equals}, {@code hashCode} and {@code toString} answer
+	 * without it.
 	 */
 	public static DataSource lazyPool() {
 		return (DataSource) java.lang.reflect.Proxy.newProxyInstance(TestDatabase.class.getClassLoader(),

@@ -1,7 +1,7 @@
 # 0001. Mocking PL/SQL in integration tests with editions
 
 - **Status:** Accepted, 2026-11-11. The core, the JUnit 5 extension and the Spring Test support are implemented and
-  measured on Oracle 23ai and 21c; the module's tests are skipped on 19c until it is measured.
+  measured on Oracle 23ai, 21c and 19c.
 - **Module:** `penitent-test`.
 
 ## Context
@@ -478,6 +478,13 @@ And in the tests of `penitent-test`, in the session of the test user, whose sche
 | `"PLSQL_REGISTRY".REGION%ROWTYPE`, a table of a schema without editions | resolves |
 | the subtype of either one, in the schema of the mocks | resolves, and nothing is created in `PLSQL_REGISTRY` |
 
+Later, the whole module, on the other versions Oracle supports, with drivers 23, 21 and 19:
+
+| Database | Result |
+|---|---|
+| Oracle 21c (`gvenzl/oracle-xe:21-slim-faststart`) | all but a `BOOLEAN` argument, which a call recorded through SQL, where only 23ai takes one: it is now written as `'true'` or `'false'` in PL/SQL first, on every version |
+| Oracle 19c (`ghcr.io/oracle/adb-free:latest`, 19.33) | all, with no change: its `ADMIN` enables editions for the schema's types and grants `CREATE ANY EDITION` and `DROP ANY EDITION` |
+
 ## Alternatives considered
 
 - **A repository of its own, named Placebo.** It would give the module an identity and releases of its own, but the
@@ -579,8 +586,5 @@ API of its own for views. Object types need
   care: enabling editions for a type that a table uses fails (`ORA-38819`), and forcing it leaves the table invalid,
   as an earlier measurement showed.
 
-- Oracle 19c, including whether `ADMIN` can enable editions on the Autonomous Database image used for 19c. Oracle
-  21c, measured: the one difference was a `BOOLEAN` argument, which a call recorded through SQL, where only 23ai takes
-  one; it is now written as `'true'` or `'false'` in PL/SQL first, on every version.
 - Spy mode: running the original body, as a nested block, when no stub matches.
 - Packages in another schema, and how much privilege that asks for.
