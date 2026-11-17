@@ -27,6 +27,9 @@ All notable changes to this project are listed here. The format follows
 
 ### Added
 
+- `penitent-test`: a stub returns, and sets as an `OUT`, time zones, intervals, a `RAW`, a `BLOB` up to 16 KB and a
+  `CLOB` above 32 KB, which were refused or did not compile. They are written as `TIMESTAMP` literals with an offset
+  or a region, `TO_DSINTERVAL` and `TO_YMINTERVAL`, `HEXTORAW`, and `TO_CLOB` pieces joined with `||`.
 - `penitent-test`: a stub's value, returned or set as an `OUT`, goes through the application's mapping, as a call
   would send it: an enum, a `UUID`, a `java.util.Date`, a `java.sql.Timestamp`, an `Optional` and a converter on the
   method or the parameter, which were refused or not applied, now work.

@@ -615,3 +615,74 @@ CREATE OR REPLACE PACKAGE BODY freight_types AS
   END describe;
 END freight_types;
 /
+
+-- time zones, intervals, binaries and a large CLOB, which a stub writes as PL/SQL; the real routines fail
+CREATE OR REPLACE PACKAGE freight_extras AS
+  FUNCTION departs_at(p_id NUMBER) RETURN TIMESTAMP WITH TIME ZONE;
+  FUNCTION arrives_at(p_id NUMBER) RETURN TIMESTAMP WITH TIME ZONE;
+  FUNCTION logged_at(p_id NUMBER) RETURN TIMESTAMP WITH LOCAL TIME ZONE;
+  FUNCTION transit_of(p_id NUMBER) RETURN INTERVAL DAY TO SECOND;
+  FUNCTION warranty_of(p_id NUMBER) RETURN INTERVAL YEAR TO MONTH;
+  FUNCTION digest_of(p_id NUMBER) RETURN RAW;
+  FUNCTION label_of(p_id NUMBER) RETURN BLOB;
+  FUNCTION manifest_of(p_id NUMBER) RETURN CLOB;
+  PROCEDURE track(p_id NUMBER, p_departs OUT TIMESTAMP WITH TIME ZONE, p_transit OUT INTERVAL DAY TO SECOND,
+                  p_digest OUT RAW, p_manifest OUT CLOB);
+  -- reads manifest_of, as PL/SQL that uses a stub would
+  FUNCTION manifest_length(p_id NUMBER) RETURN NUMBER;
+END freight_extras;
+/
+
+CREATE OR REPLACE PACKAGE BODY freight_extras AS
+  FUNCTION departs_at(p_id NUMBER) RETURN TIMESTAMP WITH TIME ZONE IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20440, 'the real departs_at');
+  END departs_at;
+
+  FUNCTION arrives_at(p_id NUMBER) RETURN TIMESTAMP WITH TIME ZONE IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20440, 'the real arrives_at');
+  END arrives_at;
+
+  FUNCTION logged_at(p_id NUMBER) RETURN TIMESTAMP WITH LOCAL TIME ZONE IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20440, 'the real logged_at');
+  END logged_at;
+
+  FUNCTION transit_of(p_id NUMBER) RETURN INTERVAL DAY TO SECOND IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20440, 'the real transit_of');
+  END transit_of;
+
+  FUNCTION warranty_of(p_id NUMBER) RETURN INTERVAL YEAR TO MONTH IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20440, 'the real warranty_of');
+  END warranty_of;
+
+  FUNCTION digest_of(p_id NUMBER) RETURN RAW IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20440, 'the real digest_of');
+  END digest_of;
+
+  FUNCTION label_of(p_id NUMBER) RETURN BLOB IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20440, 'the real label_of');
+  END label_of;
+
+  FUNCTION manifest_of(p_id NUMBER) RETURN CLOB IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20440, 'the real manifest_of');
+  END manifest_of;
+
+  PROCEDURE track(p_id NUMBER, p_departs OUT TIMESTAMP WITH TIME ZONE, p_transit OUT INTERVAL DAY TO SECOND,
+                  p_digest OUT RAW, p_manifest OUT CLOB) IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20440, 'the real track');
+  END track;
+
+  FUNCTION manifest_length(p_id NUMBER) RETURN NUMBER IS
+  BEGIN
+    RETURN DBMS_LOB.GETLENGTH(manifest_of(p_id));
+  END manifest_length;
+END freight_extras;
+/

@@ -2,23 +2,36 @@ package io.github.rponte.penitent.mock.internal;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.sql.Blob;
+import java.sql.Clob;
 import java.sql.SQLException;
 import java.sql.Struct;
 import java.sql.Timestamp;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.Period;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.StringJoiner;
 
+import io.github.rponte.penitent.internal.convert.OracleIntervalCodec;
+
 import oracle.jdbc.OracleArray;
+import oracle.sql.INTERVALDS;
+import oracle.sql.INTERVALYM;
 
 /**
- * Java values written as PL/SQL literals, for the code the mocks generate: numbers, text, booleans, {@code LocalDate}
- * and {@code LocalDateTime}; and, through {@link #constructor}, object types, collections, RECORDs, {@code %ROWTYPE}
- * records and {@code INDEX BY} collections, as the driver has them.
+ * Java values written as PL/SQL, for the code the mocks generate: numbers, {@code NaN} and the infinities, text, a
+ * {@code CLOB} above one literal in pieces, booleans, dates, timestamps, time zones, intervals and bytes up to
+ * {@value #MAX_BYTES}; and, through {@link #constructor}, object types, collections, RECORDs, {@code %ROWTYPE} records
+ * and {@code INDEX BY} collections, as the driver has them. Each form was measured on Oracle 19c, 21c and 23ai.
  * Any other value is refused with a message that says so, rather than written in a way that might compare wrongly.
  */
 public final class PlsqlLiterals {
@@ -78,7 +91,7 @@ public final class PlsqlLiterals {
 					: notFinite(number.doubleValue(), "FLOAT");
 		}
 		if (value instanceof CharSequence || value instanceof Character) {
-			return "'" + value.toString().replace("'", "''") + "'";
+			return text(value.toString());
 		}
 		if (value instanceof Boolean bool) {
 			return bool ? "TRUE" : "FALSE";
@@ -89,8 +102,96 @@ public final class PlsqlLiterals {
 		if (value instanceof LocalDateTime dateTime) {
 			return "TIMESTAMP '" + TIMESTAMP.format(dateTime) + "'";
 		}
-		throw new IllegalStateException("a " + value.getClass().getName() + " cannot be written as PL/SQL by the mocks"
-				+ " yet: they know numbers, text, booleans, LocalDate and LocalDateTime");
+		if (value instanceof OffsetDateTime dateTime) {
+			return "TIMESTAMP '" + TIMESTAMP.format(dateTime) + " " + offset(dateTime.getOffset()) + "'";
+		}
+		if (value instanceof ZonedDateTime dateTime) {
+			// a region keeps the rules of daylight saving time, which an offset alone would lose
+			return "TIMESTAMP '" + TIMESTAMP.format(dateTime) + " "
+					+ (dateTime.getZone() instanceof ZoneOffset zoneOffset ? offset(zoneOffset) : dateTime.getZone().getId())
+					+ "'";
+		}
+		if (value instanceof Instant instant) {
+			return of(instant.atOffset(ZoneOffset.UTC));
+		}
+		if (value instanceof INTERVALDS interval) {
+			return of(OracleIntervalCodec.duration(interval.toBytes()));
+		}
+		if (value instanceof INTERVALYM interval) {
+			return of(OracleIntervalCodec.period(interval.toBytes()));
+		}
+		if (value instanceof Duration duration) {
+			Duration magnitude = duration.abs();
+			return String.format(Locale.ROOT, "TO_DSINTERVAL('%s%d %02d:%02d:%02d.%09d')", duration.isNegative() ? "-" : "",
+					magnitude.toDays(), magnitude.toHoursPart(), magnitude.toMinutesPart(), magnitude.toSecondsPart(),
+					magnitude.toNanosPart());
+		}
+		if (value instanceof Period period) {
+			long months = period.toTotalMonths();
+			return String.format(Locale.ROOT, "TO_YMINTERVAL('%s%d-%d')", months < 0 ? "-" : "", Math.abs(months) / 12,
+					Math.abs(months) % 12);
+		}
+		if (value instanceof byte[] bytes) {
+			return bytes(bytes);
+		}
+		if (value instanceof Clob clob) {
+			try {
+				return text(clob.getSubString(1, Math.toIntExact(clob.length())));
+			} catch (SQLException e) {
+				throw new IllegalStateException("failed to read a Clob to write it as PL/SQL: " + e.getMessage(), e);
+			}
+		}
+		if (value instanceof Blob blob) {
+			try {
+				return bytes(blob.getBytes(1, Math.toIntExact(blob.length())));
+			} catch (SQLException e) {
+				throw new IllegalStateException("failed to read a Blob to write it as PL/SQL: " + e.getMessage(), e);
+			}
+		}
+		throw new IllegalStateException("a " + value.getClass().getName() + " cannot be written as PL/SQL by the mocks");
+	}
+
+	/** The most characters a piece of text holds, so that it fits a PL/SQL literal of 32,767 bytes in any charset. */
+	private static final int TEXT_PIECE = 8_000;
+
+	/** The most bytes {@code HEXTORAW} takes from one literal, written as two hex digits each. */
+	static final int MAX_BYTES = 16_383;
+
+	/**
+	 * Text as a PL/SQL literal; above what one literal holds, as {@code TO_CLOB} pieces joined with {@code ||}, which
+	 * only a {@code CLOB} takes, and which Oracle 19c, 21c and 23ai compile.
+	 */
+	private static String text(String text) {
+		if (text.length() <= TEXT_PIECE) {
+			return "'" + text.replace("'", "''") + "'";
+		}
+		StringJoiner pieces = new StringJoiner(" || ");
+		int start = 0;
+		while (start < text.length()) {
+			int end = Math.min(start + TEXT_PIECE, text.length());
+			// a surrogate pair stays in one piece
+			if (end < text.length() && Character.isHighSurrogate(text.charAt(end - 1))) {
+				end--;
+			}
+			pieces.add("TO_CLOB('" + text.substring(start, end).replace("'", "''") + "')");
+			start = end;
+		}
+		return pieces.toString();
+	}
+
+	/** Bytes as {@code HEXTORAW}, which a {@code RAW} and a {@code BLOB} take; above one literal, refused. */
+	private static String bytes(byte[] bytes) {
+		if (bytes.length > MAX_BYTES) {
+			throw new IllegalStateException("a value of " + bytes.length + " bytes cannot be written in a stub yet: a"
+					+ " PL/SQL literal holds " + MAX_BYTES + " bytes as hex digits, and a BLOB cannot be joined in an"
+					+ " expression; see https://github.com/rponte/penitent/issues/93");
+		}
+		return "HEXTORAW('" + java.util.HexFormat.of().withUpperCase().formatHex(bytes) + "')";
+	}
+
+	/** {@code +hh:mm}, as Oracle reads an offset, also for UTC, which Java writes as {@code Z}. */
+	private static String offset(ZoneOffset offset) {
+		return offset.equals(ZoneOffset.UTC) ? "+00:00" : offset.getId();
 	}
 
 	/**
