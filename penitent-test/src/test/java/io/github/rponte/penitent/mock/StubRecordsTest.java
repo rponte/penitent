@@ -45,6 +45,14 @@ class StubRecordsTest {
 	record Item(Long id, String uf) {
 	}
 
+	/** FREIGHT_PARCEL%ROWTYPE: DOUBLE_WEIGHT is virtual, and the invisible SECRET is not part of it. */
+	record Parcel(Long id, BigDecimal weight, BigDecimal doubleWeight) {
+	}
+
+	/** FREIGHT_BUNDLE%ROWTYPE: an object type and a VARRAY as columns. */
+	record Bundle(Long id, Item item, List<BigDecimal> codes) {
+	}
+
 	/** ROUTE_T: a RECORD holding an INDEX BY. */
 	record Route(String name, List<String> ufs) {
 	}
@@ -86,6 +94,10 @@ class StubRecordsTest {
 		Item boxOf(BigDecimal pId);
 
 		Item itemViewOf(BigDecimal pId);
+
+		Parcel parcelOf(BigDecimal pId);
+
+		Bundle bundleOf(BigDecimal pId);
 
 		Route routeOf(String pName);
 
@@ -264,6 +276,24 @@ class StubRecordsTest {
 		when(mocks.mock(Records.class).itemViewOf(BigDecimal.ONE)).thenReturn(new Item(1L, "SP"));
 
 		assertThat(records.itemViewOf(BigDecimal.ONE)).isEqualTo(new Item(1L, "SP"));
+	}
+
+	@Test
+	@DisplayName("a stub returns a %ROWTYPE of a table with a virtual column, and an invisible one left out")
+	void rowtype_with_virtual_and_invisible_columns() {
+		Parcel parcel = new Parcel(1L, BigDecimal.TEN, new BigDecimal("20"));
+		when(mocks.mock(Records.class).parcelOf(BigDecimal.ONE)).thenReturn(parcel);
+
+		assertThat(records.parcelOf(BigDecimal.ONE)).isEqualTo(parcel);
+	}
+
+	@Test
+	@DisplayName("a stub returns a %ROWTYPE of a table with an object type and a VARRAY as columns")
+	void rowtype_with_composite_columns() {
+		Bundle bundle = new Bundle(1L, new Item(7L, "SP"), List.of(BigDecimal.ONE, BigDecimal.TEN));
+		when(mocks.mock(Records.class).bundleOf(BigDecimal.ONE)).thenReturn(bundle);
+
+		assertThat(records.bundleOf(BigDecimal.ONE)).isEqualTo(bundle);
 	}
 
 	@Test
