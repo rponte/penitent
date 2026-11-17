@@ -449,16 +449,20 @@ that text, on every version.
 
 ## Not measured
 
-- Oracle 18c and older, such as 12c.
-- `penitent-test`: stubs returning a boolean or a `LocalDateTime`.
+- Oracle 18c and older, such as 12c ([on demand](roadmap.md#on-demand)).
+- `penitent-test`: stubs returning a boolean or a `LocalDateTime`
+  ([#65](https://github.com/rponte/penitent/issues/65)).
 - A script that replaces a package spec or a synonym in the test's edition: the tests replace views, package bodies
-  and standalone functions.
+  and standalone functions ([#66](https://github.com/rponte/penitent/issues/66)).
 - A stub of a standalone routine in a schema that does not edition its type, refused saying what to run: not run by a
-  test, since editions cannot be undone in the test database; nor a standalone routine with `AUTHID`,
-  `DETERMINISTIC`, `RESULT_CACHE`, `PIPELINED` or `PARALLEL_ENABLE`, which IslandSQL parsed in a one-off probe.
+  test, since editions cannot be undone in the test database; nor a standalone routine with `AUTHID`, `DETERMINISTIC`,
+  `RESULT_CACHE`, `PIPELINED` or `PARALLEL_ENABLE`, which IslandSQL parsed in a one-off probe
+  ([#67](https://github.com/rponte/penitent/issues/67)).
 - `ENABLE EDITIONS FOR VIEW` with a materialized view reading one of the schema's views: `ORA-38819`, and with `FORCE`
-  the materialized view left `INVALID`, measured once by hand, not by a test that runs.
-- A stub that returns an object type or a collection, in cases its tests do not cover:
+  the materialized view left `INVALID`, measured once by hand, not by a test that runs
+  ([#68](https://github.com/rponte/penitent/issues/68)).
+- A stub that returns an object type or a collection, in cases its tests do not cover
+  ([#69](https://github.com/rponte/penitent/issues/69)):
   - a method-level converter, `@PlsqlConvert` on the method: it does not apply to the value a stub returns, only the
     converters of the attributes do;
   - a collection declared in a package (`TYPE ... IS TABLE OF` or `VARRAY` in a spec), rather than in the schema;
@@ -467,22 +471,31 @@ that text, on every version.
     class;
   - a collection of collections;
   - what a stub with a large value costs to compile.
-- Drivers 18.x and older.
-- Resilience4j's `@Retry` on a `@Transactional` method, `@Bulkhead` and `@RateLimiter`.
-- A Jakarta EE container's `DataSource` inside a JTA transaction, with `create` or with `PlsqlPackages.using`.
-- `XMLTYPE`, `JSON`, `LONG`, `REF` and nested cursors.
-- Synonyms with a `db link`, which are currently ignored during resolution.
-- A name with a double quote or a dot inside its quotes, such as `"a.b"`, in a composite type or a collection.
-- In `penitent-test`, a `%ROWTYPE` of a table whose name needs quotes, in the test's edition.
+- Drivers 18.x and older ([on demand](roadmap.md#on-demand)).
+- Resilience4j's `@Retry` on a `@Transactional` method, `@Bulkhead` and `@RateLimiter`
+  ([#72](https://github.com/rponte/penitent/issues/72)).
+- A Jakarta EE container's `DataSource` inside a JTA transaction, with `create` or with `PlsqlPackages.using`
+  ([#73](https://github.com/rponte/penitent/issues/73)).
+- `XMLTYPE`, `JSON`, `LONG`, `REF` and nested cursors ([#74](https://github.com/rponte/penitent/issues/74)).
+- Synonyms with a `db link`, which are currently ignored during resolution
+  ([#75](https://github.com/rponte/penitent/issues/75)).
+- A name with a double quote or a dot inside its quotes, such as `"a.b"`, in a composite type or a collection
+  ([#76](https://github.com/rponte/penitent/issues/76)).
+- In `penitent-test`, a `%ROWTYPE` of a table whose name needs quotes, in the test's edition
+  ([#70](https://github.com/rponte/penitent/issues/70)).
 - In `penitent-test`, a stub that returns a `%ROWTYPE` of a view, of a table with virtual or invisible columns, or
-  holding object types or collections in its columns; a `RECORD` holding an `INDEX BY`; and a test that stubs the
-  same routine through an interface bound by position and another bound by name.
+  holding object types or collections in its columns; a `RECORD` holding an `INDEX BY`; and a test that stubs the same
+  routine through an interface bound by position and another bound by name
+  ([#71](https://github.com/rponte/penitent/issues/71)).
 - A `default` method of a non-public interface on the module path: the package must be open to the library, and
-  otherwise the call is a `PlsqlMappingException` saying so.
+  otherwise the call is a `PlsqlMappingException` saying so ([#77](https://github.com/rponte/penitent/issues/77)).
 - A block type (`@PlsqlType` on a parameter, `resultType`) in another schema or reached through a synonym: it is
-  resolved in the session's schema only.
-- A collection column in a cursor, and a collection of collections as an attribute, beyond the clear error.
-- `isX()` getters and `@PlsqlBoolean` on JavaBeans.
-- A signature change in the database after the proxy has cached the metadata.
+  resolved in the session's schema only ([#78](https://github.com/rponte/penitent/issues/78)).
+- A collection column in a cursor, and a collection of collections as an attribute, beyond the clear error
+  ([#79](https://github.com/rponte/penitent/issues/79)).
+- `isX()` getters and `@PlsqlBoolean` on JavaBeans ([#80](https://github.com/rponte/penitent/issues/80)).
+- A signature change in the database after the proxy has cached the metadata
+  ([#81](https://github.com/rponte/penitent/issues/81)).
 - `java.util.Date`, `java.sql.Date` and `java.sql.Timestamp` for a local time that the JVM's time zone skips: they
-  hold an instant in that zone, so they cannot represent it. Declare `LocalDateTime` or `LocalDate`.
+  hold an instant in that zone, so they cannot represent it. Declare `LocalDateTime` or `LocalDate`. A limit of those
+  Java types, not a gap in the tests.
