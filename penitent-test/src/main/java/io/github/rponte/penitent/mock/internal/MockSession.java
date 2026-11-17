@@ -21,6 +21,7 @@ import javax.sql.DataSource;
 import io.github.rponte.penitent.PlsqlPackages;
 import io.github.rponte.penitent.internal.metadata.CompositeType;
 import io.github.rponte.penitent.internal.metadata.RoutineMetadata;
+import io.github.rponte.penitent.internal.proxy.RoutineInvocationHandler;
 import io.github.rponte.penitent.internal.proxy.Views;
 
 /**
@@ -181,49 +182,48 @@ public final class MockSession implements RowTypes {
 	}
 
 	/**
-	 * {@code stub}, with the object type or collection it returns, and those it sets as OUT values, written as PL/SQL
-	 * constructors. The core encodes each value as a call would send it, so the mapping is the one the application
-	 * uses, {@code @PlsqlType}, {@code @PlsqlAttr} and converters included, and the constructor is written from what
-	 * the driver holds. A RECORD, a {@code %ROWTYPE} and an {@code INDEX BY} have no constructor, and are written as
-	 * qualified expressions, as {@link PlsqlLiterals#constructor} says.
+	 * {@code stub}, with the value it returns and those it sets as OUT values written as PL/SQL. The core encodes each
+	 * value as a call would send it, through the method's or the parameter's converter and {@code @PlsqlBoolean}, so
+	 * the mapping is the one the application uses: an enum by its name, a UUID as text, a boolean by its literals,
+	 * {@code @PlsqlType} and {@code @PlsqlAttr} for a composite; and the PL/SQL is written from what it encoded. A
+	 * RECORD, a {@code %ROWTYPE} and an {@code INDEX BY} have no constructor, and are written as qualified
+	 * expressions, as {@link PlsqlLiterals#constructor} says.
 	 */
 	private Stub written(Stub stub, RoutineMetadata routine) {
 		Invocation invocation = stub.invocation();
 		Stub.Action action = stub.action();
-		boolean returnsComposite = action instanceof Stub.Return returned && returned.function()
-				&& returned.value() != null && BodyRewriter.composite(routine.returnValue().orElseThrow());
+		boolean returns = action instanceof Stub.Return returned && returned.function() && returned.value() != null;
 		List<Matcher> matchers = new ArrayList<>(invocation.matchers());
-		Map<Integer, RoutineMetadata.Argument> outs = new LinkedHashMap<>();
+		List<Integer> outs = new ArrayList<>();
 		for (int i = 0; i < matchers.size(); i++) {
-			RoutineMetadata.Argument parameter = parameterAt(routine, invocation.method(), i);
-			if (matchers.get(i) instanceof Matcher.Out out && out.value() != null && BodyRewriter.composite(parameter)) {
-				outs.put(i, parameter);
+			if (matchers.get(i) instanceof Matcher.Out out && out.value() != null) {
+				outs.add(i);
 			}
 		}
-		if (!returnsComposite && outs.isEmpty()) {
+		if (!returns && outs.isEmpty()) {
 			return stub;
 		}
-		Object describer = describerOf(invocation.mock().type());
+		RoutineInvocationHandler handler = Views.handlerOf(describerOf(invocation.mock().type()));
+		Method method = invocation.method();
 		try (Connection connection = connection()) {
-			if (returnsComposite) {
-				action = new Stub.Return(write(describer, invocation.method(), routine,
-						routine.returnValue().orElseThrow(), ((Stub.Return) action).value(), connection), true);
+			if (returns) {
+				action = new Stub.Return(literal(handler.encodeReturn(method, ((Stub.Return) action).value(),
+						connection), connection), true);
 			}
-			for (Map.Entry<Integer, RoutineMetadata.Argument> out : outs.entrySet()) {
-				matchers.set(out.getKey(), new Matcher.Out(write(describer, invocation.method(), routine,
-						out.getValue(), ((Matcher.Out) matchers.get(out.getKey())).value(), connection)));
+			for (int i : outs) {
+				matchers.set(i, new Matcher.Out(literal(handler.encodeParameter(method, i,
+						((Matcher.Out) matchers.get(i)).value(), connection), connection)));
 			}
 		} catch (SQLException e) {
 			throw new IllegalStateException("failed to write the stub of " + routine.qualifiedName() + " as PL/SQL: "
 					+ e.getMessage(), e);
 		}
-		return new Stub(new Invocation(invocation.mock(), invocation.method(), List.copyOf(matchers)), action);
+		return new Stub(new Invocation(invocation.mock(), method, List.copyOf(matchers)), action);
 	}
 
-	private PlsqlLiterals.Written write(Object describer, Method method, RoutineMetadata routine,
-			RoutineMetadata.Argument target, Object value, Connection connection) throws SQLException {
-		return PlsqlLiterals.constructor(Views.handlerOf(describer).encode(method, target, value, connection),
-				driverName -> markOf(driverName, connection));
+	/** A value the core encoded, written as PL/SQL. */
+	private PlsqlLiterals.Written literal(Object encoded, Connection connection) throws SQLException {
+		return PlsqlLiterals.constructor(encoded, driverName -> markOf(driverName, connection));
 	}
 
 	/**
@@ -262,15 +262,6 @@ public final class MockSession implements RowTypes {
 			}
 		}
 		return new PlsqlLiterals.Mark(PlsqlLiterals.quoted(parts), false);
-	}
-
-	/** The parameter the {@code index}-th Java argument binds to, as the call would bind it. */
-	private static RoutineMetadata.Argument parameterAt(RoutineMetadata routine, Method method, int index) {
-		if (!routine.byName()) {
-			return routine.parameters().get(index);
-		}
-		String name = RoutineMetadata.oracleNameOf(method, method.getParameters()[index]);
-		return routine.parameters().stream().filter(p -> p.name().equals(name)).findFirst().orElseThrow();
 	}
 
 	/** Compiles the package's body with its stubs, and gives the PL/SQL generated for {@code any}'s routine. */

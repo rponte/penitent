@@ -533,3 +533,85 @@ CREATE OR REPLACE PACKAGE BODY freight_scalars AS
   END status_of;
 END freight_scalars;
 /
+
+-- scalars a stub writes through the application's mapping: an enum, a UUID, a boolean as text or a number, dates
+-- from java.util and java.sql, an Optional, NaN and infinities, and a converter; the real routines fail
+CREATE OR REPLACE PACKAGE freight_types AS
+  FUNCTION uf_of(p_id NUMBER) RETURN VARCHAR2;
+  FUNCTION token_of(p_id NUMBER) RETURN VARCHAR2;
+  FUNCTION active_yn(p_id NUMBER) RETURN VARCHAR2;
+  FUNCTION active_num(p_id NUMBER) RETURN NUMBER;
+  FUNCTION created_on(p_id NUMBER) RETURN DATE;
+  FUNCTION stamped_at(p_id NUMBER) RETURN TIMESTAMP;
+  FUNCTION note_of(p_id NUMBER) RETURN VARCHAR2;
+  FUNCTION ratio_of(p_id NUMBER) RETURN BINARY_DOUBLE;
+  FUNCTION ratio_f(p_id NUMBER) RETURN BINARY_FLOAT;
+  FUNCTION code_of(p_id NUMBER) RETURN VARCHAR2;
+  PROCEDURE load(p_id NUMBER, p_uf OUT VARCHAR2, p_active OUT VARCHAR2, p_created OUT DATE, p_code OUT VARCHAR2);
+  -- calls uf_of and active_yn, as PL/SQL that uses a stub would
+  FUNCTION describe(p_id NUMBER) RETURN VARCHAR2;
+END freight_types;
+/
+
+CREATE OR REPLACE PACKAGE BODY freight_types AS
+  FUNCTION uf_of(p_id NUMBER) RETURN VARCHAR2 IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20430, 'the real uf_of');
+  END uf_of;
+
+  FUNCTION token_of(p_id NUMBER) RETURN VARCHAR2 IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20430, 'the real token_of');
+  END token_of;
+
+  FUNCTION active_yn(p_id NUMBER) RETURN VARCHAR2 IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20430, 'the real active_yn');
+  END active_yn;
+
+  FUNCTION active_num(p_id NUMBER) RETURN NUMBER IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20430, 'the real active_num');
+  END active_num;
+
+  FUNCTION created_on(p_id NUMBER) RETURN DATE IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20430, 'the real created_on');
+  END created_on;
+
+  FUNCTION stamped_at(p_id NUMBER) RETURN TIMESTAMP IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20430, 'the real stamped_at');
+  END stamped_at;
+
+  FUNCTION note_of(p_id NUMBER) RETURN VARCHAR2 IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20430, 'the real note_of');
+  END note_of;
+
+  FUNCTION ratio_of(p_id NUMBER) RETURN BINARY_DOUBLE IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20430, 'the real ratio_of');
+  END ratio_of;
+
+  FUNCTION ratio_f(p_id NUMBER) RETURN BINARY_FLOAT IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20430, 'the real ratio_f');
+  END ratio_f;
+
+  FUNCTION code_of(p_id NUMBER) RETURN VARCHAR2 IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20430, 'the real code_of');
+  END code_of;
+
+  PROCEDURE load(p_id NUMBER, p_uf OUT VARCHAR2, p_active OUT VARCHAR2, p_created OUT DATE, p_code OUT VARCHAR2) IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20430, 'the real load');
+  END load;
+
+  FUNCTION describe(p_id NUMBER) RETURN VARCHAR2 IS
+  BEGIN
+    RETURN uf_of(p_id) || '/' || active_yn(p_id);
+  END describe;
+END freight_types;
+/

@@ -29,6 +29,12 @@ public final class PlsqlLiterals {
 	private PlsqlLiterals() {
 	}
 
+	/** {@code NaN} or an infinity, as the constant of {@code BINARY_DOUBLE} or {@code BINARY_FLOAT}. */
+	private static String notFinite(double number, String type) {
+		return Double.isNaN(number) ? "BINARY_" + type + "_NAN"
+				: (number < 0 ? "-" : "") + "BINARY_" + type + "_INFINITY";
+	}
+
 	/**
 	 * How PL/SQL writes a value of a type the driver names: the type mark of its constructor or qualified expression,
 	 * and whether its elements go with named indexes, as those of an {@code INDEX BY} do.
@@ -64,8 +70,12 @@ public final class PlsqlLiterals {
 				|| value instanceof BigInteger) {
 			return value.toString();
 		}
-		if (value instanceof Double || value instanceof Float) {
-			return new BigDecimal(value.toString()).toPlainString();
+		if (value instanceof Double number) {
+			return Double.isFinite(number) ? new BigDecimal(value.toString()).toPlainString() : notFinite(number, "DOUBLE");
+		}
+		if (value instanceof Float number) {
+			return Float.isFinite(number) ? new BigDecimal(value.toString()).toPlainString()
+					: notFinite(number.doubleValue(), "FLOAT");
 		}
 		if (value instanceof CharSequence || value instanceof Character) {
 			return "'" + value.toString().replace("'", "''") + "'";

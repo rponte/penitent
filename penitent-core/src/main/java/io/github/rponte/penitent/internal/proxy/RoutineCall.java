@@ -60,6 +60,35 @@ final class RoutineCall {
 		return call(routine, method, arguments, ReturnType.of(method) != void.class, connection);
 	}
 
+	/**
+	 * {@code value}, as the return value of {@code method}, encoded as a call would decode it backwards: through the
+	 * method's converter and its {@code @PlsqlBoolean}, an {@code Optional} unwrapped. For a tool that writes the value
+	 * elsewhere, such as the mocks of {@code penitent-test}, which write it as PL/SQL; a call never sends it.
+	 */
+	Object encodeReturn(Method method, Object value, Connection connection) throws SQLException {
+		RoutineMetadata routine = describeOnce(method, connection);
+		Argument target = routine.returnValue().orElseThrow(() -> new PlsqlMappingException(
+				routine.qualifiedName() + " returns no value"));
+		Object unwrapped = value instanceof java.util.Optional<?> optional ? optional.orElse(null) : value;
+		Object converted = converted(RoutineMetadata.converterOfReturn(method, types.converters()), unwrapped,
+				"the return value", routine);
+		return encoder.encodeForWriting(converted, target, method.getAnnotation(PlsqlBoolean.class), routine.schema(),
+				connection);
+	}
+
+	/**
+	 * {@code value}, given for the {@code index}-th Java parameter of {@code method}, encoded as a call would send it to
+	 * the Oracle parameter that Java parameter binds, by position or by name: through its converter and its
+	 * {@code @PlsqlBoolean}. For a tool that writes the value elsewhere, as {@link #encodeReturn}.
+	 */
+	Object encodeParameter(Method method, int index, Object value, Connection connection) throws SQLException {
+		RoutineMetadata routine = describeOnce(method, connection);
+		Argument target = routine.parameters().get(index);
+		java.lang.reflect.Parameter javaParameter = method.getParameters()[index];
+		return encoder.encodeForWriting(toDatabase(value, method, javaParameter, target, routine), target,
+				javaParameter.getAnnotation(PlsqlBoolean.class), routine.schema(), connection);
+	}
+
 	/** What a call of {@code method} would run: the routine, its owner and the version that fits the method. */
 	RoutineMetadata describeOnce(Method method, Connection connection) {
 		RoutineMetadata routine = Caches.get(routines, method, m -> describe(m, connection));
@@ -258,7 +287,12 @@ final class RoutineCall {
 	/** The value that actually goes to the database. A whole collection that is null does not go through the converter. */
 	private Object toDatabase(Object value, Method method, java.lang.reflect.Parameter javaParameter,
 			Argument parameter, RoutineMetadata routine) {
-		AppliedConverter applied = RoutineMetadata.converterOf(method, javaParameter, types.converters());
+		return converted(RoutineMetadata.converterOf(method, javaParameter, types.converters()), value,
+				parameter.name(), routine);
+	}
+
+	/** {@code value} through {@code applied}, element by element where it applies to the elements of a list. */
+	private static Object converted(AppliedConverter applied, Object value, String what, RoutineMetadata routine) {
 		if (applied == null) {
 			return value;
 		}
@@ -269,8 +303,7 @@ final class RoutineCall {
 			return value == null ? null
 					: java.util.Arrays.stream(ValueEncoder.toArray(value)).map(applied::toDatabase).toList().toArray();
 		} catch (ScalarCodec.ConversionException e) {
-			throw new PlsqlMappingException(parameter.name() + " of " + routine.qualifiedName() + ": "
-					+ e.getMessage(), e);
+			throw new PlsqlMappingException(what + " of " + routine.qualifiedName() + ": " + e.getMessage(), e);
 		}
 	}
 
