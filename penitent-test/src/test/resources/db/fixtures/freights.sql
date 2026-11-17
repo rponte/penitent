@@ -323,3 +323,105 @@ BEGIN
     CREATE OR REPLACE FUNCTION wrapped_rate RETURN NUMBER IS BEGIN RETURN 1; END wrapped_rate;]');
 END;
 /
+
+-- records, %ROWTYPE and INDEX BY that stubs answer with; the real routines fail, so a test passes only through a stub
+CREATE TABLE freight_note (
+  id NUMBER PRIMARY KEY,
+  "Note Text" VARCHAR2(30)
+)
+/
+
+CREATE OR REPLACE PACKAGE freight_records AS
+  TYPE quote_t IS RECORD (uf VARCHAR2(2), value NUMBER);
+  TYPE leg_t IS RECORD (origin VARCHAR2(2), quote quote_t);
+  TYPE quotes_t IS TABLE OF quote_t;
+  TYPE quotes_by_index_t IS TABLE OF quote_t INDEX BY PLS_INTEGER;
+  TYPE ufs_t IS TABLE OF VARCHAR2(2) INDEX BY PLS_INTEGER;
+  TYPE ufs_by_key_t IS TABLE OF VARCHAR2(2) INDEX BY VARCHAR2(2);
+
+  FUNCTION quote_of(p_uf VARCHAR2) RETURN quote_t;
+  PROCEDURE quote(p_uf VARCHAR2, p_quote OUT quote_t);
+  PROCEDURE settle(p_uf VARCHAR2, p_day DATE, p_quote OUT quote_t);
+  PROCEDURE settle_later(p_uf VARCHAR2, p_day DATE DEFAULT SYSDATE, p_quote OUT quote_t);
+  FUNCTION leg_of(p_origin VARCHAR2) RETURN leg_t;
+  FUNCTION quotes_of(p_uf VARCHAR2) RETURN quotes_t;
+  FUNCTION quotes_by_index(p_uf VARCHAR2) RETURN quotes_by_index_t;
+  FUNCTION ufs RETURN ufs_t;
+  FUNCTION ufs_by_key RETURN ufs_by_key_t;
+  FUNCTION item_of(p_id NUMBER) RETURN freight_item%ROWTYPE;
+  PROCEDURE load_item(p_id NUMBER, p_item OUT freight_item%ROWTYPE);
+  FUNCTION note_of(p_id NUMBER) RETURN freight_note%ROWTYPE;
+  -- calls quote_of and item_of, as PL/SQL that uses a stub would
+  FUNCTION describe(p_uf VARCHAR2, p_id NUMBER) RETURN VARCHAR2;
+END freight_records;
+/
+
+CREATE OR REPLACE PACKAGE BODY freight_records AS
+  FUNCTION quote_of(p_uf VARCHAR2) RETURN quote_t IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20410, 'the real quote_of');
+  END quote_of;
+
+  PROCEDURE quote(p_uf VARCHAR2, p_quote OUT quote_t) IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20410, 'the real quote');
+  END quote;
+
+  PROCEDURE settle(p_uf VARCHAR2, p_day DATE, p_quote OUT quote_t) IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20410, 'the real settle');
+  END settle;
+
+  PROCEDURE settle_later(p_uf VARCHAR2, p_day DATE DEFAULT SYSDATE, p_quote OUT quote_t) IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20410, 'the real settle_later');
+  END settle_later;
+
+  FUNCTION leg_of(p_origin VARCHAR2) RETURN leg_t IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20410, 'the real leg_of');
+  END leg_of;
+
+  FUNCTION quotes_of(p_uf VARCHAR2) RETURN quotes_t IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20410, 'the real quotes_of');
+  END quotes_of;
+
+  FUNCTION quotes_by_index(p_uf VARCHAR2) RETURN quotes_by_index_t IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20410, 'the real quotes_by_index');
+  END quotes_by_index;
+
+  FUNCTION ufs RETURN ufs_t IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20410, 'the real ufs');
+  END ufs;
+
+  FUNCTION ufs_by_key RETURN ufs_by_key_t IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20410, 'the real ufs_by_key');
+  END ufs_by_key;
+
+  FUNCTION item_of(p_id NUMBER) RETURN freight_item%ROWTYPE IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20410, 'the real item_of');
+  END item_of;
+
+  PROCEDURE load_item(p_id NUMBER, p_item OUT freight_item%ROWTYPE) IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20410, 'the real load_item');
+  END load_item;
+
+  FUNCTION note_of(p_id NUMBER) RETURN freight_note%ROWTYPE IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20410, 'the real note_of');
+  END note_of;
+
+  FUNCTION describe(p_uf VARCHAR2, p_id NUMBER) RETURN VARCHAR2 IS
+    l_quote quote_t := quote_of(p_uf);
+    l_item freight_item%ROWTYPE := item_of(p_id);
+  BEGIN
+    RETURN l_quote.uf || '=' || l_quote.value || ', ' || l_item.id || '/' || l_item.uf;
+  END describe;
+END freight_records;
+/

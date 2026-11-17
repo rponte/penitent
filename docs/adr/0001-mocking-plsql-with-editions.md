@@ -136,8 +136,8 @@ And what it cannot do, in the first version:
 - **An argument of an object type, a collection or a record is matched with `any()` only.** No PL/SQL literal
   stands for its value, and `JSON_ARRAY` does not take it, so a recorded call holds `"(not recorded)"` in its place,
   keeping the position of the others; another matcher on it is refused before compiling. A stub can return an object
-  type or a collection, and set one as an `OUT`, but not a `RECORD`, a `%ROWTYPE` or an `INDEX BY`, which have no
-  constructor; see [An object type or a collection in a stub](#an-object-type-or-a-collection-in-a-stub).
+  type, a collection, a `RECORD`, a `%ROWTYPE` or an `INDEX BY`, and set one as an `OUT`; see
+  [An object type or a collection in a stub](#an-object-type-or-a-collection-in-a-stub).
 - **A `%ROWTYPE` goes by a subtype compiled in the test's edition.** In the edition, the driver cannot resolve
   `"SCHEMA".TABLE%ROWTYPE`, so the library compiles a package subtype of it there, the first time a record of that
   table is bound, and binds the record by the subtype's name; see
@@ -287,8 +287,21 @@ before anything is compiled.
 **When.** Once per stub, when it is made, on a connection of the mocks' own; the stub keeps the PL/SQL written, which
 the body and the log both show.
 
-**What has no constructor,** and is refused before compiling: a `RECORD` and a `%ROWTYPE`, before qualified
-expressions, and an `INDEX BY` collection. A method-level converter, `@PlsqlConvert` on the method, does not apply to
+**What has no constructor** is written as a qualified expression, which Oracle 19c, 21c and 23ai all compile,
+measured by compiling each form as a function's `RETURN` and as an `OUT`:
+
+| Form | Written as |
+|---|---|
+| a `RECORD` of a package | its qualified expression, positional, in the order of its fields, which the core's `Struct` follows |
+| a `%ROWTYPE` | the qualified expression of `LITERAL_T`, a `RECORD` of the table's columns, each typed `TABLE.COLUMN%TYPE`, which the mocks declare next to the subtype of the next point; Oracle assigns it to the `%ROWTYPE` |
+| an `INDEX BY PLS_INTEGER` | its qualified expression with named indexes from 1, `T(1 => a, 2 => b)`: 19c refuses positional elements, with `PLS-00681` |
+
+A `%ROWTYPE` has no qualified expression of its own on any of the three versions, directly or through a `SUBTYPE` of
+it (`PLS-00306`, `PLS-00222`), while a `RECORD` of the same fields is assigned to it on all three. The mocks tell
+these forms apart by the name the driver gives each value, read in the dictionary: a type of a package, with
+`ALL_PLSQL_COLL_TYPES.INDEX_BY` for an `INDEX BY`; an object type or a collection of the schema, in `ALL_TYPES`; and a
+table otherwise, which the driver names for its `%ROWTYPE`, since a table and a type of one schema cannot share a
+name. A method-level converter, `@PlsqlConvert` on the method, does not apply to
 the value returned by a stub: the entry point encodes the value for its Oracle type, and that converter runs before
 it, in the call. What the tests do not cover yet, such as dates, LOBs and collections declared in a package, is listed
 in the compatibility page, under "Not measured".

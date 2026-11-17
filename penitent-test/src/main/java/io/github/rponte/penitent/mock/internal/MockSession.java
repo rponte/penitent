@@ -13,6 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.StringJoiner;
 import java.util.UUID;
 
 import javax.sql.DataSource;
@@ -183,7 +184,8 @@ public final class MockSession implements RowTypes {
 	 * {@code stub}, with the object type or collection it returns, and those it sets as OUT values, written as PL/SQL
 	 * constructors. The core encodes each value as a call would send it, so the mapping is the one the application
 	 * uses, {@code @PlsqlType}, {@code @PlsqlAttr} and converters included, and the constructor is written from what
-	 * the driver holds. A RECORD, a {@code %ROWTYPE} and an {@code INDEX BY} have no constructor, and are refused.
+	 * the driver holds. A RECORD, a {@code %ROWTYPE} and an {@code INDEX BY} have no constructor, and are written as
+	 * qualified expressions, as {@link PlsqlLiterals#constructor} says.
 	 */
 	private Stub written(Stub stub, RoutineMetadata routine) {
 		Invocation invocation = stub.invocation();
@@ -218,19 +220,48 @@ public final class MockSession implements RowTypes {
 		return new Stub(new Invocation(invocation.mock(), invocation.method(), List.copyOf(matchers)), action);
 	}
 
-	private static PlsqlLiterals.Written write(Object describer, Method method, RoutineMetadata routine,
+	private PlsqlLiterals.Written write(Object describer, Method method, RoutineMetadata routine,
 			RoutineMetadata.Argument target, Object value, Connection connection) throws SQLException {
-		String what = target.name() == null ? "the value it returns" : target.name();
-		if ("PL/SQL RECORD".equals(target.dataType())) {
-			throw new IllegalStateException(routine.qualifiedName() + ": " + what + " is a RECORD or a %ROWTYPE, which"
-					+ " the mocks cannot write yet, since PL/SQL has no constructor for it: they write object types and"
-					+ " collections; stub it with thenReturn(null) or thenThrow");
+		return PlsqlLiterals.constructor(Views.handlerOf(describer).encode(method, target, value, connection),
+				driverName -> markOf(driverName, connection));
+	}
+
+	/**
+	 * How PL/SQL writes a value of the type the driver names {@code driverName}, from the dictionary: a type of a
+	 * package, a RECORD or a collection, by its name, with named indexes if it is an {@code INDEX BY}; an object type or
+	 * a collection of the schema, by its name; and a table, which the driver names for its {@code %ROWTYPE}, by the
+	 * RECORD of its columns that {@link #rowPackage} declares, since a {@code %ROWTYPE} has no qualified expression and
+	 * Oracle assigns that RECORD to it. A table and a type of one schema cannot share a name, so this is not ambiguous.
+	 */
+	private PlsqlLiterals.Mark markOf(String driverName, Connection connection) throws SQLException {
+		List<String> parts = PlsqlLiterals.parts(driverName);
+		if (parts.size() == 3) {
+			try (PreparedStatement select = connection.prepareStatement("SELECT INDEX_BY FROM ALL_PLSQL_COLL_TYPES"
+					+ " WHERE OWNER = ? AND PACKAGE_NAME = ? AND TYPE_NAME = ?")) {
+				for (int i = 0; i < 3; i++) {
+					select.setString(i + 1, parts.get(i));
+				}
+				try (ResultSet rows = select.executeQuery()) {
+					return new PlsqlLiterals.Mark(PlsqlLiterals.quoted(parts), rows.next() && rows.getString(1) != null);
+				}
+			}
 		}
-		if ("PL/SQL TABLE".equals(target.dataType())) {
-			throw new IllegalStateException(routine.qualifiedName() + ": " + what + " is an INDEX BY collection, which"
-					+ " has no constructor, so the mocks cannot write it: they write nested tables and VARRAYs");
+		if (parts.size() == 2) {
+			try (PreparedStatement select = connection.prepareStatement("SELECT 1 FROM ALL_TYPES WHERE OWNER = ? AND"
+					+ " TYPE_NAME = ?")) {
+				select.setString(1, parts.get(0));
+				select.setString(2, parts.get(1));
+				try (ResultSet rows = select.executeQuery()) {
+					if (!rows.next()) {
+						String row = new CompositeType(CompositeType.Kind.ROWTYPE, parts.get(0), null, parts.get(1),
+								parts.get(1) + "%ROWTYPE").qualifiedBindName();
+						return new PlsqlLiterals.Mark("\"" + schema + "\"." + rowPackage(row, parts.get(0), parts.get(1))
+								+ ".LITERAL_T", false);
+					}
+				}
+			}
 		}
-		return PlsqlLiterals.constructor(Views.handlerOf(describer).encode(method, target, value, connection));
+		return new PlsqlLiterals.Mark(PlsqlLiterals.quoted(parts), false);
 	}
 
 	/** The parameter the {@code index}-th Java argument binds to, as the call would bind it. */
@@ -363,8 +394,8 @@ public final class MockSession implements RowTypes {
 	/**
 	 * In a child edition, the driver cannot resolve {@code "SCHEMA".TABLE%ROWTYPE} and fails with {@code ORA-17060},
 	 * while it resolves a package subtype of it. So the first time a record of a table is bound in the test's edition,
-	 * a package with that subtype is compiled in the edition, and the record goes by the subtype's name from then on;
-	 * the package goes with the edition. It is compiled in the schema of the mocks, whose packages have editions, and
+	 * a package with that subtype is compiled in the edition, by {@link #rowPackage}, and the record goes by the
+	 * subtype's name from then on; the package goes with the edition. It is compiled in the schema of the mocks, whose packages have editions, and
 	 * never in the table's, which may have none, and where nothing is written: the subtype takes the grant on the
 	 * table that the routine taking the record already needs. Its name carries the edition's, so that no connection
 	 * of the pool can hold the descriptor of the one of an earlier test, and a number, in the order the test binds
@@ -373,10 +404,19 @@ public final class MockSession implements RowTypes {
 	 */
 	@Override
 	public String nameOf(CompositeType type, String name) {
-		String current = edition;
-		if (current == null) {
+		if (edition == null) {
 			return name;
 		}
+		return schema + "." + rowPackage(name, type.schema(), type.simpleName()) + ".ROW_T";
+	}
+
+	/**
+	 * The package of the table {@code owner.table}, whose {@code %ROWTYPE} is {@code name}, compiled in the test's
+	 * edition the first time a test needs it: {@code ROW_T}, the subtype the driver resolves, and {@code LITERAL_T}, a
+	 * RECORD of the table's columns, each with its column's type, which a stub writes a {@code %ROWTYPE} as.
+	 */
+	private String rowPackage(String name, String owner, String table) {
+		String current = edition;
 		synchronized (rowTypes) {
 			String known = rowTypes.get(name);
 			if (known != null) {
@@ -385,25 +425,41 @@ public final class MockSession implements RowTypes {
 			long start = System.nanoTime();
 			// numbered as the tables come: no two tables of a test share a package, and none is compiled twice
 			String pkg = "PENITENT_ROW_" + current.substring(PREFIX.length()) + "_" + (rowTypes.size() + 1);
-			String ddl = "CREATE OR REPLACE PACKAGE \"" + schema + "\"." + pkg + " AS\n  SUBTYPE ROW_T IS "
-					+ name + ";\nEND " + pkg + ";";
-			String alias;
 			try (Connection connection = connection()) {
+				String ddl = "CREATE OR REPLACE PACKAGE \"" + schema + "\"." + pkg + " AS\n  SUBTYPE ROW_T IS "
+						+ name + ";\n  TYPE LITERAL_T IS RECORD (" + columnsOf(connection, owner, table) + ");\nEND "
+						+ pkg + ";";
 				List<String> errors = compileInEdition(connection, ddl, schema, pkg, "PACKAGE");
 				if (!errors.isEmpty()) {
 					throw new IllegalStateException("the subtype of " + name + " for the test's edition does not"
 							+ " compile:\n  " + String.join("\n  ", errors) + "\n" + ddl);
 				}
-				alias = schema + "." + pkg + ".ROW_T";
+				rowTypes.put(name, pkg);
+				MockLog.aliased(name, schema + "." + pkg + ".ROW_T", start);
+				MockLog.generated(ddl);
+				return pkg;
 			} catch (SQLException e) {
 				throw new IllegalStateException("failed to compile the subtype of " + name + " for the test's edition: "
 						+ e.getMessage(), e);
 			}
-			rowTypes.put(name, alias);
-			MockLog.aliased(name, alias, start);
-			MockLog.generated(ddl);
-			return alias;
 		}
+	}
+
+	/** The fields of {@code LITERAL_T}: the columns a {@code %ROWTYPE} of the table has, in its order, typed as they are. */
+	private static String columnsOf(Connection connection, String owner, String table) throws SQLException {
+		StringJoiner columns = new StringJoiner(", ");
+		try (PreparedStatement select = connection.prepareStatement("SELECT COLUMN_NAME FROM ALL_TAB_COLUMNS WHERE"
+				+ " OWNER = ? AND TABLE_NAME = ? AND COLUMN_ID IS NOT NULL ORDER BY COLUMN_ID")) {
+			select.setString(1, owner);
+			select.setString(2, table);
+			try (ResultSet rows = select.executeQuery()) {
+				while (rows.next()) {
+					String column = "\"" + rows.getString(1) + "\"";
+					columns.add(column + " \"" + owner + "\".\"" + table + "\"." + column + "%TYPE");
+				}
+			}
+		}
+		return columns.toString();
 	}
 
 	/** The package body, or the standalone routine, as the database has it, in the default edition. */

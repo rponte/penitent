@@ -207,25 +207,11 @@ class StubCompositesTest {
 	}
 
 	@Test
-	@DisplayName("a RECORD or %ROWTYPE returned is refused before compiling: PL/SQL has no constructor for it")
-	void record_refused() {
-		Freights mock = mocks.mock(Freights.class);
+	@DisplayName("a stub returns an INDEX BY of numbers, which StubRecordsTest covers with records and text")
+	void index_by() {
+		when(mocks.mock(Freights.class).idsOf("SP")).thenReturn(List.of(BigDecimal.ONE, BigDecimal.TEN));
 
-		assertThatThrownBy(() -> when(mock.find(BigDecimal.ONE)).thenReturn(new FreightItem(1L, "SP")))
-				.isInstanceOf(IllegalStateException.class)
-				.hasMessageContaining("PLSQL_TEST.FREIGHTS.FIND")
-				.hasMessageContaining("RECORD or a %ROWTYPE");
-	}
-
-	@Test
-	@DisplayName("an INDEX BY returned is refused before compiling: it has no constructor")
-	void index_by_refused() {
-		Freights mock = mocks.mock(Freights.class);
-
-		assertThatThrownBy(() -> when(mock.idsOf("SP")).thenReturn(List.of(BigDecimal.ONE)))
-				.isInstanceOf(IllegalStateException.class)
-				.hasMessageContaining("PLSQL_TEST.FREIGHTS.IDS_OF")
-				.hasMessageContaining("INDEX BY");
+		assertThat(freights.idsOf("SP")).containsExactly(BigDecimal.ONE, BigDecimal.TEN);
 	}
 
 	@Test

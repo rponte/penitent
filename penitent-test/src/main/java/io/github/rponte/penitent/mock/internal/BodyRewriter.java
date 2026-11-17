@@ -157,7 +157,11 @@ final class BodyRewriter {
 		return key.toString();
 	}
 
-	/** The one definition of {@code routine}: same name, same parameters, in the same order. */
+	/**
+	 * The one definition of {@code routine}: same name, and each of its parameters at the position the dictionary gives
+	 * it. Bound by name, the routine has its parameters in the order of the Java method, and only those the method
+	 * declares, a parameter with a {@code DEFAULT} left out; so they are found by position, not compared as a list.
+	 */
 	private static ParserRuleContext definitionOf(IslandSqlDocument document, String qualifiedPackage,
 			RoutineMetadata routine) {
 		List<String> wanted = routine.parameters().stream().map(RoutineMetadata.Argument::name).toList();
@@ -169,14 +173,29 @@ final class BodyRewriter {
 		definitions.addAll(document.getAllContentsOfType(PlsqlProcedureSourceContext.class));
 		List<ParserRuleContext> matching = definitions.stream()
 				.filter(definition -> identifier(nameOf(definition)).equals(routine.routineName()))
-				.filter(definition -> parametersOf(definition).stream()
-						.map(parameter -> identifier(parameter.parameter.getText())).toList().equals(wanted))
+				.filter(definition -> declares(definition, routine))
 				.toList();
 		if (matching.size() != 1) {
 			throw new IllegalStateException(matching.size() + " definitions of " + routine.routineName() + wanted
 					+ " were found in the body of " + qualifiedPackage + ", where exactly one was expected");
 		}
 		return matching.get(0);
+	}
+
+	/** Whether {@code definition} has each parameter of {@code routine} at its position, and no more without them. */
+	private static boolean declares(ParserRuleContext definition, RoutineMetadata routine) {
+		List<String> declared = parametersOf(definition).stream()
+				.map(parameter -> identifier(parameter.parameter.getText())).toList();
+		if (!routine.byName()) {
+			return declared.equals(routine.parameters().stream().map(RoutineMetadata.Argument::name).toList());
+		}
+		for (RoutineMetadata.Argument parameter : routine.parameters()) {
+			int index = parameter.position() - 1;
+			if (index < 0 || index >= declared.size() || !declared.get(index).equals(parameter.name())) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	private static String identifier(String text) {
