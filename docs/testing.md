@@ -313,7 +313,9 @@ and Oracle assigns to the `%ROWTYPE`. An `INDEX BY VARCHAR2` is refused, as a ca
 **Every value goes through the application's mapping.** What a stub returns, and what it sets as an `OUT`, is
 encoded as a call would send it: through the converter and `@PlsqlBoolean` of the method, for the value returned,
 or of the parameter, for an `OUT`. So `thenReturn(Uf.CE)` answers `'CE'`, a `UUID` answers its text, `true` answers
-`'Y'` on a method with `@PlsqlBoolean`, and an `Optional` answers its value, or `NULL` when empty.
+`'Y'` on a method with `@PlsqlBoolean`, and an `Optional` answers its value, or `NULL` when empty. Time zones,
+intervals, a `RAW`, a `BLOB` and a `CLOB` above the 32 KB of a PL/SQL literal are written too; bytes above 16 KB are
+refused, since a `BLOB` cannot be joined in an expression ([#93](https://github.com/rponte/penitent/issues/93)).
 
 **Stub a standalone routine.** A function or procedure outside any package is stubbed the same way, from the
 interface with `@PlsqlSchema` the application calls it through:
