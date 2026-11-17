@@ -244,20 +244,21 @@ becomes this, compiled in the test's edition (shown as generated; a test of the 
 
 ```sql
 FUNCTION calculate(p_origin freight_item.uf%TYPE, p_destination VARCHAR2 DEFAULT 'SP') RETURN money IS
-    l_penitent_args VARCHAR2(4000);
+    l_penitent_args CLOB;
   BEGIN
-    SELECT JSON_ARRAY(P_ORIGIN, P_DESTINATION NULL ON NULL) INTO l_penitent_args FROM DUAL;
+    SELECT JSON_ARRAY(P_ORIGIN, P_DESTINATION NULL ON NULL RETURNING CLOB) INTO l_penitent_args FROM DUAL;
     PENITENT_MOCK.record('PLSQL_TEST.FREIGHTS.CALCULATE(P_ORIGIN,P_DESTINATION)', l_penitent_args);
     IF P_ORIGIN = 'SP' AND P_DESTINATION = 'CE' THEN
       RETURN 24.90;
     END IF;
-    RAISE_APPLICATION_ERROR(-20999, 'PLSQL_TEST.FREIGHTS.CALCULATE: no stub matches the arguments ' || l_penitent_args);
+    RAISE_APPLICATION_ERROR(-20999, 'PLSQL_TEST.FREIGHTS.CALCULATE: no stub matches the arguments ' || DBMS_LOB.SUBSTR(l_penitent_args, 1500, 1) || CASE WHEN DBMS_LOB.GETLENGTH(l_penitent_args) > 1500 THEN '... (' || DBMS_LOB.GETLENGTH(l_penitent_args) || ' characters)' END);
   END calculate;
 ```
 
 - **The heading is the body's own,** as written, so `%TYPE`, the `SUBTYPE` `money` and the `DEFAULT` are kept.
-- **The arguments are recorded first,** as a JSON array of the `IN` parameters, with the routine and its parameter
-  names, which tell overloads apart.
+- **The arguments are recorded first,** as a JSON array of the `IN` parameters, in a `CLOB`, which no long text nor
+  LOB overflows, with the routine and its parameter names, which tell overloads apart. The message of a call that no
+  stub matches shows the first 1,500 characters of the arguments, and their length when there is more.
 - **Each stub is an `IF`,** the last stub made first, so that the last one that matches wins. A matcher such as
   `any()` adds no condition; `isNull()` adds `IS NULL`. A second stub of the routine, for the same arguments or for
   others, adds an `IF` before this one and recompiles the body: stubs of different arguments answer each their own,
@@ -373,15 +374,26 @@ After the call, the table holds one row for it:
 |---|---|---|
 | `PENITENT_MOCK_5F2A91C3D4E6` | `PLSQL_TEST.FREIGHTS.CALCULATE(P_ORIGIN,P_DESTINATION)` | `["SP","CE"]` |
 
-`verify(freights).calculate("SP", "CE")` counts the rows that match, with each argument read back from the JSON with
-the type of its parameter, and fails unless the count is the one expected:
+`verify(freights).calculate("SP", "CE")` counts the rows that match, and fails unless the count is the one expected.
+Each value matched is encoded as a call would send it, as in a stub, and bound to the query rather than written in
+it; each argument is read back from the JSON with the type of its parameter:
 
 ```sql
 SELECT COUNT(*) FROM PENITENT_MOCK_CALLS
  WHERE EDITION_NAME = ? AND ROUTINE = ?
-   AND JSON_VALUE(ARGS, '$[0]' RETURNING VARCHAR2(4000)) = 'SP'
-   AND JSON_VALUE(ARGS, '$[1]' RETURNING VARCHAR2(4000)) = 'CE'
+   AND DBMS_LOB.COMPARE(JSON_VALUE(ARGS, '$[0]' RETURNING CLOB), ?) = 0
+   AND DBMS_LOB.COMPARE(JSON_VALUE(ARGS, '$[1]' RETURNING CLOB), ?) = 0
 ```
+
+| Parameter | Read back as | Compared with |
+|---|---|---|
+| text, a LOB, `RAW`, `BOOLEAN` | `CLOB`; bytes are hex digits, a `BOOLEAN` `'true'` or `'false'`, as the recording keeps them | `DBMS_LOB.COMPARE`, which no length overflows |
+| `NUMBER`, `BINARY_DOUBLE`, `BINARY_FLOAT` | its own type | `=` |
+| `DATE` | `TIMESTAMP`, since `RETURNING DATE` drops the time | `=` |
+| `TIMESTAMP`, intervals | its own type | `=` |
+| `TIMESTAMP WITH TIME ZONE` and `WITH LOCAL TIME ZONE` | `TIMESTAMP WITH TIME ZONE`, which `RETURNING` takes for both | `=`, as an instant |
+
+In a stub, a LOB argument is matched with `DBMS_LOB.COMPARE` too, since PL/SQL does not compare one with `=`.
 
 Only a stubbed routine records its calls, which is why `verify` refuses a routine with no stub in the test.
 

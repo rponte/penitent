@@ -8,6 +8,10 @@ All notable changes to this project are listed here. The format follows
 
 ### Changed
 
+- `penitent-test`: `penitent-mock-schema.sql` is version 2: `PENITENT_MOCK_CALLS.ARGS` and the argument of
+  `PENITENT_MOCK.record` are `CLOB`s. A schema prepared by version 1 is refused by `begin()`, asking for the script to
+  be applied again, which `PlsqlMocks.prepare` does; the script drops the table of version 1, which holds only the
+  calls of tests, and creates it again.
 - `penitent-test`: the package the mocks compile in the test's edition for a `%ROWTYPE` declares `LITERAL_T` next to
   `ROW_T`, which the generated PL/SQL in the log shows.
 - `penitent-test`: `penitent-mock-admin.sql` also enables editions for functions and procedures, each in a statement
@@ -27,6 +31,10 @@ All notable changes to this project are listed here. The format follows
 
 ### Added
 
+- `penitent-test`: a stub matches, and `verify` counts, an argument by value for every scalar type a stub writes:
+  text of any length and LOBs, compared with `DBMS_LOB.COMPARE`, bytes, time zones, intervals and the binary
+  numbers, and an enum, a `UUID`, a `@PlsqlBoolean`, a `java.util.Date` and a converter, through the parameter's
+  mapping. `verify` binds the value matched, rather than writing it in the query.
 - `penitent-test`: a stub returns, and sets as an `OUT`, time zones, intervals, a `RAW`, a `BLOB` up to 16 KB and a
   `CLOB` above 32 KB, which were refused or did not compile. They are written as `TIMESTAMP` literals with an offset
   or a region, `TO_DSINTERVAL` and `TO_YMINTERVAL`, `HEXTORAW`, and `TO_CLOB` pieces joined with `||`.
@@ -53,6 +61,9 @@ All notable changes to this project are listed here. The format follows
 
 ### Fixed
 
+- `penitent-test`: a call to a stubbed routine failed with `ORA-40478` when its arguments, recorded for `verify`,
+  went above 4,000 bytes, such as a `VARCHAR2` of 5,000 characters or a large `CLOB`. The arguments are recorded in a
+  `CLOB` now, and the message of a call no stub matches shows their first 1,500 characters.
 - `penitent-test`: a stub that returned a `Boolean` for a routine mapped with `@PlsqlBoolean`, or as `1` or `0`,
   generated a body that did not compile, writing `TRUE` where a `VARCHAR2` or a `NUMBER` was due. A stub that
   returned `NaN` or an infinity failed with a `NumberFormatException`. Both are written as a call would send them now.

@@ -32,7 +32,7 @@ import io.github.rponte.penitent.internal.proxy.Views;
 public final class MockSession implements RowTypes {
 
 	/** The version of {@code penitent-mock-schema.sql} this library expects. */
-	static final int SCHEMA_VERSION = 1;
+	static final int SCHEMA_VERSION = 2;
 
 	private static final String PREFIX = "PENITENT_MOCK_";
 
@@ -182,12 +182,12 @@ public final class MockSession implements RowTypes {
 	}
 
 	/**
-	 * {@code stub}, with the value it returns and those it sets as OUT values written as PL/SQL. The core encodes each
-	 * value as a call would send it, through the method's or the parameter's converter and {@code @PlsqlBoolean}, so
-	 * the mapping is the one the application uses: an enum by its name, a UUID as text, a boolean by its literals,
-	 * {@code @PlsqlType} and {@code @PlsqlAttr} for a composite; and the PL/SQL is written from what it encoded. A
-	 * RECORD, a {@code %ROWTYPE} and an {@code INDEX BY} have no constructor, and are written as qualified
-	 * expressions, as {@link PlsqlLiterals#constructor} says.
+	 * {@code stub}, with the value it returns, those it sets as OUT values and those its arguments are matched with
+	 * written as PL/SQL. The core encodes each value as a call would send it, through the method's or the parameter's
+	 * converter and {@code @PlsqlBoolean}, so the mapping is the one the application uses: an enum by its name, a UUID
+	 * as text, a boolean by its literals, {@code @PlsqlType} and {@code @PlsqlAttr} for a composite; and the PL/SQL is
+	 * written from what it encoded. A RECORD, a {@code %ROWTYPE} and an {@code INDEX BY} have no constructor, and are
+	 * written as qualified expressions, as {@link PlsqlLiterals#constructor} says.
 	 */
 	private Stub written(Stub stub, RoutineMetadata routine) {
 		Invocation invocation = stub.invocation();
@@ -195,12 +195,15 @@ public final class MockSession implements RowTypes {
 		boolean returns = action instanceof Stub.Return returned && returned.function() && returned.value() != null;
 		List<Matcher> matchers = new ArrayList<>(invocation.matchers());
 		List<Integer> outs = new ArrayList<>();
+		List<Integer> equals = new ArrayList<>();
 		for (int i = 0; i < matchers.size(); i++) {
 			if (matchers.get(i) instanceof Matcher.Out out && out.value() != null) {
 				outs.add(i);
+			} else if (matchers.get(i) instanceof Matcher.Equal equal && equal.value() != null) {
+				equals.add(i);
 			}
 		}
-		if (!returns && outs.isEmpty()) {
+		if (!returns && outs.isEmpty() && equals.isEmpty()) {
 			return stub;
 		}
 		RoutineInvocationHandler handler = Views.handlerOf(describerOf(invocation.mock().type()));
@@ -213,6 +216,10 @@ public final class MockSession implements RowTypes {
 			for (int i : outs) {
 				matchers.set(i, new Matcher.Out(literal(handler.encodeParameter(method, i,
 						((Matcher.Out) matchers.get(i)).value(), connection), connection)));
+			}
+			for (int i : equals) {
+				matchers.set(i, new Matcher.Equal(literal(handler.encodeParameter(method, i,
+						((Matcher.Equal) matchers.get(i)).value(), connection), connection)));
 			}
 		} catch (SQLException e) {
 			throw new IllegalStateException("failed to write the stub of " + routine.qualifiedName() + " as PL/SQL: "
@@ -485,34 +492,56 @@ public final class MockSession implements RowTypes {
 
 	// ---------------------------------------------------------------- verification
 
+	/**
+	 * Counts the recorded calls that match {@code invocation}. A value matched is encoded as a call would send it, as
+	 * in a stub, and bound to the query rather than written in it: each recorded argument is read back with its own
+	 * type, and text, a LOB and bytes, which the recording keeps as text and hex digits, are compared as a
+	 * {@code CLOB}, which no length overflows.
+	 */
 	public void verify(Invocation invocation, int times) {
 		RoutineMetadata routine = routineOf(invocation);
 		requireStubbed(routine);
 		Map<String, Matcher> byParameter = byParameter(routine, invocation);
 		requireMatchable(routine, byParameter);
+		Map<String, Integer> javaIndexes = javaIndexes(routine, invocation);
+		RoutineInvocationHandler handler = Views.handlerOf(describerOf(invocation.mock().type()));
 		StringBuilder sql = new StringBuilder(
 				"SELECT COUNT(*) FROM PENITENT_MOCK_CALLS WHERE EDITION_NAME = ? AND ROUTINE = ?");
-		int index = 0;
-		for (RoutineMetadata.Argument parameter : routine.parameters()) {
-			if (!parameter.isIn()) {
-				continue;
-			}
-			Matcher matcher = recordedAs(parameter, byParameter.get(parameter.name()));
-			String check = matcher == null ? null
-					: matcher.condition("JSON_VALUE(ARGS, '$[" + index + "]' RETURNING " + jsonType(parameter) + ")");
-			if (check != null) {
-				sql.append(" AND ").append(check);
-			}
-			index++;
-		}
+		List<Expected> binds = new ArrayList<>();
 		int calls;
-		try (Connection connection = connection();
-				PreparedStatement count = connection.prepareStatement(sql.toString())) {
-			count.setString(1, edition);
-			count.setString(2, BodyRewriter.callKey(routine));
-			try (ResultSet rows = count.executeQuery()) {
-				rows.next();
-				calls = rows.getInt(1);
+		try (Connection connection = connection()) {
+			int index = 0;
+			for (RoutineMetadata.Argument parameter : routine.parameters()) {
+				if (!parameter.isIn()) {
+					continue;
+				}
+				Matcher matcher = byParameter.get(parameter.name());
+				String recorded = "JSON_VALUE(ARGS, '$[" + index + "]' RETURNING " + jsonType(parameter) + ")";
+				if (matcher instanceof Matcher.Equal equal && equal.value() != null) {
+					Expected expected = expected(parameter, parameter.isBoolean() ? equal.value()
+							: handler.encodeParameter(invocation.method(), javaIndexes.get(parameter.name()),
+									equal.value(), connection));
+					sql.append(" AND ").append(expected.text() ? "DBMS_LOB.COMPARE(" + recorded + ", ?) = 0"
+							: recorded + " = ?");
+					binds.add(expected);
+				} else {
+					String check = matcher == null ? null : matcher.condition(recorded);
+					if (check != null) {
+						sql.append(" AND ").append(check);
+					}
+				}
+				index++;
+			}
+			try (PreparedStatement count = connection.prepareStatement(sql.toString())) {
+				count.setString(1, edition);
+				count.setString(2, BodyRewriter.callKey(routine));
+				for (int i = 0; i < binds.size(); i++) {
+					binds.get(i).bind(count, i + 3);
+				}
+				try (ResultSet rows = count.executeQuery()) {
+					rows.next();
+					calls = rows.getInt(1);
+				}
 			}
 		} catch (SQLException e) {
 			throw new IllegalStateException("failed to read the calls of " + routine.qualifiedName() + ": "
@@ -559,29 +588,81 @@ public final class MockSession implements RowTypes {
 		}
 	}
 
-	/**
-	 * The matcher against the recorded value: a BOOLEAN is recorded as 'true' or 'false', since only Oracle 23ai takes
-	 * a BOOLEAN into SQL, so its value is compared as that text, not as the literal TRUE.
-	 */
-	private static Matcher recordedAs(RoutineMetadata.Argument parameter, Matcher matcher) {
-		if (parameter.isBoolean() && matcher instanceof Matcher.Equal equal && equal.value() instanceof Boolean flag) {
-			return new Matcher.Equal(flag ? "true" : "false");
+	/** A value a verification binds: as text, which a CLOB is compared with, or as the driver binds it. */
+	private record Expected(Object value, boolean text, String dataType) {
+
+		void bind(PreparedStatement statement, int position) throws SQLException {
+			if (text) {
+				String string = (String) value;
+				statement.setClob(position, new java.io.StringReader(string), string.length());
+			} else if (value instanceof Double number && dataType.equals("BINARY_DOUBLE")) {
+				statement.unwrap(oracle.jdbc.OraclePreparedStatement.class).setBinaryDouble(position, number);
+			} else if (value instanceof Float number && dataType.equals("BINARY_FLOAT")) {
+				statement.unwrap(oracle.jdbc.OraclePreparedStatement.class).setBinaryFloat(position, number);
+			} else {
+				statement.setObject(position, value);
+			}
 		}
-		return matcher;
 	}
 
+	/**
+	 * The value a recorded argument is compared with: a BOOLEAN is recorded as 'true' or 'false', since only Oracle
+	 * 23ai takes a BOOLEAN into SQL; bytes, of a RAW or a BLOB, as their hex digits, as JSON_ARRAY writes them; and a
+	 * text, of any length, as itself.
+	 */
+	private static Expected expected(RoutineMetadata.Argument parameter, Object encoded) throws SQLException {
+		if (parameter.isBoolean()) {
+			return new Expected(Boolean.TRUE.equals(encoded) ? "true" : "false", true, parameter.dataType());
+		}
+		Object value = encoded;
+		if (value instanceof java.sql.Clob clob) {
+			value = clob.getSubString(1, Math.toIntExact(clob.length()));
+		} else if (value instanceof java.sql.Blob blob) {
+			value = blob.getBytes(1, Math.toIntExact(blob.length()));
+		}
+		if (value instanceof byte[] bytes) {
+			value = java.util.HexFormat.of().withUpperCase().formatHex(bytes);
+		}
+		boolean text = jsonType(parameter).equals("CLOB");
+		return new Expected(text ? String.valueOf(value) : value, text, parameter.dataType());
+	}
+
+	/**
+	 * The type a recorded argument is read back with: its own, for numbers, timestamps and intervals; a {@code DATE}
+	 * as a {@code TIMESTAMP}, since {@code RETURNING DATE} drops its time; a {@code TIMESTAMP WITH LOCAL TIME ZONE} as
+	 * {@code WITH TIME ZONE}, which {@code RETURNING} takes; and a {@code CLOB} for text, LOBs, bytes and booleans,
+	 * which the recording keeps as text.
+	 */
 	private static String jsonType(RoutineMetadata.Argument parameter) {
 		String type = parameter.dataType();
 		if (type.equals("DATE")) {
-			return "DATE";
+			return "TIMESTAMP";
 		}
 		if (type.startsWith("TIMESTAMP")) {
-			return "TIMESTAMP";
+			return type.contains("TIME ZONE") ? "TIMESTAMP WITH TIME ZONE" : "TIMESTAMP";
+		}
+		if (type.startsWith("INTERVAL DAY")) {
+			return "INTERVAL DAY TO SECOND";
+		}
+		if (type.startsWith("INTERVAL YEAR")) {
+			return "INTERVAL YEAR TO MONTH";
+		}
+		if (type.equals("BINARY_DOUBLE") || type.equals("BINARY_FLOAT")) {
+			return type;
 		}
 		if (parameter.isNumeric()) {
 			return "NUMBER";
 		}
-		return "VARCHAR2(4000)";
+		return "CLOB";
+	}
+
+	/** The index of the Java parameter each Oracle parameter of {@code routine} binds, by its name. */
+	private static Map<String, Integer> javaIndexes(RoutineMetadata routine, Invocation invocation) {
+		Map<String, Integer> indexes = new HashMap<>();
+		for (int i = 0; i < invocation.method().getParameterCount(); i++) {
+			indexes.put(routine.parameters().get(i).name(), i);
+		}
+		return indexes;
 	}
 
 	private static String timesOf(int count) {

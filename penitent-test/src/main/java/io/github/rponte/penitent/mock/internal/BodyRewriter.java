@@ -99,7 +99,8 @@ final class BodyRewriter {
 		String qualified = routine.qualifiedName();
 		List<RoutineMetadata.Argument> recorded = routine.parameters().stream()
 				.filter(RoutineMetadata.Argument::isIn).toList();
-		StringBuilder code = new StringBuilder("\n    l_penitent_args VARCHAR2(4000);\n");
+		// a CLOB, which no argument overflows: a long text or a LOB is recorded whole
+		StringBuilder code = new StringBuilder("\n    l_penitent_args CLOB;\n");
 		// a BOOLEAN goes into SQL only from Oracle 23ai on: before JSON_ARRAY, PL/SQL writes it as 'true' or 'false'
 		for (int i = 0; i < recorded.size(); i++) {
 			if (recorded.get(i).isBoolean()) {
@@ -112,8 +113,8 @@ final class BodyRewriter {
 		if (recorded.isEmpty()) {
 			code.append("    l_penitent_args := '[]';\n");
 		} else {
-			StringJoiner arguments = new StringJoiner(", ", "    SELECT JSON_ARRAY(", " NULL ON NULL) INTO l_penitent_args"
-					+ " FROM DUAL;\n");
+			StringJoiner arguments = new StringJoiner(", ", "    SELECT JSON_ARRAY(", " NULL ON NULL RETURNING CLOB) INTO"
+					+ " l_penitent_args FROM DUAL;\n");
 			// JSON_ARRAY takes scalars: an object type, a collection or a record is marked, keeping each one's position
 			for (int i = 0; i < recorded.size(); i++) {
 				RoutineMetadata.Argument argument = recorded.get(i);
@@ -136,7 +137,10 @@ final class BodyRewriter {
 				if (matcher instanceof Matcher.Out out) {
 					outs.append(parameter.name()).append(" := ").append(PlsqlLiterals.of(out.value())).append("; ");
 				} else {
-					String check = matcher.condition(parameter.name());
+					// a LOB has no =: DBMS_LOB.COMPARE, which gives NULL when either side is, as = would
+					String check = lob(parameter) && matcher instanceof Matcher.Equal equal && equal.value() != null
+							? "DBMS_LOB.COMPARE(" + parameter.name() + ", " + PlsqlLiterals.of(equal.value()) + ") = 0"
+							: matcher.condition(parameter.name());
 					if (check != null) {
 						condition.add(check);
 					}
@@ -145,8 +149,11 @@ final class BodyRewriter {
 			code.append("    IF ").append(condition.length() == 0 ? "TRUE" : condition).append(" THEN\n      ")
 					.append(outs).append(action(stub.action())).append("\n    END IF;\n");
 		}
+		// the start of the arguments, and their length when there is more: a message holds 2,048 bytes
 		code.append("    RAISE_APPLICATION_ERROR(-20999, '").append(qualified)
-				.append(": no stub matches the arguments ' || l_penitent_args);\n  END ").append(name);
+				.append(": no stub matches the arguments ' || DBMS_LOB.SUBSTR(l_penitent_args, 1500, 1)")
+				.append(" || CASE WHEN DBMS_LOB.GETLENGTH(l_penitent_args) > 1500 THEN '... (' ||")
+				.append(" DBMS_LOB.GETLENGTH(l_penitent_args) || ' characters)' END);\n  END ").append(name);
 		return code.toString();
 	}
 
@@ -158,6 +165,11 @@ final class BodyRewriter {
 			return "RAISE_APPLICATION_ERROR(" + error.code() + ", " + PlsqlLiterals.of(error.message()) + ");";
 		}
 		return "RAISE " + ((Stub.Raise) action).name() + ";";
+	}
+
+	/** A {@code CLOB}, an {@code NCLOB} or a {@code BLOB}, which PL/SQL does not compare with {@code =}. */
+	static boolean lob(RoutineMetadata.Argument parameter) {
+		return parameter.dataType().endsWith("LOB");
 	}
 
 	/** How a call of {@code routine} is recorded: its name and its parameters, which tell overloads apart. */

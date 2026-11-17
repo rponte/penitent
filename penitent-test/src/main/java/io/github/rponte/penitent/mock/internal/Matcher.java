@@ -18,7 +18,7 @@ public sealed interface Matcher {
 
 		@Override
 		public String toString() {
-			return value == null ? "null" : PlsqlLiterals.of(value);
+			return value == null ? "null" : shown(value);
 		}
 	}
 
@@ -57,7 +57,19 @@ public sealed interface Matcher {
 
 		@Override
 		public String toString() {
-			return "out(" + PlsqlLiterals.of(value) + ")";
+			return "out(" + shown(value) + ")";
+		}
+	}
+
+	/**
+	 * A value as a log or a message shows it: as PL/SQL where the mocks write it so, and otherwise as Java has it, such
+	 * as an enum a verification matches before the core encodes it.
+	 */
+	private static String shown(Object value) {
+		try {
+			return PlsqlLiterals.of(value);
+		} catch (IllegalStateException e) {
+			return String.valueOf(value);
 		}
 	}
 }
