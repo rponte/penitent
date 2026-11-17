@@ -389,7 +389,7 @@ SELECT COUNT(*) FROM PENITENT_MOCK_CALLS
 |---|---|---|
 | text, a LOB, `RAW`, `BOOLEAN` | `CLOB`; bytes are hex digits, a `BOOLEAN` `'true'` or `'false'`, as the recording keeps them | `DBMS_LOB.COMPARE`, which no length overflows |
 | `NUMBER`, `BINARY_DOUBLE`, `BINARY_FLOAT` | its own type | `=` |
-| `DATE` | `TIMESTAMP`, since `RETURNING DATE` drops the time | `=` |
+| `DATE` | `DATE PRESERVE TIME`, since `RETURNING DATE` truncates the time by default, as Oracle documents | `=` |
 | `TIMESTAMP`, intervals | its own type | `=` |
 | `TIMESTAMP WITH TIME ZONE` and `WITH LOCAL TIME ZONE` | `TIMESTAMP WITH TIME ZONE`, which `RETURNING` takes for both | `=`, as an instant |
 
