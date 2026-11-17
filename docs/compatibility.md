@@ -170,6 +170,7 @@ Where the PL/SQL guarantees the value is never `null`, driver 23 works as it is.
 | Form | Status |
 |---|---|
 | OBJECT, package RECORD and `%ROWTYPE`, as parameter and return value | Validated |
+| `%ROWTYPE` of a table with a virtual column, which it keeps, and an invisible one, which it leaves out as PL/SQL does; and with an OBJECT, a nested table and a `VARRAY` as columns, `null` included, in and back, in a collection and from a block; a cursor over such a table, `SELECT *` leaving the invisible column out and a query naming it having it | Validated |
 | RECORD containing RECORD, OBJECT and collections | Validated |
 | OBJECT containing OBJECT and collections | Validated |
 | Mapping to `record` and to JavaBean, matched by attribute name | Validated |
