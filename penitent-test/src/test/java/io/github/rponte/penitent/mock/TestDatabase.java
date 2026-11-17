@@ -82,6 +82,19 @@ public final class TestDatabase {
 		}
 	}
 
+	/**
+	 * Whether driver 23 reads a null BOOLEAN output from this database as true or false: it does from a database before
+	 * Oracle 23ai, which the core's tests measure and its compatibility page records.
+	 */
+	public static boolean nullBooleanOutputMisread() {
+		try (Connection connection = pool().getConnection()) {
+			return new oracle.jdbc.OracleDriver().getMajorVersion() >= 23
+					&& connection.getMetaData().getDatabaseMajorVersion() < 23;
+		} catch (SQLException e) {
+			throw new IllegalStateException(e);
+		}
+	}
+
 	/** A pool of the database's administrator, for what only a DBA may run. */
 	public static HikariDataSource adminPool() {
 		return newPool(oracle().adminUser());

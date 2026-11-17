@@ -425,3 +425,36 @@ CREATE OR REPLACE PACKAGE BODY freight_records AS
   END describe;
 END freight_records;
 /
+
+-- scalars a stub returns directly: a BOOLEAN, a TIMESTAMP and a DATE; the real routines fail
+CREATE OR REPLACE PACKAGE freight_scalars AS
+  FUNCTION is_open(p_uf VARCHAR2) RETURN BOOLEAN;
+  FUNCTION shipped_at(p_id NUMBER) RETURN TIMESTAMP;
+  FUNCTION due_on(p_id NUMBER) RETURN DATE;
+  -- calls is_open, as PL/SQL that uses a stub would
+  FUNCTION status_of(p_uf VARCHAR2) RETURN VARCHAR2;
+END freight_scalars;
+/
+
+CREATE OR REPLACE PACKAGE BODY freight_scalars AS
+  FUNCTION is_open(p_uf VARCHAR2) RETURN BOOLEAN IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20420, 'the real is_open');
+  END is_open;
+
+  FUNCTION shipped_at(p_id NUMBER) RETURN TIMESTAMP IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20420, 'the real shipped_at');
+  END shipped_at;
+
+  FUNCTION due_on(p_id NUMBER) RETURN DATE IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20420, 'the real due_on');
+  END due_on;
+
+  FUNCTION status_of(p_uf VARCHAR2) RETURN VARCHAR2 IS
+  BEGIN
+    RETURN CASE WHEN is_open(p_uf) THEN 'open' WHEN NOT is_open(p_uf) THEN 'closed' ELSE 'unknown' END;
+  END status_of;
+END freight_scalars;
+/
