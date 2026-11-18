@@ -323,6 +323,27 @@ class StubRecordsTest {
 	}
 
 	@Test
+	@DisplayName("in a session of another territory, with a decimal comma, PL/SQL gets the same stubbed values")
+	void called_from_plsql_in_another_territory() {
+		try (com.zaxxer.hikari.HikariDataSource brazil = TestDatabase.newPool(OracleUnderTest.USER)) {
+			brazil.setConnectionInitSql("ALTER SESSION SET NLS_TERRITORY = 'BRAZIL'");
+			DataSource inBrazil = PlsqlMocks.wrap(brazil);
+			try (PlsqlMocks brazilMocks = PlsqlMocks.on(inBrazil)) {
+				mocks.end();
+				brazilMocks.begin();
+				Records mock = brazilMocks.mock(Records.class);
+				when(mock.quoteOf("CE")).thenReturn(CE);
+				when(mock.itemOf(BigDecimal.ONE)).thenReturn(new Item(1L, "SP"));
+
+				assertThat(PlsqlPackages.create(Records.class, inBrazil).describe("CE", BigDecimal.ONE))
+						.isEqualTo("CE=24.9, 1/SP");
+			} finally {
+				mocks.begin();
+			}
+		}
+	}
+
+	@Test
 	@DisplayName("PL/SQL calling the routines gets the stubbed RECORD and %ROWTYPE")
 	void called_from_plsql() {
 		Records mock = mocks.mock(Records.class);
