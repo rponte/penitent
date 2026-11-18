@@ -345,6 +345,9 @@ final class RoutineCall {
 			bindNull(statement, position, parameter, schema, connection);
 		} else if (parameter.isBoolean() && bindable instanceof Boolean) {
 			statement.setObject(position, bindable, Jdbc.ORACLE_PLSQL_BOOLEAN);
+		} else if (ValueEncoder.binaryFloatingPoint(parameter) && bindable instanceof Number number) {
+			// bound with its type: as the default NUMBER, a NaN or an infinity fails in the driver
+			Jdbc.setBinaryFloatingPoint(statement, position, number, parameter.dataType());
 		} else {
 			statement.setObject(position, ScalarCodec.forDriver(bindable));
 		}

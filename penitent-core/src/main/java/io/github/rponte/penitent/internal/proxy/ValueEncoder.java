@@ -36,11 +36,13 @@ final class ValueEncoder {
 		if (value instanceof Boolean flag) {
 			return encodeBoolean(flag, target, literals);
 		}
+		requireFinite(value, target);
 		return ScalarCodec.encode(value, ValueConversion.DEFAULT);
 	}
 
 	Object encode(Object value, Argument target, PlsqlBoolean literals, String schema, Connection connection)
 			throws SQLException {
+		requireFinite(value, target);
 
 		if (value == null) {
 			return null;
@@ -56,6 +58,25 @@ final class ValueEncoder {
 		}
 		return TemporaryLobs.forLob(target.dataType(), ScalarCodec.encode(value, ValueConversion.DEFAULT),
 				connection);
+	}
+
+	/** {@code BINARY_DOUBLE} or {@code BINARY_FLOAT}: the types that hold {@code NaN} and the infinities. */
+	static boolean binaryFloatingPoint(Argument target) {
+		return "BINARY_DOUBLE".equals(target.dataType()) || "BINARY_FLOAT".equals(target.dataType());
+	}
+
+	/**
+	 * {@code NaN} or an infinity, for a type that does not hold it, such as a {@code NUMBER}: refused here, where the
+	 * parameter is known, rather than as the driver's {@code IllegalArgumentException} or {@code NumberFormatException}.
+	 */
+	private static void requireFinite(Object value, Argument target) {
+		boolean finite = value instanceof Double doubleValue ? Double.isFinite(doubleValue)
+				: !(value instanceof Float floatValue) || Float.isFinite(floatValue);
+		if (!finite && !binaryFloatingPoint(target) && !target.isStruct() && !target.isCollection()) {
+			throw new PlsqlMappingException((target.name() == null ? "the value it returns" : target.name()) + " is "
+					+ target.dataType() + ", which holds no NaN nor infinity, and the value is " + value
+					+ ": declare the parameter BINARY_DOUBLE or BINARY_FLOAT, or send a finite value");
+		}
 	}
 
 	/**
