@@ -429,6 +429,13 @@ rather than ignored. With any other test framework, which has no extension, call
   the schema of the mocks, whose editions keep that type. Anything else is refused before any statement runs,
   naming the statement and its line: a table, DML, `DROP` or `ALTER` would change the database itself, and in a
   schema that does not edition the type, a `CREATE OR REPLACE` would replace the real object for good.
+- **A spec replaced without its body** leaves the body to compile against it in the edition. The library compiles it
+  at the end of the script, so a body that no longer fits the spec, such as one missing a function the new spec
+  declares, is refused there, with its errors: replace the body in the same script, after the spec.
+- **A synonym** can be replaced only in a schema whose editions keep synonyms, which `penitent-mock-admin.sql` does
+  not enable: on a test database, a DBA can run `ALTER USER <schema> ENABLE EDITIONS FOR SYNONYM`, which cannot be
+  undone. Then the test reaches the synonym's new target, from Java and from PL/SQL, and every other session the
+  real one.
 - **A package has stubs or is replaced by a script in a test, not both:** a stub rewrites the body as the default
   edition has it, so one would undo the other.
 - **A statement that does not compile stops the script there,** with its errors, as a stub's would be; the statements

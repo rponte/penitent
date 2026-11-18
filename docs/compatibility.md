@@ -450,6 +450,8 @@ that text, on every version.
 | A stub returns a `%ROWTYPE`, an OBJECT, a collection of it, a package RECORD and a package collection of a `%ROWTYPE` whose names' quotes hold a dot, and a RECORD of a package with such a name; `any()` matches and `verify` counts such an OBJECT as an argument; on drivers 23, 21 and 19, which give such a name without its quotes, as `PLSQL_TEST.Dot.T`, so the mocks read it in the dictionary | Validated |
 | A stub of a type the driver names as it names another, such as an OBJECT `"Twin.Box_T"` next to a package `"Twin"` declaring `"Box_T"`, both `PLSQL_TEST.Twin.Box_T` | Not supported, with a clear error |
 | A script in the test's edition, from the classpath, `file:`, a `Path`, an `InputStream` or text: a view and a package body replaced, seen only in the edition and gone with it; nothing of the test's transaction committed; a table, DML, `DROP`, `ALTER`, another schema and a type the schema does not edition refused before any statement runs; compilation errors reported; a package with stubs and a script refused, in either order | Validated |
+| A script that replaces a package spec with its body, seen only in the edition; a spec alone with the same declarations, whose body compiles again in the edition; a private synonym pointed to another package, followed by Java and by PL/SQL in the edition, in a schema whose editions keep synonyms; on 23ai, 21c and 19c | Validated |
+| A script that replaces a package spec alone, declaring what the body lacks | Not supported, with a clear error when applied, rather than `ORA-04063` at the first call |
 | `@PlsqlMockScript` with the JUnit 5 extension, also without Spring, and with `@EnablePlsqlMocks` in a transactional test: the class's scripts in every test, then the method's, repeated in their order, before `@BeforeEach`; found on a superclass, on the class enclosing a `@Nested` one and as a meta-annotation; one with no script, and one with different `value` and `scripts`, refused; in Spring without `@EnablePlsqlMocks`, refused | Validated |
 | Several stubs of the same routine: different arguments each answered; the same arguments twice, the later one wins; a second answer on the same stub replaces the first | Validated |
 | A call no stub matches fails with `ORA-20999`, naming the routine and showing the arguments | Validated |
@@ -469,8 +471,6 @@ that text, on every version.
 ## Not measured
 
 - Oracle 18c and older, such as 12c ([on demand](roadmap.md#on-demand)).
-- A script that replaces a package spec or a synonym in the test's edition: the tests replace views, package bodies
-  and standalone functions ([#66](https://github.com/rponte/penitent/issues/66)).
 - A stub of a standalone routine in a schema that does not edition its type, refused saying what to run: not run by a
   test, since editions cannot be undone in the test database; nor a standalone routine with `AUTHID`, `DETERMINISTIC`,
   `RESULT_CACHE`, `PIPELINED` or `PARALLEL_ENABLE`, which IslandSQL parsed in a one-off probe
