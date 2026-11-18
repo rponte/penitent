@@ -50,7 +50,8 @@ lead to silent data corruption". To avoid the error, Oracle offers:
 - **edition-based redefinition**, which compiles the new code in a new edition while sessions keep using the old one;
 - **`SESSION_EXIT_ON_PACKAGE_STATE_ERROR = TRUE`**, from Oracle 19c RU 19.23: the session ends instead of raising
   `ORA-04068`, and a pool replaces a connection that ended
-  ([reference](https://docs.oracle.com/en/database/oracle/oracle-database/19/refrn/SESSION_EXIT_ON_PACKAGE_STATE_ERROR.html));
+  ([reference](https://docs.oracle.com/en/database/oracle/oracle-database/19/refrn/SESSION_EXIT_ON_PACKAGE_STATE_ERROR.html)).
+  See [below](#when-a-package-with-state-is-recompiled) how to set it for a pool;
 - **`CREATE OR REPLACE PACKAGE ... RESETTABLE`**, from Oracle 26ai, for a package whose state can be discarded
   ([reference](https://docs.oracle.com/en/database/oracle/oracle-database/26/lnpls/RESETTABLE-clause.html)).
 
@@ -85,9 +86,82 @@ restart does not help the last two rows, which no error reveals:
 | an object type gains an attribute, with `ALTER TYPE ... ADD ATTRIBUTE ... CASCADE` | fails with `ORA-03101: invalid input data`. A new proxy on the same connections still fails, with `ORA-17049: Inconsistent Java and SQL object types`, because the driver kept the old type in each connection |
 | the table of a `%ROWTYPE` gains a column | **the database closes the connection**: `ORA-03138: connection terminated due to security policy violation`, or, with driver 19, `No more data to read from socket` |
 
-Only new connections read the new type. Restart the application, or renew the pool's connections: with HikariCP,
-`HikariPoolMXBean.softEvictConnections()` replaces each connection as it comes back to the pool. Then also update the
-Java record or JavaBean, since a composite has to cover every attribute.
+Only new connections read the new type: the database session already sees the new one, but the driver keeps the
+old one in a cache of its own, which its public methods do not clear. Restart the application, or renew the pool's
+connections, [as below](#recovering-without-a-restart). Then also update the Java record or JavaBean, since a
+composite has to cover every attribute.
+
+## Recovering without a restart
+
+Penitent never repeats a call that failed, and never closes a connection it was given: the connection belongs to the
+pool and to the caller's transaction, and closing it would undo the caller's work behind its back. Recovering is the
+pool's job, as HikariCP does it: it replaces a connection rather than repairing it, it never repeats a statement, and
+it leaves every decision beyond its default to explicit configuration. The examples below use HikariCP, Spring
+Boot's pool, each one measured on Oracle 23ai and 19c.
+
+### When a type changed
+
+HikariCP replaces a connection by itself only when the connection is broken: a SQLState of class `08`, as when the
+database closes the session after a `%ROWTYPE` changed. `ORA-17049` and `ORA-03101` come from a healthy connection,
+which HikariCP keeps, still holding the old type. Two ways to replace it:
+
+- **At once, for every connection,** as a step of the deploy, through the pool's MXBean, also reachable through JMX
+  with `registerMbeans`:
+
+  <!-- snippet: deploying/soft-evict -->
+  ```java
+  hikari.getHikariPoolMXBean().softEvictConnections();
+  ```
+
+  An idle connection closes at once; one in use closes when it comes back to the pool, so no call in progress is cut.
+
+- **One connection at a time, when it fails,** with an `SQLExceptionOverride`, which HikariCP asks about each
+  `SQLException`:
+
+  <!-- snippet: deploying/stale-type-eviction -->
+  ```java
+  /** Evicts a connection whose driver keeps an object type a deploy has changed. */
+  public static class StaleTypeEviction implements SQLExceptionOverride {
+
+      public Override adjudicate(SQLException e) {
+          // ORA-17049: the driver's old type; ORA-03101: the old type sent to the database
+          return e.getErrorCode() == 17049 || e.getErrorCode() == 3101 ? Override.MUST_EVICT
+                  : Override.CONTINUE_EVICT;
+      }
+  }
+  ```
+
+  <!-- snippet: deploying/exception-override -->
+  ```java
+  config.setExceptionOverride(new StaleTypeEviction());
+  ```
+
+  With Spring Boot, name the class in `spring.datasource.hikari.exception-override-class-name`. The call that failed
+  still fails: the override only gives the next borrower a new connection. HikariCP takes one override, so if the
+  application already has one, add these codes to it. Return `CONTINUE_EVICT` for everything else, as HikariCP's own
+  documentation advises.
+
+### When a package with state is recompiled
+
+`ORA-04068` comes from a healthy session, and the call after it works, so HikariCP rightly keeps the connection.
+Two ways to handle it, both outside Penitent:
+
+- **Make the session end instead,** with Oracle's `SESSION_EXIT_ON_PACKAGE_STATE_ERROR`, set on each new connection:
+
+  <!-- snippet: deploying/session-exit -->
+  ```java
+  config.setConnectionInitSql("ALTER SESSION SET SESSION_EXIT_ON_PACKAGE_STATE_ERROR = TRUE");
+  ```
+
+  The call then fails with `ORA-00028: session has been terminated`, a connection error, and HikariCP replaces the
+  connection. **The whole transaction is undone,** not only the call that failed, so nothing partial is left, and the
+  next call works with the new state. It needs Oracle 19c RU 19.23 or later, and the right to change the parameter:
+  on an Autonomous Database 19c, the statement failed with `ORA-01031: insufficient privileges`, and with it every new
+  connection of the pool. Ask the DBA, and try it before turning it on.
+- **Retry the whole unit of work,** in the application, at the boundary of its transaction, with Spring Retry or
+  Resilience4j: retry when the cause is a `PlsqlExecutionException` whose `getCode()` is `4068`, or the connection
+  error above. A retry there runs the transaction again from its start, with a new state, rather than one call in
+  the middle of it. It is still the application's call: only it knows whether its work can run twice.
 
 ## Before and after a deploy
 
