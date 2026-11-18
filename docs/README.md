@@ -143,6 +143,7 @@ Every page uses the same orders package, so the examples build on each other.
 | run a transaction without Spring | [`PlsqlTransactions`](transactions.md#without-spring-plsqltransactions) |
 | configure every interface at once | [Settings](settings.md) |
 | check every interface against the database | [Validation](validation.md) |
+| change PL/SQL while the application runs, or understand `ORA-04068` | [Changing PL/SQL while the application runs](deploying.md) |
 | use Spring transactions, or inject interfaces as beans | [Spring and Spring Boot](spring.md) |
 | test code that calls PL/SQL, or stub a routine as with Mockito | [Testing](testing.md) |
 | replace a view or a package in a test, with a script | [Testing](testing.md#replacing-a-view-or-a-package) |

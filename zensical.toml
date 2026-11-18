@@ -26,6 +26,7 @@ nav = [
     { "Transactions and connections" = "transactions.md" },
     { "Settings" = "settings.md" },
     { "Validation" = "validation.md" },
+    { "Changing PL/SQL while the application runs" = "deploying.md" },
     { "Spring and Spring Boot" = "spring.md" },
     { "Testing" = "testing.md" },
     { "Logging" = "logging.md" },
