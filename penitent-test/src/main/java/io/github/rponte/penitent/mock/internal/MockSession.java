@@ -48,6 +48,7 @@ public final class MockSession implements RowTypes {
 	private final Map<String, String> bodies = new HashMap<>();
 	private final Map<String, List<Stub>> stubsByPackage = new LinkedHashMap<>();
 	private final Map<String, String> rowTypes = new HashMap<>();
+	private final Map<String, List<String>> partsByDriverName = new HashMap<>();
 	/** The packages a script replaced in this test, which a stub would undo, as {@code SCHEMA.NAME}. */
 	private final java.util.Set<String> scriptedPackages = new java.util.HashSet<>();
 	private volatile String edition;
@@ -275,7 +276,11 @@ public final class MockSession implements RowTypes {
 	 * Oracle assigns that RECORD to it. A table and a type of one schema cannot share a name, so this is not ambiguous.
 	 */
 	private PlsqlLiterals.Mark markOf(String driverName, Connection connection) throws SQLException {
-		List<String> parts = PlsqlLiterals.parts(driverName);
+		List<String> parts = partsByDriverName.get(driverName);
+		if (parts == null) {
+			parts = partsOf(driverName, connection);
+			partsByDriverName.put(driverName, parts);
+		}
 		if (parts.size() == 3) {
 			try (PreparedStatement select = connection.prepareStatement("SELECT INDEX_BY FROM ALL_PLSQL_COLL_TYPES"
 					+ " WHERE OWNER = ? AND PACKAGE_NAME = ? AND TYPE_NAME = ?")) {
@@ -320,6 +325,54 @@ public final class MockSession implements RowTypes {
 			}
 		}
 		return types;
+	}
+
+	/**
+	 * The parts of a name the driver gives, as the dictionary has them: the reading of {@link PlsqlLiterals#readings}
+	 * that names a type, a table or a view, or a type of a package. A name no reading finds is split on its dots, as
+	 * before; one that two readings find, such as an object type {@code "Twin.Box_T"} next to a package {@code "Twin"}
+	 * declaring {@code "Box_T"}, is refused, since the driver gives both the same name.
+	 */
+	private static List<String> partsOf(String driverName, Connection connection) throws SQLException {
+		List<List<String>> readings = PlsqlLiterals.readings(driverName);
+		if (readings.size() <= 1) {
+			return PlsqlLiterals.parts(driverName);
+		}
+		List<List<String>> found = new ArrayList<>();
+		for (List<String> reading : readings) {
+			if (exists(reading, connection)) {
+				found.add(reading);
+			}
+		}
+		if (found.isEmpty()) {
+			return PlsqlLiterals.parts(driverName);
+		}
+		if (found.size() > 1) {
+			StringJoiner names = new StringJoiner(" and ");
+			found.forEach(reading -> names.add(PlsqlLiterals.quoted(reading)));
+			throw new IllegalStateException("the driver names both " + names + " " + driverName
+					+ ", so the mocks cannot tell which type a value is: rename one of them");
+		}
+		return found.get(0);
+	}
+
+	private static boolean exists(List<String> reading, Connection connection) throws SQLException {
+		String sql = reading.size() == 3
+				? "SELECT 1 FROM ALL_PLSQL_TYPES WHERE OWNER = ? AND PACKAGE_NAME = ? AND TYPE_NAME = ?"
+				: "SELECT 1 FROM ALL_TYPES WHERE OWNER = ? AND TYPE_NAME = ? UNION ALL SELECT 1 FROM ALL_OBJECTS"
+						+ " WHERE OWNER = ? AND OBJECT_NAME = ? AND OBJECT_TYPE IN ('TABLE', 'VIEW')";
+		try (PreparedStatement select = connection.prepareStatement(sql)) {
+			for (int i = 0; i < reading.size(); i++) {
+				select.setString(i + 1, reading.get(i));
+			}
+			if (reading.size() == 2) {
+				select.setString(3, reading.get(0));
+				select.setString(4, reading.get(1));
+			}
+			try (ResultSet rows = select.executeQuery()) {
+				return rows.next();
+			}
+		}
 	}
 
 	/** Compiles the package's body with its stubs, and gives the PL/SQL generated for {@code any}'s routine. */
