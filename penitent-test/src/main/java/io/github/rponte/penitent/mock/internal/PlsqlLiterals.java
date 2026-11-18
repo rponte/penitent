@@ -299,6 +299,31 @@ public final class PlsqlLiterals {
 		return split;
 	}
 
+	/**
+	 * Every way to read a name the driver gives as an owner, a type and, between them, a package. Every driver writes
+	 * a quoted name that holds a dot without its quotes, {@code PLSQL_TEST.Dot.Crate_T} for {@code "Dot.Crate_T"}, as it
+	 * writes {@code PLSQL_TEST.FREIGHTS.CRATE_T} for a type of a package: only the dictionary tells where the parts end.
+	 */
+	public static List<List<String>> readings(String driverName) {
+		String name = driverName.replace("\"", "");
+		if (name.toUpperCase(Locale.ROOT).endsWith("%ROWTYPE")) {
+			name = name.substring(0, name.length() - "%ROWTYPE".length());
+		}
+		String[] atoms = name.split("\\.", -1);
+		List<List<String>> readings = new ArrayList<>();
+		for (int i = 1; i < atoms.length; i++) {
+			readings.add(List.of(joined(atoms, 0, i), joined(atoms, i, atoms.length)));
+			for (int j = i + 1; j < atoms.length; j++) {
+				readings.add(List.of(joined(atoms, 0, i), joined(atoms, i, j), joined(atoms, j, atoms.length)));
+			}
+		}
+		return readings;
+	}
+
+	private static String joined(String[] atoms, int from, int to) {
+		return String.join(".", java.util.Arrays.asList(atoms).subList(from, to));
+	}
+
 	/** {@code parts} joined by dots, each in quotes, keeping its case. */
 	public static String quoted(List<String> parts) {
 		StringJoiner quoted = new StringJoiner(".");

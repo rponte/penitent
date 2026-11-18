@@ -184,6 +184,8 @@ Where the PL/SQL guarantees the value is never `null`, driver 23 works as it is.
 | `null` in place of a RECORD or `%ROWTYPE` | Validated: a RECORD is never null in PL/SQL, and comes back with null fields |
 | Driver addressing, probed without the library: RECORD as `PACKAGE.TYPE`, `%ROWTYPE` as `TABLE%ROWTYPE`, package collection as `PACKAGE.TYPE`, and the names that fail (`ORA-17060`, `ORA-17074`) | Validated |
 | Names that need quotes, created as `CREATE TABLE "Mixed"` or `CREATE TYPE "Two Words_T"`: a `%ROWTYPE`, an OBJECT, a package RECORD, a RECORD of a package with such a name, a schema collection and a package collection of a `%ROWTYPE`, through an interface and a block's `@PlsqlType`, each next to an unquoted namesake of another shape, which they do not reach | Validated: such a name is bound with every part in quotes, the one spelling drivers 23, 21 and 19 all resolve |
+| Names whose quotes hold a dot, created as `CREATE TYPE "Dot.T"`: a `%ROWTYPE`, an OBJECT and a collection of it, a package RECORD, a package collection of a `%ROWTYPE` and a RECORD of a package with such a name, through an interface and a block's `@PlsqlType`, on drivers 23, 21 and 19 | Validated |
+| Names whose quotes hold a double quote | Not supported by the database: Oracle refuses a double quote in any name, quoted or not, with `ORA-25716` on 23ai ([Database Object Names and Qualifiers](https://docs.oracle.com/en/database/oracle/oracle-database/19/sqlrf/Database-Object-Names-and-Qualifiers.html)) |
 | JavaBean without a default constructor, when reading | Not supported, with a clear error |
 | JavaBean without a setter, when reading | Not supported, with a clear error |
 
@@ -445,6 +447,8 @@ that text, on every version.
 | A stub returns a `%ROWTYPE` of a table with a virtual column and an invisible one, which it leaves out, and of a table with an object type and a `VARRAY` as columns, on 23ai, 21c and 19c | Validated |
 | A stub returns an object type with `TIMESTAMP WITH TIME ZONE` and `WITH LOCAL TIME ZONE` attributes, and one with `RAW`, `BLOB` and `CLOB` attributes, the `CLOB` above 32 KB; collections of `TIMESTAMP WITH TIME ZONE` and of `RAW` elements; a nested table, a `VARRAY` and a table of object types declared in a package spec; a collection of collections, an inner one empty; on 23ai, 21c and 19c | Validated |
 | A stub returns an object type with a `BOOLEAN` attribute, `TRUE` and `NULL`, on 23ai, the only version whose SQL types take one | Validated |
+| A stub returns a `%ROWTYPE`, an OBJECT, a collection of it, a package RECORD and a package collection of a `%ROWTYPE` whose names' quotes hold a dot, and a RECORD of a package with such a name; `any()` matches and `verify` counts such an OBJECT as an argument; on drivers 23, 21 and 19, which give such a name without its quotes, as `PLSQL_TEST.Dot.T`, so the mocks read it in the dictionary | Validated |
+| A stub of a type the driver names as it names another, such as an OBJECT `"Twin.Box_T"` next to a package `"Twin"` declaring `"Box_T"`, both `PLSQL_TEST.Twin.Box_T` | Not supported, with a clear error |
 | A script in the test's edition, from the classpath, `file:`, a `Path`, an `InputStream` or text: a view and a package body replaced, seen only in the edition and gone with it; nothing of the test's transaction committed; a table, DML, `DROP`, `ALTER`, another schema and a type the schema does not edition refused before any statement runs; compilation errors reported; a package with stubs and a script refused, in either order | Validated |
 | `@PlsqlMockScript` with the JUnit 5 extension, also without Spring, and with `@EnablePlsqlMocks` in a transactional test: the class's scripts in every test, then the method's, repeated in their order, before `@BeforeEach`; found on a superclass, on the class enclosing a `@Nested` one and as a meta-annotation; one with no script, and one with different `value` and `scripts`, refused; in Spring without `@EnablePlsqlMocks`, refused | Validated |
 | Several stubs of the same routine: different arguments each answered; the same arguments twice, the later one wins; a second answer on the same stub replaces the first | Validated |
@@ -486,8 +490,6 @@ that text, on every version.
 - `XMLTYPE`, `JSON`, `LONG`, `REF` and nested cursors ([#74](https://github.com/rponte/penitent/issues/74)).
 - Synonyms with a `db link`, which are currently ignored during resolution
   ([#75](https://github.com/rponte/penitent/issues/75)).
-- A name with a double quote or a dot inside its quotes, such as `"a.b"`, in a composite type or a collection
-  ([#76](https://github.com/rponte/penitent/issues/76)).
 - A `default` method of a non-public interface on the module path: the package must be open to the library, and
   otherwise the call is a `PlsqlMappingException` saying so ([#77](https://github.com/rponte/penitent/issues/77)).
 - A block type (`@PlsqlType` on a parameter, `resultType`) in another schema or reached through a synonym: it is

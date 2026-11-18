@@ -791,3 +791,61 @@ BEGIN
   END IF;
 END;
 /
+
+-- composites whose quoted names hold a dot, which a name split on every dot would cut in two: a table, an object type,
+-- a collection, a package RECORD and a collection of rows, and a package whose name holds a dot; the real routines
+-- fail
+CREATE TABLE "Dot.Crate" (ID NUMBER, NAME VARCHAR2(20))
+/
+
+CREATE OR REPLACE TYPE "Dot.Crate_T" AS OBJECT (ID NUMBER, NAME VARCHAR2(20))
+/
+
+CREATE OR REPLACE TYPE "Dot.Crates" AS TABLE OF "Dot.Crate_T"
+/
+
+-- an object type and a type of a package that the driver gives the same name, PLSQL_TEST.Twin.Box_T
+CREATE OR REPLACE TYPE "Twin.Box_T" AS OBJECT (ID NUMBER, NAME VARCHAR2(20))
+/
+
+CREATE OR REPLACE PACKAGE "Twin" AS
+  TYPE "Box_T" IS RECORD (ID NUMBER, NAME VARCHAR2(20));
+END "Twin";
+/
+
+CREATE OR REPLACE PACKAGE freight_dots AS
+  TYPE "Dot.Rec" IS RECORD (ID NUMBER, NAME VARCHAR2(20));
+  TYPE "Dot.Rows" IS TABLE OF "Dot.Crate"%ROWTYPE;
+
+  FUNCTION row_of(p_id NUMBER) RETURN "Dot.Crate"%ROWTYPE;
+  FUNCTION object_of(p_id NUMBER) RETURN "Dot.Crate_T";
+  FUNCTION objects_of(p_id NUMBER) RETURN "Dot.Crates";
+  FUNCTION record_of(p_id NUMBER) RETURN "Dot.Rec";
+  FUNCTION rows_of(p_id NUMBER) RETURN "Dot.Rows";
+  FUNCTION name_of(p_crate "Dot.Crate_T") RETURN VARCHAR2;
+  FUNCTION twin_of(p_id NUMBER) RETURN "Twin.Box_T";
+END freight_dots;
+/
+
+CREATE OR REPLACE PACKAGE BODY freight_dots AS
+  FUNCTION row_of(p_id NUMBER) RETURN "Dot.Crate"%ROWTYPE IS BEGIN RAISE_APPLICATION_ERROR(-20460, 'real'); END;
+  FUNCTION object_of(p_id NUMBER) RETURN "Dot.Crate_T" IS BEGIN RAISE_APPLICATION_ERROR(-20460, 'real'); END;
+  FUNCTION objects_of(p_id NUMBER) RETURN "Dot.Crates" IS BEGIN RAISE_APPLICATION_ERROR(-20460, 'real'); END;
+  FUNCTION record_of(p_id NUMBER) RETURN "Dot.Rec" IS BEGIN RAISE_APPLICATION_ERROR(-20460, 'real'); END;
+  FUNCTION rows_of(p_id NUMBER) RETURN "Dot.Rows" IS BEGIN RAISE_APPLICATION_ERROR(-20460, 'real'); END;
+  FUNCTION name_of(p_crate "Dot.Crate_T") RETURN VARCHAR2 IS BEGIN RAISE_APPLICATION_ERROR(-20460, 'real'); END;
+  FUNCTION twin_of(p_id NUMBER) RETURN "Twin.Box_T" IS BEGIN RAISE_APPLICATION_ERROR(-20460, 'real'); END;
+END freight_dots;
+/
+
+CREATE OR REPLACE PACKAGE "Freight.Dots" AS
+  TYPE item_rec IS RECORD (ID NUMBER, NAME VARCHAR2(20));
+
+  FUNCTION item_of(p_id NUMBER) RETURN item_rec;
+END "Freight.Dots";
+/
+
+CREATE OR REPLACE PACKAGE BODY "Freight.Dots" AS
+  FUNCTION item_of(p_id NUMBER) RETURN item_rec IS BEGIN RAISE_APPLICATION_ERROR(-20460, 'real'); END;
+END "Freight.Dots";
+/

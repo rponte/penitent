@@ -11,6 +11,9 @@ All notable changes to this project are listed here. The format follows
 - `penitent-test`: a stub that returns an object type with a `TIMESTAMP WITH TIME ZONE` or `WITH LOCAL TIME ZONE`
   attribute, refused as "a oracle.sql.TIMESTAMPTZ cannot be written as PL/SQL", and one with a `BOOLEAN` attribute on
   Oracle 23ai, whose body did not compile with `PLS-00306`, since the driver gives the attribute as a number.
+- `penitent-test`: a stub of a composite type whose quoted name holds a dot, such as `"Dot.T"`, or of a type of a
+  package whose name holds one, did not compile: the driver gives such a name without its quotes, and the mocks cut it
+  at every dot. They now read it in the dictionary, and refuse, naming both, the rare name the driver gives two types.
 
 ### Changed
 
