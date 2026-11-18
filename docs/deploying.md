@@ -6,7 +6,8 @@ to do about it. In short:
 
 - **A body that changes** is picked up at once, unless the package keeps state between calls: then each connection
   of the pool fails once with `ORA-04068`.
-- **A signature or a type that changes** needs the application restarted, or at least the pool's connections renewed.
+- **A signature or a type that changes** is noticed at the next call, which says what changed. A changed type also
+  needs the pool's connections renewed, or the application restarted.
 - **Two parameters of the same type that swap places** give a wrong result with no error, unless the interface binds
   [by name](routines.md#binding-by-name).
 
@@ -57,21 +58,23 @@ lead to silent data corruption". To avoid the error, Oracle offers:
 
 ### The signature
 
-Penitent describes each routine once, on the method's first call. A proxy created before the change keeps the old
-description:
+Penitent describes each routine once, on the method's first call, and keeps that description. When a call with it
+fails as if the routine had changed, Penitent describes the routine again, and says what no longer fits:
 
 | Change | What the next call does |
 |---|---|
 | a parameter added at the end, with `DEFAULT` | works: the call leaves it out |
 | an overload added | works, as long as the method still fits the version it used |
-| a parameter added without `DEFAULT`, a parameter renamed when binding by name, a function turned into a procedure, or the routine removed | fails with Oracle's error, such as `PLS-00306: wrong number or types of arguments`, `PLS-00222` or `PLS-00302`: the call does not run |
+| a parameter added without `DEFAULT`, a parameter renamed when binding by name, a function turned into a procedure, or the routine removed | fails without running: Oracle refuses it with `PLS-00306: wrong number or types of arguments`, `PLS-00222` or `PLS-00302`, and Penitent, having read the routine again, throws a `PlsqlMappingException` that says so, such as `PLSQL_TEST.ORDERS_PKG.F changed since this proxy described it: the method declares 2 parameters, but PLSQL_TEST.ORDERS_PKG.F expects 3: [...]`. The calls after it are refused before they run, as a new proxy would, until the method fits again |
 | the return type changed | fails converting the value, such as `ORA-06502` |
 | **two parameters of the same type swap places** | **returns a wrong result with no error** when binding by position: `f(10, 3)` returned `-7` instead of `7`. Binding by name returned `7` |
 | **a parameter's type changed to one Oracle converts to**, such as `NUMBER` to `VARCHAR2` | **runs, with Oracle's implicit conversion**: the result depends on what the routine now does with the value |
 
-The failures are safe: the call does not run. After a restart, the same change gives Penitent's own message instead,
-saying what no longer matches, as in [Troubleshooting](troubleshooting.md#the-method-does-not-match-the-routine). A
-restart does not help the last two rows, which no error reveals:
+The failures are safe: the call does not run, and Penitent does not repeat it. Update the method to the new
+signature, as in [Troubleshooting](troubleshooting.md#the-method-does-not-match-the-routine). Penitent says a routine
+changed only when it reads it again and the method no longer fits: a `PLS-00306` raised inside the routine, by its own
+dynamic PL/SQL, stays as Oracle says it. Neither Penitent nor a restart can help the last two rows, which no error
+reveals:
 
 - **Bind by name** when parameters of the same type may change places: `@PlsqlPackage(value = "...", bind =
   PlsqlBind.BY_NAME)`, or for every interface in [Settings](settings.md). Swapped parameters then still get the
@@ -83,7 +86,7 @@ restart does not help the last two rows, which no error reveals:
 
 | Change | What the next call does |
 |---|---|
-| an object type gains an attribute, with `ALTER TYPE ... ADD ATTRIBUTE ... CASCADE` | fails with `ORA-03101: invalid input data`. A new proxy on the same connections still fails, with `ORA-17049: Inconsistent Java and SQL object types`, because the driver kept the old type in each connection |
+| an object type gains an attribute, with `ALTER TYPE ... ADD ATTRIBUTE ... CASCADE` | the database refuses the value in the old shape: `ORA-03101: invalid input data`, or, on 21c, an internal `ORA-00600 [kope2_readstr232]` that also closes the connection. Penitent reads the type again and, if the Java type no longer covers it, says so: `a type of ... changed since this proxy described it: Pair does not cover attribute(s) of PAIR_T: [C NUMBER]`, at that call or, on 21c, at the next one. Once the Java type covers it, the connections that used the old type still fail, with `ORA-17049: Inconsistent Java and SQL object types`, because the driver keeps the old type in each connection: Penitent keeps that error, with its code, and adds what to do |
 | the table of a `%ROWTYPE` gains a column | **the database closes the connection**: `ORA-03138: connection terminated due to security policy violation`, or, with driver 19, `No more data to read from socket` |
 
 Only new connections read the new type: the database session already sees the new one, but the driver keeps the
@@ -168,7 +171,8 @@ Two ways to handle it, both outside Penitent:
 - **Before:** prefer packages without state, and bind by name where parameters of the same type could change places.
 - **During:** a change of signature or type is a change of the application's contract with the database: deploy it
   with the application, not under it.
-- **After:** restart the application, or renew the pool's connections, when a signature or a type changed. Run
+- **After:** update the methods and types that no longer fit, as the calls' errors say, and renew the pool's
+  connections, or restart the application, when a type changed. Run
   [validation](validation.md) at startup, so that a method that no longer matches fails then, with a clear message,
   rather than on the first request.
 

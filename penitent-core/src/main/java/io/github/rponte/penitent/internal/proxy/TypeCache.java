@@ -65,6 +65,14 @@ final class TypeCache {
 				k -> BlockMetadata.declaredType(new Dictionary(connection), schema, declared));
 	}
 
+	/** Forgets every type it read, after one changed in the database: the next use reads them again. */
+	void clear() {
+		bindings.clear();
+		collectionTypes.clear();
+		declaredTypes.clear();
+		cursors.clear();
+	}
+
 	/** How to read a cursor whose rows become {@code elementType}. */
 	CursorBinding cursor(Class<?> elementType) {
 		return cursors.computeIfAbsent(elementType, t -> CursorBinding.of(t, converters, this::binding));
