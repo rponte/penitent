@@ -61,6 +61,10 @@ All notable changes to this project are listed here. The format follows
 
 ### Fixed
 
+- `NaN` and the infinities sent to a `BINARY_DOUBLE` or a `BINARY_FLOAT` parameter failed in the driver, with a
+  `NumberFormatException` or an overflow, since the value was bound as a `NUMBER`. Such a parameter is bound with its
+  type now, and a block binds a `NaN` or an infinity as a `BINARY_DOUBLE`. Sent to a `NUMBER`, which holds neither,
+  the value is refused before the call, naming the parameter.
 - `penitent-test`: a call to a stubbed routine failed with `ORA-40478` when its arguments, recorded for `verify`,
   went above 4,000 bytes, such as a `VARCHAR2` of 5,000 characters or a large `CLOB`. The arguments are recorded in a
   `CLOB` now, and the message of a call no stub matches shows their first 1,500 characters.

@@ -126,6 +126,8 @@ Where the PL/SQL guarantees the value is never `null`, driver 23 works as it is.
 | `BINARY_INTEGER`, `PLS_INTEGER` | `Integer` | Validated |
 | `FLOAT`, `BINARY_DOUBLE`, `BINARY_FLOAT` as return value | `BigDecimal`, `Double`, `Float` | Validated, with `NLS_TERRITORY` `AMERICA` and `BRAZIL` |
 | `BINARY_DOUBLE_NAN` as return value | `Double` | Validated |
+| `NaN` and the infinities sent to a `BINARY_DOUBLE` or a `BINARY_FLOAT`: as `IN`, `IN OUT`, an attribute of an object type, an element of a collection and a parameter of a block, bound through the driver's `setBinaryDouble` and `setBinaryFloat` | `Double`, `Float` | Validated, on drivers 23, 21 and 19 |
+| `NaN` or an infinity sent to a `NUMBER` | `Double`, `Float` | Rejected with `PlsqlMappingException`, before the call, naming the parameter: `NUMBER` holds neither |
 | `VARCHAR2` | `String`, enum by `name()`, `Boolean` by `Y`/`N` | Validated |
 | `VARCHAR2` up to 32 KB | `String` | Validated |
 | `VARCHAR2` with a value other than `Y` and `N` | `Boolean` | Validated: `PlsqlMappingException` citing the value |

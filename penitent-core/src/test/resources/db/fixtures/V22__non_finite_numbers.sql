@@ -1,0 +1,43 @@
+--
+-- NaN and the infinities, which BINARY_DOUBLE and BINARY_FLOAT hold and NUMBER does not: as an IN OUT, as the
+-- elements of a collection, and a NUMBER that cannot take them.
+--
+
+CREATE TYPE BINARY_DOUBLE_LIST_T AS TABLE OF BINARY_DOUBLE;
+/
+
+CREATE PACKAGE FIXTURE_NON_FINITE AS
+	PROCEDURE negate(p_value IN OUT BINARY_DOUBLE);
+
+	FUNCTION echo_doubles(p_value BINARY_DOUBLE_LIST_T) RETURN BINARY_DOUBLE_LIST_T;
+
+	FUNCTION echo_number(p_value NUMBER) RETURN NUMBER;
+
+	-- whether PL/SQL sees what Java sent: 'NaN', 'Inf' or '-Inf'
+	FUNCTION describe(p_value BINARY_DOUBLE) RETURN VARCHAR2;
+END FIXTURE_NON_FINITE;
+/
+
+CREATE PACKAGE BODY FIXTURE_NON_FINITE AS
+	PROCEDURE negate(p_value IN OUT BINARY_DOUBLE) IS
+	BEGIN
+		p_value := -p_value;
+	END;
+
+	FUNCTION echo_doubles(p_value BINARY_DOUBLE_LIST_T) RETURN BINARY_DOUBLE_LIST_T IS
+	BEGIN
+		RETURN p_value;
+	END;
+
+	FUNCTION echo_number(p_value NUMBER) RETURN NUMBER IS
+	BEGIN
+		RETURN p_value;
+	END;
+
+	FUNCTION describe(p_value BINARY_DOUBLE) RETURN VARCHAR2 IS
+	BEGIN
+		RETURN CASE WHEN p_value IS NAN THEN 'NaN' WHEN p_value = BINARY_DOUBLE_INFINITY THEN 'Inf'
+			WHEN p_value = -BINARY_DOUBLE_INFINITY THEN '-Inf' ELSE TO_CHAR(p_value) END;
+	END;
+END FIXTURE_NON_FINITE;
+/

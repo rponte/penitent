@@ -117,4 +117,19 @@ final class Jdbc {
 			default -> Types.VARCHAR;
 		};
 	}
+
+	/**
+	 * {@code value} bound as a {@code BINARY_DOUBLE} or a {@code BINARY_FLOAT}, the Oracle types that hold {@code NaN}
+	 * and the infinities, through the driver's own methods: drivers 21 and 23 also take {@code setObject} with the
+	 * type's code, and driver 19 refuses it as an invalid column type.
+	 */
+	static void setBinaryFloatingPoint(java.sql.PreparedStatement statement, int position, Number value,
+			String dataType) throws java.sql.SQLException {
+		oracle.jdbc.OraclePreparedStatement oracle = statement.unwrap(oracle.jdbc.OraclePreparedStatement.class);
+		if ("BINARY_FLOAT".equals(dataType)) {
+			oracle.setBinaryFloat(position, value.floatValue());
+		} else {
+			oracle.setBinaryDouble(position, value.doubleValue());
+		}
+	}
 }

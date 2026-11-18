@@ -214,7 +214,15 @@ final class BlockCall {
 		} else {
 			Object bindable = ScalarCodec.encode(value, ValueConversion.from(literals));
 			log.sent(name, bindable);
-			statement.setObject(position, ScalarCodec.forDriver(bindable));
+			if (bindable instanceof Double number && !Double.isFinite(number)) {
+				// a block's parameter has no declared type, and the driver binds a double as a NUMBER, which holds
+				// no NaN nor infinity: a BINARY_DOUBLE does, and a finite double keeps its NUMBER
+				Jdbc.setBinaryFloatingPoint(statement, position, number, "BINARY_DOUBLE");
+			} else if (bindable instanceof Float number && !Float.isFinite(number)) {
+				Jdbc.setBinaryFloatingPoint(statement, position, number, "BINARY_FLOAT");
+			} else {
+				statement.setObject(position, ScalarCodec.forDriver(bindable));
+			}
 		}
 	}
 
