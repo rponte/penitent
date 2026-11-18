@@ -14,6 +14,9 @@ All notable changes to this project are listed here. The format follows
 
 ### Changed
 
+- A JavaBean with both `isX()` and `getX()` for one property is refused, naming both, where the library used one of
+  them without saying which: they may answer differently, as a `boolean` and a `Boolean` that is `null`.
+
 - `penitent-test`: `penitent-mock-schema.sql` is version 2: `PENITENT_MOCK_CALLS.ARGS` and the argument of
   `PENITENT_MOCK.record` are `CLOB`s. A schema prepared by version 1 is refused by `begin()`, asking for the script to
   be applied again, which `PlsqlMocks.prepare` does; the script drops the table of version 1, which holds only the
