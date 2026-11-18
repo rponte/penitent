@@ -310,6 +310,7 @@ Where the PL/SQL guarantees the value is never `null`, driver 23 works as it is.
 | `boolean` or `Boolean` parameter, including `null`: goes as a PL/SQL `BOOLEAN` | Validated |
 | `@PlsqlBoolean` on the parameter or on the method: replaces `BOOLEAN` with the literal | Validated |
 | Composite or collection parameter, with `@PlsqlType` on the parameter or on the composite's class: OBJECT, collection of scalars, of OBJECT or of collections, and `null` | Validated |
+| A block's `@PlsqlType` and `resultType` naming a type of another schema, `SCHEMA.TYPE`, `SCHEMA.PACKAGE.TYPE` and `SCHEMA.TABLE%ROWTYPE`, or reached through a private synonym of an OBJECT, a collection, a package or a table, resolved as PL/SQL resolves them; one that does not exist, refused naming it; on 23ai, 21c and 19c | Validated |
 | Composite or collection parameter without `@PlsqlType` | Not supported, with a clear error |
 | `:` inside a string literal, including `q'[...]'`, a comment or a quoted identifier: not a placeholder | Validated |
 | `?` inside a string literal and a comment | Validated |
@@ -492,8 +493,6 @@ that text, on every version.
   ([#75](https://github.com/rponte/penitent/issues/75)).
 - A `default` method of a non-public interface on the module path: the package must be open to the library, and
   otherwise the call is a `PlsqlMappingException` saying so ([#77](https://github.com/rponte/penitent/issues/77)).
-- A block type (`@PlsqlType` on a parameter, `resultType`) in another schema or reached through a synonym: it is
-  resolved in the session's schema only ([#78](https://github.com/rponte/penitent/issues/78)).
 - A collection column in a cursor, and a collection of collections as an attribute, beyond the clear error
   ([#79](https://github.com/rponte/penitent/issues/79)).
 - A signature change in the database after the proxy has cached the metadata
