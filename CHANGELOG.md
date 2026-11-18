@@ -22,6 +22,9 @@ All notable changes to this project are listed here. The format follows
 - `penitent-test`: a script that replaces a package spec without its body compiles the body in the test's edition at
   its end, and is refused, with the body's errors, when the body no longer fits the spec, which would otherwise fail
   with `ORA-04063` at the first call.
+- `penitent-test`: a script refused because the schema does not edition its type, as a synonym in a schema prepared by
+  `penitent-mock-admin.sql`, also warns that the `ALTER USER` it asks for fails with `ORA-38819` when an object without
+  editions depends on one of them, and that `FORCE` would leave that object `INVALID`.
 - `penitent-test`: `penitent-mock-schema.sql` is version 2: `PENITENT_MOCK_CALLS.ARGS` and the argument of
   `PENITENT_MOCK.record` are `CLOB`s. A schema prepared by version 1 is refused by `begin()`, asking for the script to
   be applied again, which `PlsqlMocks.prepare` does; the script drops the table of version 1, which holds only the

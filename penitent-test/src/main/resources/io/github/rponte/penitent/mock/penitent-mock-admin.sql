@@ -18,4 +18,9 @@ ALTER USER ${schema} ENABLE EDITIONS FOR FUNCTION;
 
 ALTER USER ${schema} ENABLE EDITIONS FOR PROCEDURE;
 
+-- Synonyms are left out: an object type, a table or a materialized view using one of the schema's private synonyms, a
+-- common pattern, makes ENABLE EDITIONS FOR SYNONYM fail with ORA-38819, and FORCE would leave that object INVALID
+-- for good. Only a test that applies a script with a synonym needs them; it is refused with what to do, and the DBA,
+-- who knows the schema, decides.
+
 GRANT CREATE ANY EDITION, DROP ANY EDITION TO ${schema};
