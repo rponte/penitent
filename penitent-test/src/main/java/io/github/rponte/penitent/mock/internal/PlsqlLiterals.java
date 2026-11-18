@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.sql.Blob;
 import java.sql.Clob;
+import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Struct;
 import java.sql.Timestamp;
@@ -22,6 +23,7 @@ import java.util.Locale;
 import java.util.StringJoiner;
 
 import io.github.rponte.penitent.internal.convert.OracleIntervalCodec;
+import io.github.rponte.penitent.internal.convert.OracleTimeZoneCodec;
 
 import oracle.jdbc.OracleArray;
 import oracle.sql.INTERVALDS;
@@ -52,7 +54,16 @@ public final class PlsqlLiterals {
 	 * How PL/SQL writes a value of a type the driver names: the type mark of its constructor or qualified expression,
 	 * and whether its elements go with named indexes, as those of an {@code INDEX BY} do.
 	 */
-	public record Mark(String name, boolean indexed) {
+	public record Mark(String name, boolean indexed, List<String> attributeTypes) {
+
+		public Mark(String name, boolean indexed) {
+			this(name, indexed, List.of());
+		}
+
+		/** Whether the attribute at {@code index}, from 0, is a BOOLEAN, as the dictionary declares it. */
+		boolean isBoolean(int index) {
+			return index < attributeTypes.size() && "BOOLEAN".equals(attributeTypes.get(index));
+		}
 	}
 
 	/** The {@link Mark} of each type the driver names, which the dictionary tells. */
@@ -201,20 +212,22 @@ public final class PlsqlLiterals {
 	 * {@code INDEX BY}, a qualified expression with named indexes from 1, which Oracle 19c requires; and the rest as
 	 * literals. {@code marks} names each type as PL/SQL writes it, owner included, so it resolves in any schema.
 	 */
-	public static Written constructor(Object encoded, TypeMarks marks) throws SQLException {
-		return new Written(write(encoded, marks));
+	public static Written constructor(Object encoded, TypeMarks marks, Connection connection)
+			throws SQLException {
+		return new Written(write(encoded, marks, connection));
 	}
 
-	private static String write(Object value, TypeMarks marks) throws SQLException {
+	private static String write(Object value, TypeMarks marks, Connection connection) throws SQLException {
 		if (value == null) {
 			return "NULL";
 		}
 		if (value instanceof Struct struct) {
-			return arguments(marks.of(struct.getSQLTypeName()), struct.getAttributes(), marks);
+			Mark mark = marks.of(struct.getSQLTypeName());
+			return arguments(mark, attributesOf(struct, mark, connection), marks, connection);
 		}
 		if (value instanceof OracleArray array) {
 			// java.sql.Array has the element's type, not its own: the driver's does
-			return arguments(marks.of(array.getSQLTypeName()), (Object[]) array.getArray(), marks);
+			return arguments(marks.of(array.getSQLTypeName()), (Object[]) array.getArray(), marks, connection);
 		}
 		if (value instanceof Timestamp timestamp) {
 			// how the driver hands back a DATE or a TIMESTAMP: as a TIMESTAMP literal, it converts to either one
@@ -223,12 +236,36 @@ public final class PlsqlLiterals {
 		return of(value);
 	}
 
-	private static String arguments(Mark type, Object[] values, TypeMarks marks) throws SQLException {
+	private static String arguments(Mark type, Object[] values, TypeMarks marks, Connection connection)
+			throws SQLException {
 		StringJoiner joined = new StringJoiner(", ", type.name() + "(", ")");
 		for (int i = 0; i < values.length; i++) {
-			joined.add((type.indexed() ? (i + 1) + " => " : "") + write(values[i], marks));
+			joined.add((type.indexed() ? (i + 1) + " => " : "") + write(values[i], marks, connection));
 		}
 		return joined.toString();
+	}
+
+	/**
+	 * The attributes of {@code struct} as the writer takes them. The driver hands an attribute in its own types where
+	 * the core reads Java ones: a {@code TIMESTAMP WITH TIME ZONE} or {@code WITH LOCAL TIME ZONE} becomes a
+	 * {@code ZonedDateTime}, from its bytes, as the core reads it, since driver 19 has no method for it; and a
+	 * {@code BOOLEAN}, which the core binds as {@code 1} or {@code 0}, becomes {@code TRUE} or {@code FALSE}, from the
+	 * attribute's type in the dictionary, since the driver's metadata calls it a {@code NUMBER}.
+	 */
+	private static Object[] attributesOf(Struct struct, Mark mark, Connection connection) throws SQLException {
+		Object[] attributes = struct.getAttributes();
+		for (int i = 0; i < attributes.length; i++) {
+			Object value = attributes[i];
+			if (value instanceof oracle.sql.TIMESTAMPTZ zoned) {
+				attributes[i] = OracleTimeZoneCodec.decodeTimestampTz(zoned.toBytes());
+			} else if (value instanceof oracle.sql.TIMESTAMPLTZ local) {
+				attributes[i] = OracleTimeZoneCodec.decodeTimestampLtz(local.toBytes(),
+						OracleTimeZoneCodec.databaseZone(connection), OracleTimeZoneCodec.sessionZone(connection));
+			} else if (value instanceof Number number && mark.isBoolean(i)) {
+				attributes[i] = number.intValue() != 0;
+			}
+		}
+		return attributes;
 	}
 
 	/**

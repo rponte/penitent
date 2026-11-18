@@ -6,6 +6,12 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- `penitent-test`: a stub that returns an object type with a `TIMESTAMP WITH TIME ZONE` or `WITH LOCAL TIME ZONE`
+  attribute, refused as "a oracle.sql.TIMESTAMPTZ cannot be written as PL/SQL", and one with a `BOOLEAN` attribute on
+  Oracle 23ai, whose body did not compile with `PLS-00306`, since the driver gives the attribute as a number.
+
 ### Changed
 
 - `penitent-test`: `penitent-mock-schema.sql` is version 2: `PENITENT_MOCK_CALLS.ARGS` and the argument of

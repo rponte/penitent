@@ -264,7 +264,7 @@ public final class MockSession implements RowTypes {
 
 	/** A value the core encoded, written as PL/SQL. */
 	private PlsqlLiterals.Written literal(Object encoded, Connection connection) throws SQLException {
-		return PlsqlLiterals.constructor(encoded, driverName -> markOf(driverName, connection));
+		return PlsqlLiterals.constructor(encoded, driverName -> markOf(driverName, connection), connection);
 	}
 
 	/**
@@ -301,8 +301,25 @@ public final class MockSession implements RowTypes {
 					}
 				}
 			}
+			return new PlsqlLiterals.Mark(PlsqlLiterals.quoted(parts), false, attributeTypes(connection, parts));
 		}
 		return new PlsqlLiterals.Mark(PlsqlLiterals.quoted(parts), false);
+	}
+
+	/** The types of an object type's attributes, in their order, as the dictionary declares them; none for a collection. */
+	private static List<String> attributeTypes(Connection connection, List<String> parts) throws SQLException {
+		List<String> types = new ArrayList<>();
+		try (PreparedStatement select = connection.prepareStatement("SELECT ATTR_TYPE_NAME FROM ALL_TYPE_ATTRS"
+				+ " WHERE OWNER = ? AND TYPE_NAME = ? ORDER BY ATTR_NO")) {
+			select.setString(1, parts.get(0));
+			select.setString(2, parts.get(1));
+			try (ResultSet rows = select.executeQuery()) {
+				while (rows.next()) {
+					types.add(rows.getString(1));
+				}
+			}
+		}
+		return types;
 	}
 
 	/** Compiles the package's body with its stubs, and gives the PL/SQL generated for {@code any}'s routine. */
