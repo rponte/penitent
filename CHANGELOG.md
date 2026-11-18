@@ -6,17 +6,15 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
-### Fixed
-
-- `penitent-test`: a stub that returns an object type with a `TIMESTAMP WITH TIME ZONE` or `WITH LOCAL TIME ZONE`
-  attribute, refused as "a oracle.sql.TIMESTAMPTZ cannot be written as PL/SQL", and one with a `BOOLEAN` attribute on
-  Oracle 23ai, whose body did not compile with `PLS-00306`, since the driver gives the attribute as a number.
-- `penitent-test`: a stub of a composite type whose quoted name holds a dot, such as `"Dot.T"`, or of a type of a
-  package whose name holds one, did not compile: the driver gives such a name without its quotes, and the mocks cut it
-  at every dot. They now read it in the dictionary, and refuse, naming both, the rare name the driver gives two types.
-
 ### Changed
 
+- A routine or a type that changed in the database after a proxy described it, as a deploy under a running
+  application does, is described again when a call fails because of it. A call that failed with `PLS-00306`,
+  `PLS-00222` or `PLS-00302`, or with `ORA-03101` or 21c's `ORA-00600` for a composite, now throws a
+  `PlsqlMappingException` that says the routine or the type changed since the proxy described it, and what no longer
+  fits, as a new proxy would, rather than Oracle's raw error until a restart. `ORA-17049` stays a
+  `PlsqlExecutionException`, with its code, and says that the driver keeps the old type in each connection until it is
+  renewed. The call is never repeated.
 - A JavaBean with both `isX()` and `getX()` for one property is refused, naming both, where the library used one of
   them without saying which: they may answer differently, as a `boolean` and a `Boolean` that is `null`.
 - `penitent-test`: a script that replaces a package spec without its body compiles the body in the test's edition at
@@ -82,6 +80,12 @@ All notable changes to this project are listed here. The format follows
 
 ### Fixed
 
+- `penitent-test`: a stub that returns an object type with a `TIMESTAMP WITH TIME ZONE` or `WITH LOCAL TIME ZONE`
+  attribute, refused as "a oracle.sql.TIMESTAMPTZ cannot be written as PL/SQL", and one with a `BOOLEAN` attribute on
+  Oracle 23ai, whose body did not compile with `PLS-00306`, since the driver gives the attribute as a number.
+- `penitent-test`: a stub of a composite type whose quoted name holds a dot, such as `"Dot.T"`, or of a type of a
+  package whose name holds one, did not compile: the driver gives such a name without its quotes, and the mocks cut it
+  at every dot. They now read it in the dictionary, and refuse, naming both, the rare name the driver gives two types.
 - `penitent-test`: dropping the test's edition at `end()` failed now and then on Oracle 19c, on the Autonomous
   Database, with `ORA-00060`, a deadlock, or `ORA-00604` over `ORA-04043`. The drop is tried again on those errors, up
   to 3 times, with a warning in the log each time; any other error still fails at once.

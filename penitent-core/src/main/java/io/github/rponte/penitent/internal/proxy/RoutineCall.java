@@ -55,9 +55,54 @@ final class RoutineCall {
 	}
 
 	Object call(Method method, Object[] arguments, Connection connection) {
+		boolean described = routines.containsKey(method);
 		RoutineMetadata routine = Caches.get(routines, method, m -> describe(m, connection));
 		requireToAgree(method, routine, arguments.length);
-		return call(routine, method, arguments, ReturnType.of(method) != void.class, connection);
+		try {
+			return call(routine, method, arguments, ReturnType.of(method) != void.class, connection);
+		} catch (SqlFailure e) {
+			if (described) {
+				explainChange(method, routine, e.failure().cause(), connection);
+			}
+			throw StaleTypes.explained(e);
+		}
+	}
+
+	/** Oracle's errors that a call with a signature the routine no longer has raises, from its {@code PLS-} code. */
+	private static final List<String> SIGNATURE_CHANGED = List.of("PLS-00306", "PLS-00222", "PLS-00302");
+
+	/**
+	 * A call described before failed as if the routine, or a type it takes, had changed in the database since, as a
+	 * deploy under a running application does. The routine, or the types, are described again, so that the cache holds
+	 * them as they are now; if the method no longer fits, the error says so as a new proxy would, naming the change.
+	 * The call is not repeated: it failed, and only the caller knows whether it may run again. If the method still
+	 * fits, nothing is claimed, and the original error goes on; so it does if the dictionary cannot be read, as when the
+	 * error closed the connection, which 21c does: the cache is already cleared, and the next call reads it again.
+	 */
+	private void explainChange(Method method, RoutineMetadata routine, SQLException cause, Connection connection) {
+		String message = String.valueOf(cause.getMessage());
+		if (SIGNATURE_CHANGED.stream().anyMatch(message::contains)) {
+			routines.remove(method, routine);
+			try {
+				requireToAgree(method, Caches.get(routines, method, m -> describe(m, connection)),
+						method.getParameterCount());
+			} catch (PlsqlMappingException e) {
+				throw new PlsqlMappingException(routine.qualifiedName() + " changed since this proxy described it: "
+						+ e.getMessage(), cause);
+			} catch (SqlFailure unreadable) {
+				routines.remove(method);
+			}
+		} else if (StaleTypes.OLDER_SHAPE.contains(cause.getErrorCode())) {
+			types.clear();
+			try {
+				validate(method, connection);
+			} catch (PlsqlMappingException e) {
+				throw new PlsqlMappingException("a type of " + routine.qualifiedName()
+						+ " changed since this proxy described it: " + e.getMessage(), cause);
+			} catch (SqlFailure unreadable) {
+				types.clear();
+			}
+		}
 	}
 
 	/**
