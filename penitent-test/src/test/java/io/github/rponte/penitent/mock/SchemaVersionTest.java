@@ -29,10 +29,8 @@ class SchemaVersionTest {
 		BigDecimal takesText(String pValue);
 	}
 
-	@Test
-	@DisplayName("a schema of version 1 is refused, saying what to apply, and preparing it again moves it to version 2")
-	void version_1_is_refused_and_replaced() throws Exception {
-		DataSource pool = TestDatabase.pool();
+	/** Turns the schema back into version 1: the table with its arguments in a VARCHAR2, and the package. */
+	private static void version1(DataSource pool) throws Exception {
 		try (Connection connection = pool.getConnection(); Statement statement = connection.createStatement()) {
 			statement.execute("DROP TABLE PENITENT_MOCK_CALLS");
 			statement.execute("CREATE TABLE PENITENT_MOCK_CALLS (EDITION_NAME VARCHAR2(128) NOT NULL, ROUTINE"
@@ -43,6 +41,22 @@ class SchemaVersionTest {
 					+ " RETURN 1; END; PROCEDURE record(p_routine VARCHAR2, p_args VARCHAR2) IS BEGIN NULL; END;"
 					+ " END PENITENT_MOCK;");
 		}
+	}
+
+	private static String argsType(DataSource pool) throws Exception {
+		try (Connection connection = pool.getConnection(); Statement statement = connection.createStatement();
+				ResultSet rows = statement.executeQuery("SELECT DATA_TYPE FROM USER_TAB_COLUMNS WHERE TABLE_NAME ="
+						+ " 'PENITENT_MOCK_CALLS' AND COLUMN_NAME = 'ARGS'")) {
+			rows.next();
+			return rows.getString(1);
+		}
+	}
+
+	@Test
+	@DisplayName("a schema of version 1 is refused, saying what to apply, and preparing it again moves it to version 2")
+	void version_1_is_refused_and_replaced() throws Exception {
+		DataSource pool = TestDatabase.pool();
+		version1(pool);
 		DataSource dataSource = PlsqlMocks.wrap(pool);
 
 		assertThatThrownBy(() -> PlsqlMocks.on(dataSource).begin())
@@ -51,12 +65,7 @@ class SchemaVersionTest {
 				.hasMessageContaining("apply penitent-mock-schema.sql again");
 
 		PlsqlMocks.prepare(TestDatabase.adminPool(), pool, OracleUnderTest.USER);
-		try (Connection connection = pool.getConnection(); Statement statement = connection.createStatement();
-				ResultSet rows = statement.executeQuery("SELECT DATA_TYPE FROM USER_TAB_COLUMNS WHERE TABLE_NAME ="
-						+ " 'PENITENT_MOCK_CALLS' AND COLUMN_NAME = 'ARGS'")) {
-			rows.next();
-			assertThat(rows.getString(1)).isEqualTo("CLOB");
-		}
+		assertThat(argsType(pool)).isEqualTo("CLOB");
 		try (PlsqlMocks mocks = PlsqlMocks.on(dataSource)) {
 			mocks.begin();
 			Args mock = mocks.mock(Args.class);
@@ -65,6 +74,23 @@ class SchemaVersionTest {
 
 			assertThat(PlsqlPackages.create(Args.class, dataSource).takesText(text)).isEqualByComparingTo("1");
 			verify(mock).takesText(text);
+		}
+	}
+
+	@Test
+	@DisplayName("applied by another user, with the session's current schema set to the owner, as a migration tool may,"
+			+ " the script replaces the table of version 1 too")
+	void applied_by_another_user_with_the_current_schema() throws Exception {
+		DataSource pool = TestDatabase.pool();
+		version1(pool);
+		try (com.zaxxer.hikari.HikariDataSource asAdmin = TestDatabase.adminPool()) {
+			asAdmin.setConnectionInitSql("ALTER SESSION SET CURRENT_SCHEMA = " + OracleUnderTest.USER);
+			PlsqlMocks.prepare(TestDatabase.adminPool(), asAdmin, OracleUnderTest.USER);
+		}
+
+		assertThat(argsType(pool)).isEqualTo("CLOB");
+		try (PlsqlMocks mocks = PlsqlMocks.on(PlsqlMocks.wrap(pool))) {
+			mocks.begin();
 		}
 	}
 }

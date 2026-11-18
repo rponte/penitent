@@ -11,7 +11,8 @@ All notable changes to this project are listed here. The format follows
 - `penitent-test`: `penitent-mock-schema.sql` is version 2: `PENITENT_MOCK_CALLS.ARGS` and the argument of
   `PENITENT_MOCK.record` are `CLOB`s. A schema prepared by version 1 is refused by `begin()`, asking for the script to
   be applied again, which `PlsqlMocks.prepare` does; the script drops the table of version 1, which holds only the
-  calls of tests, and creates it again.
+  calls of tests, and creates it again. It finds that table in the session's current schema, so another user may
+  apply it with the current schema set to the owner, as a migration tool such as Flyway does.
 - `penitent-test`: the package the mocks compile in the test's edition for a `%ROWTYPE` declares `LITERAL_T` next to
   `ROW_T`, which the generated PL/SQL in the log shows.
 - `penitent-test`: `penitent-mock-admin.sql` also enables editions for functions and procedures, each in a statement

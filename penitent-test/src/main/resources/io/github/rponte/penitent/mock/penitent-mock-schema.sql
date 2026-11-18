@@ -1,15 +1,19 @@
 -- Penitent mocks, prerequisites for the schema owner: run once, as the owner of the mocked packages, after
--- penitent-mock-admin.sql. Each mocked routine records its calls through PENITENT_MOCK, for verify().
+-- penitent-mock-admin.sql, or as another user with the session's current schema set to the owner, as a migration tool
+-- such as Flyway may run it. Each mocked routine records its calls through PENITENT_MOCK, for verify().
 --
 -- PENITENT_MOCK.VERSION tells the library which version of this script is applied: when it changes, the library
 -- asks for the script to be applied again.
 
 -- version 1 kept the arguments in a VARCHAR2(4000), which a long text or a LOB overflows: a table of that version is
--- dropped, to be created again. It holds only the calls of tests, which each test drops when it ends.
+-- dropped, to be created again. It holds only the calls of tests, which each test drops when it ends. The table is
+-- looked up in the current schema, not the user's, which differ when another user applies the script.
 DECLARE
-  l_type USER_TAB_COLUMNS.DATA_TYPE%TYPE;
+  l_type ALL_TAB_COLUMNS.DATA_TYPE%TYPE;
 BEGIN
-  SELECT DATA_TYPE INTO l_type FROM USER_TAB_COLUMNS WHERE TABLE_NAME = 'PENITENT_MOCK_CALLS' AND COLUMN_NAME = 'ARGS';
+  SELECT DATA_TYPE INTO l_type FROM ALL_TAB_COLUMNS
+   WHERE OWNER = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA') AND TABLE_NAME = 'PENITENT_MOCK_CALLS'
+     AND COLUMN_NAME = 'ARGS';
   IF l_type <> 'CLOB' THEN
     EXECUTE IMMEDIATE 'DROP TABLE PENITENT_MOCK_CALLS';
   END IF;
