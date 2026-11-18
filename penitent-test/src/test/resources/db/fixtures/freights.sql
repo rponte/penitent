@@ -456,7 +456,9 @@ CREATE OR REPLACE PACKAGE BODY freight_records AS
     l_quote quote_t := quote_of(p_uf);
     l_item freight_item%ROWTYPE := item_of(p_id);
   BEGIN
-    RETURN l_quote.uf || '=' || l_quote.value || ', ' || l_item.id || '/' || l_item.uf;
+    -- with its own decimal separator: an implicit conversion takes the session's, which the JVM's locale sets
+    RETURN l_quote.uf || '=' || TO_CHAR(l_quote.value, 'TM9', 'NLS_NUMERIC_CHARACTERS=''.,''') || ', ' || l_item.id
+      || '/' || l_item.uf;
   END describe;
 
   FUNCTION describe_crate(p_crate "Crate"%ROWTYPE) RETURN VARCHAR2 IS
