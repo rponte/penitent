@@ -435,7 +435,10 @@ rather than ignored. With any other test framework, which has no extension, call
 - **A synonym** can be replaced only in a schema whose editions keep synonyms, which `penitent-mock-admin.sql` does
   not enable: on a test database, a DBA can run `ALTER USER <schema> ENABLE EDITIONS FOR SYNONYM`, which cannot be
   undone. Then the test reaches the synonym's new target, from Java and from PL/SQL, and every other session the
-  real one.
+  real one. The admin script leaves synonyms out because an object without editions that uses one of the schema's
+  private synonyms, such as `CREATE TYPE price_t AS OBJECT (value money_syn)`, makes that statement fail with
+  `ORA-38819`, and `FORCE` would leave the object `INVALID` for good. Since that pattern is common, and replacing a
+  synonym in a test is rare, the choice is left to the DBA, who knows the schema.
 - **A package has stubs or is replaced by a script in a test, not both:** a stub rewrites the body as the default
   edition has it, so one would undo the other.
 - **A statement that does not compile stops the script there,** with its errors, as a stub's would be; the statements
@@ -624,6 +627,7 @@ or a container init script:
 > view that reads one of the schema's views makes the views' statement fail with `ORA-38819`: the packages are
 > enabled anyway, by a statement of their own, and a script replacing a view is refused with what to do.
 > `ENABLE EDITIONS FOR VIEW FORCE` would get past it, but leaves that materialized view `INVALID`.
+> Synonyms are left out for the same reason, more often met: see [Replacing a view or a package](#replacing-a-view-or-a-package).
 
 The library never applies them by itself: when a test begins, it checks them, and if something is missing, the test
 fails with a message that lists everything missing and names the scripts.

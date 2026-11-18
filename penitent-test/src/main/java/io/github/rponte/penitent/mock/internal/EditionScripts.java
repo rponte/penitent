@@ -54,7 +54,9 @@ public final class EditionScripts {
 				throw new IllegalStateException(statement.where() + ": " + statement.object() + " would replace the real "
 						+ statement.type() + " for every session, for good, since " + schema + " does not edition its "
 						+ statement.type() + " objects. On a test database, a DBA can run ALTER USER " + schema
-						+ " ENABLE EDITIONS FOR " + type + ", which cannot be undone");
+						+ " ENABLE EDITIONS FOR " + type + ", which cannot be undone; it fails with ORA-38819 when an"
+						+ " object without editions, such as an object type, a table or a materialized view, depends on"
+						+ " one of them, and FORCE would leave that object INVALID");
 			}
 		}
 	}
