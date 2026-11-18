@@ -382,6 +382,9 @@ Where the PL/SQL guarantees the value is never `null`, driver 23 works as it is.
 | `PlsqlTransactions` with `penitent-spring`: a Spring transaction that begins inside a block is refused before it takes a connection, and the block rolls back; `@EnablePlsqlPackages` and the starter add the refusal once to each transaction manager in the context, the one Spring Boot creates included, also when both are present | Validated |
 | `PlsqlTransactions` with the starter: a `@Transactional` method, through the proxy Spring Boot creates, is refused inside a block before it takes a connection, and a block inside one is refused before it takes its own | Validated |
 | `PlsqlTransactions` with `penitent-spring`: an interface of `SpringPlsqlPackages` of the block's `DataSource` is refused without `tx.using`, and runs in the block's session through it; one of another `DataSource` runs on its own | Validated |
+| An object type changed under a pool of HikariCP: the connection that bound it keeps the old type in the driver (`ORA-17049`), which HikariCP keeps by itself; `softEvictConnections()`, or an `SQLExceptionOverride` returning `MUST_EVICT` for 17049 and 3101, gives a connection that reads the new type; on 23ai, 21c and 19c | Validated |
+| A package body with state recompiled: `ORA-04068` once on the connection, as a `PlsqlExecutionException` with `getCode()` 4068, and the new body on the next call; on 23ai, 21c and 19c | Validated |
+| `SESSION_EXIT_ON_PACKAGE_STATE_ERROR` set with HikariCP's `connectionInitSql`: `ORA-00028` instead of `ORA-04068`, the transaction's earlier work undone, and a new connection with the new body, on 23ai; on an Autonomous Database 19c, `ORA-01031: insufficient privileges` | Validated on 23ai; measured by hand on 19c |
 
 ## Interface behavior
 
@@ -495,13 +498,13 @@ that text, on every version.
   otherwise the call is a `PlsqlMappingException` saying so ([#77](https://github.com/rponte/penitent/issues/77)).
 - A collection column in a cursor, and a collection of collections as an attribute, beyond the clear error
   ([#79](https://github.com/rponte/penitent/issues/79)).
-- A signature or a type that changes in the database after the proxy described it, and a package body with state
-  compiled again: measured once, by hand, on 23ai and 19c, not by a test that runs. A changed signature fails with
-  Oracle's error until the application restarts; two parameters of the same type that swap places give a wrong result
-  with no error when binding by position; a changed type needs new connections, and a `%ROWTYPE`'s closes the
-  connection; a body with state fails once per connection with `ORA-04068`. See
-  [Changing PL/SQL while the application runs](deploying.md), [#81](https://github.com/rponte/penitent/issues/81)
-  and [#116](https://github.com/rponte/penitent/issues/116).
+- A signature or a type that changes in the database after the proxy described it, measured once, by hand, on 23ai
+  and 19c, not by a test that runs: a changed signature fails with Oracle's error until the application restarts; two
+  parameters of the same type that swap places give a wrong result with no error when binding by position; a
+  `%ROWTYPE`'s changed table closes the connection. The recovery with HikariCP and a body with state are Validated
+  above. See [Changing PL/SQL while the application runs](deploying.md),
+  [#81](https://github.com/rponte/penitent/issues/81), [#116](https://github.com/rponte/penitent/issues/116) and
+  [#118](https://github.com/rponte/penitent/issues/118).
 - `java.util.Date`, `java.sql.Date` and `java.sql.Timestamp` for a local time that the JVM's time zone skips: they
   hold an instant in that zone, so they cannot represent it. Declare `LocalDateTime` or `LocalDate`. A limit of those
   Java types, not a gap in the tests.
