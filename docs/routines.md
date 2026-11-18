@@ -222,10 +222,23 @@ interface declares `@PlsqlPackage` or `@PlsqlSchema`, never both, and one made o
 - **Another schema:** `@PlsqlPackage(value = "ORDERS_PKG", schema = "SALES")`.
 - **Synonyms:** name the synonym your application already uses. Private, public and chained synonyms are resolved;
   a synonym that points through a database link is not.
-- **Names follow SQL rules.** Without quotes, a name is read in upper case: `@PlsqlPackage("orders_pkg")` is
-  `ORDERS_PKG`. In double quotes, it keeps its case: `@PlsqlPackage("\"ordersPkg\"")` is the package created as
-  `"ordersPkg"`, and Penitent quotes it in the call. The same goes for `schema`, `@PlsqlRoutine`, `@PlsqlParam`,
-  `@PlsqlType` and `resultType`.
+
+### Upper case, lower case and quotes
+
+You do not have to write a name in upper case. Names follow the rules of SQL and PL/SQL: without double quotes, a
+name is read in upper case, as Oracle reads `CREATE PACKAGE orders_pkg`; in double quotes, it keeps its case exactly,
+for an object created with quotes:
+
+| You write | Penitent looks for | When to use it |
+|---|---|---|
+| `@PlsqlPackage("ORDERS_PKG")` | `ORDERS_PKG` | the usual case |
+| `@PlsqlPackage("orders_pkg")` or `@PlsqlPackage("Orders_Pkg")` | `ORDERS_PKG` | the same package: without quotes, case does not matter |
+| `@PlsqlPackage("\"ordersPkg\"")` | `ordersPkg`, exactly | a package created as `CREATE PACKAGE "ordersPkg"`; Penitent quotes it in the call |
+
+So most schemas need no quotes at all: they are only for an object whose name was created in quotes, in mixed or
+lower case, or with a character such as a space or a dot. The same rule applies to `schema`, `@PlsqlRoutine`,
+`@PlsqlParam`, `@PlsqlType` and `resultType`. A method without `@PlsqlRoutine` takes its routine name from the
+method, in upper case: `calculateFreight` calls `CALCULATE_FREIGHT`.
 
 ## When a method does not match
 
