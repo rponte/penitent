@@ -437,7 +437,9 @@ public final class MockSession implements RowTypes {
 	/**
 	 * Applies {@code script}, from {@code source}, in the test's edition, on a connection of the mocks' own: every
 	 * statement is checked first, so a refused one applies none; then each runs, and a compilation error stops the
-	 * script there, with the statements before it applied, until the edition goes.
+	 * script there, with the statements before it applied, until the edition goes. A spec replaced without its body
+	 * leaves the body to compile against it in the edition, which it does at the end of the script, so that a body that
+	 * no longer fits the spec fails here, rather than as {@code ORA-04063} at the first call.
 	 */
 	public void applyScript(String script, String source) {
 		requireBegun();
@@ -461,9 +463,41 @@ public final class MockSession implements RowTypes {
 				}
 				MockLog.applied(statement, start);
 			}
+			for (PlsqlScript.Statement spec : specsWithoutBody(statements, connection)) {
+				List<String> errors = compileInEdition(connection, "ALTER PACKAGE \"" + schema + "\".\"" + spec.name()
+						+ "\" COMPILE BODY", schema, spec.name(), "PACKAGE BODY");
+				if (!errors.isEmpty()) {
+					throw new IllegalStateException(spec.where() + ": the spec of " + schema + "." + spec.name()
+							+ " replaced without its body leaves the body invalid in the test's edition, since the body"
+							+ " does not fit it:\n  " + String.join("\n  ", errors) + "\nReplace the body in the same"
+							+ " script, after the spec");
+				}
+			}
 		} catch (SQLException e) {
 			throw new IllegalStateException("failed to apply " + source + ": " + e.getMessage(), e);
 		}
+	}
+
+	/** The specs {@code statements} replace without their bodies, of packages that have one. */
+	private List<PlsqlScript.Statement> specsWithoutBody(List<PlsqlScript.Statement> statements, Connection connection)
+			throws SQLException {
+		List<PlsqlScript.Statement> specs = new ArrayList<>();
+		for (PlsqlScript.Statement statement : statements) {
+			if (statement.type().equals("PACKAGE") && statements.stream().noneMatch(
+					other -> other.type().equals("PACKAGE BODY") && other.name().equals(statement.name()))) {
+				try (PreparedStatement select = connection.prepareStatement("SELECT 1 FROM ALL_OBJECTS WHERE OWNER = ?"
+						+ " AND OBJECT_NAME = ? AND OBJECT_TYPE = 'PACKAGE BODY'")) {
+					select.setString(1, schema);
+					select.setString(2, statement.name());
+					try (ResultSet rows = select.executeQuery()) {
+						if (rows.next()) {
+							specs.add(statement);
+						}
+					}
+				}
+			}
+		}
+		return specs;
 	}
 
 	/** What a stub rewrites too: a package, or a standalone function or procedure. */
