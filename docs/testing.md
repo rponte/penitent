@@ -609,7 +609,7 @@ or a container init script:
 | Script | Run by | What it does |
 |---|---|---|
 | `penitent-mock-admin.sql` | a DBA | enables editions for the schema's packages, views, functions and procedures, and grants `CREATE ANY EDITION` and `DROP ANY EDITION` |
-| `penitent-mock-schema.sql` | the schema that owns the packages | creates the table `PENITENT_MOCK_CALLS` and the package `PENITENT_MOCK`, which record the calls. A schema prepared by an earlier version is refused by `begin()`, asking for the script to be applied again, which replaces the table |
+| `penitent-mock-schema.sql` | the schema that owns the packages, or another user with the session's current schema set to it, as a migration tool such as Flyway may run it | creates the table `PENITENT_MOCK_CALLS` and the package `PENITENT_MOCK`, which record the calls. A schema prepared by an earlier version is refused by `begin()`, asking for the script to be applied again, which replaces the table |
 
 > **Only on a test database.** `ENABLE EDITIONS` cannot be undone. The admin script limits it to packages, views and
 > standalone routines,
