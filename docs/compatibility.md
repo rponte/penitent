@@ -496,8 +496,13 @@ that text, on every version.
   resolved in the session's schema only ([#78](https://github.com/rponte/penitent/issues/78)).
 - A collection column in a cursor, and a collection of collections as an attribute, beyond the clear error
   ([#79](https://github.com/rponte/penitent/issues/79)).
-- A signature change in the database after the proxy has cached the metadata
-  ([#81](https://github.com/rponte/penitent/issues/81)).
+- A signature or a type that changes in the database after the proxy described it, and a package body with state
+  compiled again: measured once, by hand, on 23ai and 19c, not by a test that runs. A changed signature fails with
+  Oracle's error until the application restarts; two parameters of the same type that swap places give a wrong result
+  with no error when binding by position; a changed type needs new connections, and a `%ROWTYPE`'s closes the
+  connection; a body with state fails once per connection with `ORA-04068`. See
+  [Changing PL/SQL while the application runs](deploying.md), [#81](https://github.com/rponte/penitent/issues/81)
+  and [#116](https://github.com/rponte/penitent/issues/116).
 - `java.util.Date`, `java.sql.Date` and `java.sql.Timestamp` for a local time that the JVM's time zone skips: they
   hold an instant in that zone, so they cannot represent it. Declare `LocalDateTime` or `LocalDate`. A limit of those
   Java types, not a gap in the tests.

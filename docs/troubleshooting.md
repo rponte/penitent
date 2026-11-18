@@ -118,6 +118,22 @@ normalizeAddress(Address): Address does not cover attribute(s) of POSTAL_ADDRESS
 Every Oracle attribute needs a Java property, matched by name: `zipCode` is `ZIP_CODE`. Add the property, or map a
 different name with `@PlsqlAttr("ZIP_CODE")`. Extra Java properties are fine.
 
+## A call fails after a deploy, while it worked before
+
+The PL/SQL changed under the running application: Penitent described the routine before the change, the driver kept
+the old types in each connection, or the session had state in a package that was compiled again.
+
+- **`ORA-04068: existing state of packages has been discarded`:** a package with state was compiled again. Each
+  connection fails once, and the next call works. Penitent does not repeat the call, since the package's state was
+  lost.
+- **`PLS-00306`, `PLS-00222` or `PLS-00302`** where the method used to work: the routine's signature changed.
+  Restart the application.
+- **`ORA-03101`, `ORA-17049` or `ORA-03138`** on a call with an OBJECT or a `%ROWTYPE`: the type changed. Restart
+  the application, or renew the pool's connections.
+
+What each change does, and how to avoid the errors, is in
+[Changing PL/SQL while the application runs](deploying.md).
+
 ## The first call is slow
 
 The first call of each method reads the dictionary, with about 5 queries for a scalar routine and up to about 16

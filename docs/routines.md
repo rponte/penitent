@@ -282,3 +282,4 @@ Penitent fails instead of guessing. It refuses a method that:
 - [Types](types.md): which Java type goes with each Oracle type, composites, collections and cursors.
 - [Anonymous blocks](anonymous-blocks.md): for what is not a `package.routine` call, such as an OBJECT member method.
 - [Compatibility](compatibility.md): every behavior on this page, with the test that covers it.
+- [Changing PL/SQL while the application runs](deploying.md): what a deploy that changes a routine does to the calls.
