@@ -49,6 +49,9 @@ All notable changes to this project are listed here. The format follows
 
 ### Added
 
+- A block's `@PlsqlType` and `resultType` resolve a type as PL/SQL does: of another schema, as `OTHER.TYPE_T`,
+  `OTHER.PKG.RECORD_T` or `OTHER.TABLE%ROWTYPE`, and through a private or public synonym of a type, a package or a
+  table. They were looked up in the session's schema only, and `OTHER.TYPE_T` was read as a type of a package `OTHER`.
 - `penitent-test`: a stub matches, and `verify` counts, an argument by value for every scalar type a stub writes:
   text of any length and LOBs, compared with `DBMS_LOB.COMPARE`, bytes, time zones, intervals and the binary
   numbers, and an enum, a `UUID`, a `@PlsqlBoolean`, a `java.util.Date` and a converter, through the parameter's

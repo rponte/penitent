@@ -67,8 +67,10 @@ public interface AddressBlocks {
 ```
 
 - **`@PlsqlType`** goes on the parameter, or on the class of a composite. It names an OBJECT, a RECORD
-  (`PACKAGE.RECORD`), a `TABLE%ROWTYPE` or a collection, resolved in the session's schema, and the dictionary says
-  which of them it is. A `null` goes as a `NULL` of that type.
+  (`PACKAGE.RECORD`), a `TABLE%ROWTYPE` or a collection, and the dictionary says which of them it is. The name is
+  resolved as PL/SQL resolves it: in the session's schema, then through a private synonym and a public one, or in the
+  schema it names, as `OTHER.TYPE_T`, `OTHER.PKG.RECORD_T` or `OTHER.TABLE%ROWTYPE`. In `A.B`, a package `A` of the
+  session's schema comes before a schema `A`, as in PL/SQL. A `null` goes as a `NULL` of that type.
 - **Scalars need nothing:** a `String`, a `long` or a `LocalDate` is bound as it is.
 - **A collection `:result`** becomes a `List<T>`, and a `NULL` one an empty list, as for a routine.
 - **A cursor `:result`** is read into a `List<T>` as for a routine. When the block assigns a cursor variable to
