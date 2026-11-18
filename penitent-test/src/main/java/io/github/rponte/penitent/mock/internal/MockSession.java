@@ -104,8 +104,9 @@ public final class MockSession implements RowTypes {
 			drop(connection, ending);
 			MockLog.ended(ending, start);
 		} catch (SQLException e) {
-			throw new IllegalStateException("failed to drop the test's edition " + ending + " (a connection taken in the"
-					+ " test may still be open, and in it): " + e.getMessage(), e);
+			throw new IllegalStateException("failed to drop the test's edition " + ending + (TRANSIENT.contains(
+					e.getErrorCode()) ? ", in " + DROP_ATTEMPTS + " attempts" : " (a connection taken in the test may still"
+							+ " be open, and in it)") + ": " + e.getMessage(), e);
 		}
 	}
 
@@ -129,8 +130,32 @@ public final class MockSession implements RowTypes {
 		}
 	}
 
+	/**
+	 * Errors that dropping an edition gets past when run again: a deadlock, ORA-00060, which Oracle rolls back and
+	 * expects to be run again; and ORA-00604 over ORA-04043, an object of the edition gone during the drop's recursive
+	 * SQL. Oracle 19c on the Autonomous Database showed both, now and then, in the CI.
+	 */
+	private static final java.util.Set<Integer> TRANSIENT = java.util.Set.of(60, 604, 4043);
+
+	private static final int DROP_ATTEMPTS = 3;
+
+	/**
+	 * Drops {@code edition}, its objects and its recorded calls. A transient error is run past, up to
+	 * {@value #DROP_ATTEMPTS} attempts, each one logged; any other fails at once.
+	 */
 	private static void drop(Connection connection, String edition) throws SQLException {
-		EditionDataSource.execute(connection, "DROP EDITION " + edition + " CASCADE");
+		for (int attempt = 1;; attempt++) {
+			try {
+				EditionDataSource.execute(connection, "DROP EDITION " + edition + " CASCADE");
+				break;
+			} catch (SQLException e) {
+				if (attempt == DROP_ATTEMPTS || !TRANSIENT.contains(e.getErrorCode())) {
+					throw e;
+				}
+				MockLog.retriedDrop(edition, attempt, DROP_ATTEMPTS, e);
+				pause(attempt);
+			}
+		}
 		try (PreparedStatement delete = connection.prepareStatement(
 				"DELETE FROM PENITENT_MOCK_CALLS WHERE EDITION_NAME = ?")) {
 			delete.setString(1, edition);
@@ -138,6 +163,15 @@ public final class MockSession implements RowTypes {
 		}
 		if (!connection.getAutoCommit()) {
 			connection.commit();
+		}
+	}
+
+	/** A short wait before trying again, longer each time, so that what held the edition can finish. */
+	private static void pause(int attempt) {
+		try {
+			Thread.sleep(500L * attempt);
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
 		}
 	}
 

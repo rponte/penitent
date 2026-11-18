@@ -37,6 +37,11 @@ final class MockLog {
 		}
 	}
 
+	static void retriedDrop(String edition, int attempt, int attempts, java.sql.SQLException failure) {
+		LOG.warn("{}: {}, attempt {} of {}: {}", label("Retried drop"), edition, attempt, attempts,
+				failure.getMessage().strip().replace('\n', ' '));
+	}
+
 	static void leftover(String edition) {
 		LOG.warn("{}: {}, left by a run that died before ending its mocks", label("Dropped edition"), edition);
 	}

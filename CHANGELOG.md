@@ -62,6 +62,9 @@ All notable changes to this project are listed here. The format follows
 
 ### Fixed
 
+- `penitent-test`: dropping the test's edition at `end()` failed now and then on Oracle 19c, on the Autonomous
+  Database, with `ORA-00060`, a deadlock, or `ORA-00604` over `ORA-04043`. The drop is tried again on those errors, up
+  to 3 times, with a warning in the log each time; any other error still fails at once.
 - `NaN` and the infinities sent to a `BINARY_DOUBLE` or a `BINARY_FLOAT` parameter failed in the driver, with a
   `NumberFormatException` or an overflow, since the value was bound as a `NUMBER`. Such a parameter is bound with its
   type now, and a block binds a `NaN` or an infinity as a `BINARY_DOUBLE`. Sent to a `NUMBER`, which holds neither,
