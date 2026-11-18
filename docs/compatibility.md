@@ -441,6 +441,8 @@ that text, on every version.
 | A stub of a `RECORD` holding an `INDEX BY` | Not supported, with the core's clear error: a call refuses it too, since the driver would write the `INDEX BY` from index 0 |
 | One routine stubbed in one test through two interfaces that bind it differently, by position and by name or in another order | Not supported, with a clear error; the stubs made before it still answer ([#87](https://github.com/rponte/penitent/issues/87)) |
 | A stub returns a `%ROWTYPE` of a table with a virtual column and an invisible one, which it leaves out, and of a table with an object type and a `VARRAY` as columns, on 23ai, 21c and 19c | Validated |
+| A stub returns an object type with `TIMESTAMP WITH TIME ZONE` and `WITH LOCAL TIME ZONE` attributes, and one with `RAW`, `BLOB` and `CLOB` attributes, the `CLOB` above 32 KB; collections of `TIMESTAMP WITH TIME ZONE` and of `RAW` elements; a nested table, a `VARRAY` and a table of object types declared in a package spec; a collection of collections, an inner one empty; on 23ai, 21c and 19c | Validated |
+| A stub returns an object type with a `BOOLEAN` attribute, `TRUE` and `NULL`, on 23ai, the only version whose SQL types take one | Validated |
 | A script in the test's edition, from the classpath, `file:`, a `Path`, an `InputStream` or text: a view and a package body replaced, seen only in the edition and gone with it; nothing of the test's transaction committed; a table, DML, `DROP`, `ALTER`, another schema and a type the schema does not edition refused before any statement runs; compilation errors reported; a package with stubs and a script refused, in either order | Validated |
 | `@PlsqlMockScript` with the JUnit 5 extension, also without Spring, and with `@EnablePlsqlMocks` in a transactional test: the class's scripts in every test, then the method's, repeated in their order, before `@BeforeEach`; found on a superclass, on the class enclosing a `@Nested` one and as a meta-annotation; one with no script, and one with different `value` and `scripts`, refused; in Spring without `@EnablePlsqlMocks`, refused | Validated |
 | Several stubs of the same routine: different arguments each answered; the same arguments twice, the later one wins; a second answer on the same stub replaces the first | Validated |
@@ -470,14 +472,10 @@ that text, on every version.
 - `ENABLE EDITIONS FOR VIEW` with a materialized view reading one of the schema's views: `ORA-38819`, and with `FORCE`
   the materialized view left `INVALID`, measured once by hand, not by a test that runs
   ([#68](https://github.com/rponte/penitent/issues/68)).
-- A stub that returns an object type or a collection, in cases its tests do not cover
-  ([#69](https://github.com/rponte/penitent/issues/69)):
-  - a collection declared in a package (`TYPE ... IS TABLE OF` or `VARRAY` in a spec), rather than in the schema;
-  - attributes or elements of `TIMESTAMP WITH TIME ZONE`, `BOOLEAN`, `RAW`, `CLOB` and `BLOB`: the tests cover
-    numbers, text, `DATE` and `TIMESTAMP`; a value the mocks cannot write is refused before compiling, naming its Java
-    class;
-  - a collection of collections;
-  - what a stub with a large value costs to compile.
+- What a stub with a large value costs, measured once by hand, not by a test that runs: a collection of 1,000 object
+  types compiled in under 1 s and one of 5,000 in about 3 s on 23ai Free; one of 20,000 did not compile, with
+  `ORA-04036`, the instance's PGA limit, reported as a body that does not compile
+  ([#69](https://github.com/rponte/penitent/issues/69)).
 - Drivers 18.x and older ([on demand](roadmap.md#on-demand)).
 - Resilience4j's `@Retry` on a `@Transactional` method, `@Bulkhead` and `@RateLimiter`
   ([#72](https://github.com/rponte/penitent/issues/72)).

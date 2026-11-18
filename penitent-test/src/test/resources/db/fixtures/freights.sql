@@ -725,3 +725,69 @@ CREATE OR REPLACE PACKAGE BODY freight_args AS
   FUNCTION takes_code(p_value VARCHAR2) RETURN NUMBER IS BEGIN RAISE_APPLICATION_ERROR(-20450, 'real'); END;
 END freight_args;
 /
+
+-- composites a stub returns, in the cases #69 lists: attributes and elements of time zones, binaries and LOBs,
+-- collections declared in a package, and a collection of collections; the real routines fail
+CREATE OR REPLACE TYPE freight_stamp_t AS OBJECT (
+  id         NUMBER,
+  departs_at TIMESTAMP WITH TIME ZONE,
+  logged_at  TIMESTAMP WITH LOCAL TIME ZONE
+)
+/
+
+CREATE OR REPLACE TYPE freight_payload_t AS OBJECT (
+  id     NUMBER,
+  digest RAW(16),
+  doc    CLOB,
+  image  BLOB
+)
+/
+
+CREATE OR REPLACE TYPE freight_stamps_t AS TABLE OF TIMESTAMP WITH TIME ZONE
+/
+
+CREATE OR REPLACE TYPE freight_digests_t AS TABLE OF RAW(16)
+/
+
+CREATE OR REPLACE TYPE freight_matrix_t AS TABLE OF freight_tags_t
+/
+
+CREATE OR REPLACE PACKAGE freight_composites AS
+  TYPE ufs_t IS TABLE OF VARCHAR2(2);
+  TYPE codes_t IS VARRAY(5) OF NUMBER;
+  TYPE items_t IS TABLE OF freight_item_t;
+
+  FUNCTION stamp_of(p_id NUMBER) RETURN freight_stamp_t;
+  FUNCTION payload_of(p_id NUMBER) RETURN freight_payload_t;
+  FUNCTION stamps_of(p_id NUMBER) RETURN freight_stamps_t;
+  FUNCTION digests_of(p_id NUMBER) RETURN freight_digests_t;
+  FUNCTION matrix_of(p_id NUMBER) RETURN freight_matrix_t;
+  FUNCTION ufs_of(p_id NUMBER) RETURN ufs_t;
+  FUNCTION codes_of(p_id NUMBER) RETURN codes_t;
+  FUNCTION items_of(p_id NUMBER) RETURN items_t;
+END freight_composites;
+/
+
+CREATE OR REPLACE PACKAGE BODY freight_composites AS
+  FUNCTION stamp_of(p_id NUMBER) RETURN freight_stamp_t IS BEGIN RAISE_APPLICATION_ERROR(-20460, 'real'); END;
+  FUNCTION payload_of(p_id NUMBER) RETURN freight_payload_t IS BEGIN RAISE_APPLICATION_ERROR(-20460, 'real'); END;
+  FUNCTION stamps_of(p_id NUMBER) RETURN freight_stamps_t IS BEGIN RAISE_APPLICATION_ERROR(-20460, 'real'); END;
+  FUNCTION digests_of(p_id NUMBER) RETURN freight_digests_t IS BEGIN RAISE_APPLICATION_ERROR(-20460, 'real'); END;
+  FUNCTION matrix_of(p_id NUMBER) RETURN freight_matrix_t IS BEGIN RAISE_APPLICATION_ERROR(-20460, 'real'); END;
+  FUNCTION ufs_of(p_id NUMBER) RETURN ufs_t IS BEGIN RAISE_APPLICATION_ERROR(-20460, 'real'); END;
+  FUNCTION codes_of(p_id NUMBER) RETURN codes_t IS BEGIN RAISE_APPLICATION_ERROR(-20460, 'real'); END;
+  FUNCTION items_of(p_id NUMBER) RETURN items_t IS BEGIN RAISE_APPLICATION_ERROR(-20460, 'real'); END;
+END freight_composites;
+/
+
+-- an object type with a BOOLEAN attribute, which only Oracle 23ai takes in SQL types
+BEGIN
+  IF DBMS_DB_VERSION.VERSION >= 23 THEN
+    EXECUTE IMMEDIATE 'CREATE OR REPLACE TYPE freight_flag_t AS OBJECT (id NUMBER, active BOOLEAN)';
+    EXECUTE IMMEDIATE 'CREATE OR REPLACE PACKAGE freight_flags AS FUNCTION flag_of(p_id NUMBER) RETURN freight_flag_t;'
+      || ' END freight_flags;';
+    EXECUTE IMMEDIATE 'CREATE OR REPLACE PACKAGE BODY freight_flags AS FUNCTION flag_of(p_id NUMBER) RETURN'
+      || ' freight_flag_t IS BEGIN RAISE_APPLICATION_ERROR(-20460, ''real''); END; END freight_flags;';
+  END IF;
+END;
+/
