@@ -135,11 +135,13 @@ public final class JavaProperties {
 
 	private static Map<String, JavaProperty> ofBean(Class<?> javaType) {
 		Map<String, JavaProperty> byName = new LinkedHashMap<>();
+		Map<String, Method> readers = new LinkedHashMap<>();
 		for (Method method : javaType.getMethods()) {
 			String propertyName = propertyNameOf(method);
 			if (propertyName == null) {
 				continue;
 			}
+			refuseTwoReaders(javaType, propertyName, readers.put(propertyName, method), method);
 			Method writer = writerFor(javaType, propertyName, method.getReturnType());
 			JavaProperty property = new JavaProperty() {
 				@Override
@@ -178,6 +180,21 @@ public final class JavaProperties {
 					property);
 		}
 		return byName;
+	}
+
+	/**
+	 * {@code isX()} and {@code getX()} both read {@code x}, and may answer differently, as a {@code boolean} and a
+	 * {@code Boolean} that is null: the library does not pick one. A method seen twice, as a bridge method that
+	 * {@code getMethods} returns next to its override, has the same name and is not a second reader.
+	 */
+	private static void refuseTwoReaders(Class<?> javaType, String propertyName, Method previous, Method reader) {
+		if (previous != null && !previous.getName().equals(reader.getName())) {
+			String[] names = { previous.getName(), reader.getName() };
+			java.util.Arrays.sort(names);
+			throw new PlsqlMappingException(javaType.getSimpleName() + ": " + names[0] + "() and " + names[1]
+					+ "() both read the property " + propertyName + ", and may answer differently; keep one of them,"
+					+ " or map the type with a record or another class");
+		}
 	}
 
 	private static String propertyNameOf(Method method) {

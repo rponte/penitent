@@ -233,7 +233,10 @@ CustomerSummary summary(long id);
   ```text
   normalizeAddress(Address): Address does not cover attribute(s) of POSTAL_ADDRESS_T: [ZIP_CODE VARCHAR2]. Available properties: [STREET, CITY]. Use @PlsqlAttr to declare the name.
   ```
-- **JavaBeans** need a no-argument constructor and setters to be read. Inherited properties count.
+- **JavaBeans** need a no-argument constructor and setters to be read. Inherited properties count. A `boolean` or
+  `Boolean` property can be read through `isX()` as well as `getX()`, but not through both: they may answer
+  differently, as a `boolean` and a `Boolean` that is `null`, so the library refuses the class rather than pick one.
+  `@PlsqlBoolean` and `@PlsqlAttr` go on the field, the getter or the setter.
 - **Inheritance:** an OBJECT type created `UNDER` another works too.
 - **`null`:** a whole OBJECT can be `null`. A RECORD cannot be null in PL/SQL, so it comes back with null fields.
 - **`@PlsqlType("POSTAL_ADDRESS_T")`** on the class is optional for a routine, and must agree with the dictionary if

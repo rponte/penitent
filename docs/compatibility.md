@@ -177,6 +177,8 @@ Where the PL/SQL guarantees the value is never `null`, driver 23 works as it is.
 | OBJECT containing OBJECT and collections | Validated |
 | Mapping to `record` and to JavaBean, matched by attribute name | Validated |
 | JavaBean with inherited properties or extra properties | Validated |
+| JavaBean `boolean` and `Boolean` properties read through `isX()`, in a `VARCHAR2(1)` and a `NUMBER(1)`, both ways; `@PlsqlBoolean` on the field, the `isX()` getter or the setter | Validated |
+| JavaBean with both `isX()` and `getX()` for one property | Not supported, with a clear error |
 | OBJECT inheritance (`UNDER`) | Validated |
 | `null` in place of a whole OBJECT | Validated |
 | `null` in place of a RECORD or `%ROWTYPE` | Validated: a RECORD is never null in PL/SQL, and comes back with null fields |
@@ -492,7 +494,6 @@ that text, on every version.
   resolved in the session's schema only ([#78](https://github.com/rponte/penitent/issues/78)).
 - A collection column in a cursor, and a collection of collections as an attribute, beyond the clear error
   ([#79](https://github.com/rponte/penitent/issues/79)).
-- `isX()` getters and `@PlsqlBoolean` on JavaBeans ([#80](https://github.com/rponte/penitent/issues/80)).
 - A signature change in the database after the proxy has cached the metadata
   ([#81](https://github.com/rponte/penitent/issues/81)).
 - `java.util.Date`, `java.sql.Date` and `java.sql.Timestamp` for a local time that the JVM's time zone skips: they
