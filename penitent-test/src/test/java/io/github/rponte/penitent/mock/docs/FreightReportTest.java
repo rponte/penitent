@@ -13,6 +13,7 @@ import io.github.rponte.penitent.mock.TestKit;
 
 /** The test without mocks of docs/testing.md: run by DocsTestingTest, through JUnit's test kit. */
 @ExtendWith(TestKit.OnlyThroughTheTestKit.class)
+@TestKit.RunBy(DocsTestingTest.class)
 // snippet: testing/arrange-act-assert
 @SpringBootTest
 @Transactional

@@ -89,8 +89,34 @@ public final class TestKit {
 	public static class OnlyThroughTheTestKit implements ExecutionCondition {
 		@Override
 		public ConditionEvaluationResult evaluateExecutionCondition(ExtensionContext context) {
-			return context.getConfigurationParameter(SAMPLES).isPresent() ? ConditionEvaluationResult.enabled("sample")
-					: ConditionEvaluationResult.disabled("a sample, run only through the test kit");
+			if (context.getConfigurationParameter(SAMPLES).isPresent()) {
+				return ConditionEvaluationResult.enabled("sample");
+			}
+			return ConditionEvaluationResult.disabled("a sample, run by " + runnerOf(context.getRequiredTestClass())
+					+ ", which checks how it ends: it may fail on purpose. To run it alone, for debugging, pass"
+					+ " -Dpenitent.mock.samples=true to this sample only");
 		}
+
+		/** The test that runs {@code sample}: the one {@link RunBy} names, or the class it is nested in. */
+		private static String runnerOf(Class<?> sample) {
+			for (Class<?> type = sample; type != null; type = type.getEnclosingClass()) {
+				RunBy runBy = type.getAnnotation(RunBy.class);
+				if (runBy != null) {
+					return runBy.value().getSimpleName();
+				}
+			}
+			Class<?> outermost = sample;
+			while (outermost.getEnclosingClass() != null) {
+				outermost = outermost.getEnclosingClass();
+			}
+			return outermost == sample ? "the test that passes it to TestKit.run" : outermost.getSimpleName();
+		}
+	}
+
+	/** The test that runs a sample of its own, not nested in it, such as an example of the docs. */
+	@java.lang.annotation.Retention(java.lang.annotation.RetentionPolicy.RUNTIME)
+	@java.lang.annotation.Target(java.lang.annotation.ElementType.TYPE)
+	public @interface RunBy {
+		Class<?> value();
 	}
 }
