@@ -16,6 +16,7 @@ import io.github.rponte.penitent.mock.spring.EnablePlsqlMocks;
 
 /** The first mock of docs/testing.md: run by DocsTestingTest, through JUnit's test kit. */
 @ExtendWith(TestKit.OnlyThroughTheTestKit.class)
+@TestKit.RunBy(DocsTestingTest.class)
 // snippet: testing/spring
 @SpringBootTest
 @EnablePlsqlMocks

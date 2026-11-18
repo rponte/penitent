@@ -17,6 +17,7 @@ import io.github.rponte.penitent.mock.TestKit;
 
 /** The @PlsqlMockScript example of docs/testing.md: run by DocsTestingTest, through JUnit's test kit. */
 @ExtendWith(TestKit.OnlyThroughTheTestKit.class)
+@TestKit.RunBy(DocsTestingTest.class)
 class FreightItemsTest {
 
 	static DataSource dataSource = PlsqlMocks.wrap(TestDatabase.lazyPool());
