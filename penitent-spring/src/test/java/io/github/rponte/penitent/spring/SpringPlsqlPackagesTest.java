@@ -321,6 +321,31 @@ class SpringPlsqlPackagesTest {
 		assertThatThrownBy(withSettings::raiseError).isInstanceOf(PlsqlRoutineRaisedException.class);
 	}
 
+	@PlsqlPackage("CHG_SPRING")
+	interface Changing {
+		java.math.BigDecimal f(java.math.BigDecimal pA);
+	}
+
+	@Test
+	@DisplayName("a routine changed since the proxy described it: a PlsqlMappingException, as every mapping error, not"
+			+ " the BadSqlGrammarException of Oracle's PLS-00306")
+	void changed_routine_is_a_mapping_error() {
+		jdbc.execute("CREATE OR REPLACE PACKAGE chg_spring AS FUNCTION f(p_a NUMBER) RETURN NUMBER; END chg_spring;");
+		jdbc.execute("CREATE OR REPLACE PACKAGE BODY chg_spring AS FUNCTION f(p_a NUMBER) RETURN NUMBER IS BEGIN"
+				+ " RETURN p_a; END; END chg_spring;");
+		Changing changing = SpringPlsqlPackages.create(Changing.class, dataSource);
+		assertThat(changing.f(java.math.BigDecimal.ONE)).isEqualByComparingTo("1");
+
+		jdbc.execute("CREATE OR REPLACE PACKAGE chg_spring AS FUNCTION f(p_a NUMBER, p_b NUMBER) RETURN NUMBER;"
+				+ " END chg_spring;");
+		jdbc.execute("CREATE OR REPLACE PACKAGE BODY chg_spring AS FUNCTION f(p_a NUMBER, p_b NUMBER) RETURN NUMBER IS"
+				+ " BEGIN RETURN p_a; END; END chg_spring;");
+
+		assertThatThrownBy(() -> changing.f(java.math.BigDecimal.ONE))
+				.isInstanceOf(PlsqlMappingException.class)
+				.hasMessageContaining("PLSQL_TEST.CHG_SPRING.F changed since this proxy described it");
+	}
+
 	@Test
 	@DisplayName("a translator in the settings replaces the Spring one")
 	void settings_translator_replaces_spring() {

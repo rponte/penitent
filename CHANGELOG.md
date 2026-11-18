@@ -14,7 +14,9 @@ All notable changes to this project are listed here. The format follows
   `PlsqlMappingException` that says the routine or the type changed since the proxy described it, and what no longer
   fits, as a new proxy would, rather than Oracle's raw error until a restart. `ORA-17049` stays a
   `PlsqlExecutionException`, with its code, and says that the driver keeps the old type in each connection until it is
-  renewed. The call is never repeated.
+  renewed. The call is never repeated. With `penitent-spring`, such a failure was a `BadSqlGrammarException`, from
+  Oracle's `ORA-06550`; it is now a `PlsqlMappingException`, which no `PlsqlExceptionTranslator` sees, as every
+  mapping error, and as a new proxy would throw.
 - A JavaBean with both `isX()` and `getX()` for one property is refused, naming both, where the library used one of
   them without saying which: they may answer differently, as a `boolean` and a `Boolean` that is `null`.
 - `penitent-test`: a script that replaces a package spec without its body compiles the body in the test's edition at
