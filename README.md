@@ -150,6 +150,43 @@ One property, `penitent.validation.enabled: true`, checks every interface agains
 Spring but without Boot, `@EnablePlsqlPackages` registers the beans. [Getting started](docs/getting-started.md) walks
 through it all step by step.
 
+### Testing with mocks
+
+To test the Java around a PL/SQL call, you need the routine to answer what the test expects, whatever the real one
+computes. Add `penitent-test`, and stub the routine in the style of Mockito, from the same interface the code calls:
+
+<!-- snippet: testing/spring -->
+```java
+@SpringBootTest
+@EnablePlsqlMocks
+class CheckoutServiceTest {
+
+    @Autowired PlsqlMocks mocks;
+    @Autowired CheckoutService checkout;
+
+    @Test
+    void adds_the_freight_to_the_subtotal() {
+        // arrange
+        Freights freights = mocks.mock(Freights.class);
+        when(freights.calculate("SP", "CE")).thenReturn(new BigDecimal("24.90"));
+
+        // act
+        BigDecimal total = checkout.total(new BigDecimal("100.00"), "SP", "CE");
+
+        // assert
+        assertThat(total).isEqualByComparingTo("124.90");
+    }
+}
+```
+
+- **The stub is real PL/SQL,** compiled against a real Oracle, so the code under test meets it wherever it calls the
+  routine from: Java, or other PL/SQL that calls it.
+- **It lives only while the test runs,** in an edition of the test's own, and the rest of the package stays real.
+  Other sessions on the same database never see it.
+- **A script can replace a view or a package,** only for the test, and `verify` checks how a routine was called.
+
+[Testing](docs/testing.md) shows how to prepare a test database, test without Spring, and what to keep in mind.
+
 ## Compatibility
 
 Which Oracle JDBC driver works with which Oracle Database, as the build tests them on every change:

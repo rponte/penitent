@@ -65,6 +65,25 @@ class DocsPagesTest {
 	}
 
 	@Test
+	@DisplayName("a block of the README that a marker names is a region of a test, as it is")
+	void readme_blocks_are_regions() {
+		Map<String, String> regions = Pages.regions();
+		List<Block> named = Pages.readmeBlocks();
+		List<String> problems = new ArrayList<>();
+		for (Block block : named) {
+			String region = regions.get(block.name());
+			if (region == null) {
+				problems.add(block.where() + ": no test has the region " + block.name());
+			} else if (!region.equals(Pages.dedent(block.text().lines().toList()))) {
+				problems.add(block.where() + ": differs from the region " + block.name() + "\n--- README\n"
+						+ block.text() + "\n--- test\n" + region);
+			}
+		}
+		assertThat(named).as("the README's mocking example is checked").isNotEmpty();
+		assertThat(problems).isEmpty();
+	}
+
+	@Test
 	@DisplayName("a text block is compared by a test with what the library printed")
 	void text_blocks_are_read_by_a_test() {
 		String sources = Pages.testSources();

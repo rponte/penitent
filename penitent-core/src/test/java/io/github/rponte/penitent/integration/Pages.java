@@ -31,6 +31,9 @@ final class Pages {
 
 	static final Path DOCS = Path.of("..", "docs");
 
+	/** The repository's README, outside the site: only its named blocks are checked, against the tests' regions. */
+	static final String README = "README.md";
+
 	/** The tests whose regions the pages show: this module's, and those of penitent-test, for its page. */
 	static final List<Path> TESTS = List.of(Path.of("src", "test", "java"),
 			Path.of("..", "penitent-test", "src", "test", "java"));
@@ -58,7 +61,7 @@ final class Pages {
 	record Block(String page, int line, String language, String name, String text) {
 
 		String where() {
-			return "docs/" + page + ":" + line;
+			return (page.equals(README) ? page : "docs/" + page) + ":" + line;
 		}
 	}
 
@@ -71,6 +74,15 @@ final class Pages {
 			return blocks;
 		} catch (IOException e) {
 			throw new UncheckedIOException("the tests run from penitent-core, next to ../docs", e);
+		}
+	}
+
+	/** The README's blocks that a marker names; the others are shown as they are. */
+	static List<Block> readmeBlocks() {
+		try {
+			return blocksOf(Path.of("..", README)).stream().filter(b -> b.name() != null).toList();
+		} catch (IOException e) {
+			throw new UncheckedIOException("the tests run from penitent-core, next to ../README.md", e);
 		}
 	}
 
