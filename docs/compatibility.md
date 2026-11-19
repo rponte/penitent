@@ -487,26 +487,32 @@ that text, on every version.
 - What a stub with a large value costs, measured once by hand, not by a test that runs: a collection of 1,000 object
   types compiled in under 1 s and one of 5,000 in about 3 s on 23ai Free; one of 20,000 did not compile, with
   `ORA-04036`, the instance's PGA limit, reported as a body that does not compile
-  ([#69](https://github.com/rponte/penitent/issues/69)).
+  ([#130](https://github.com/rponte/penitent/issues/130)).
 - Drivers 18.x and older ([on demand](roadmap.md#on-demand)).
 - Resilience4j's `@Retry` on a `@Transactional` method, `@Bulkhead` and `@RateLimiter`
   ([#72](https://github.com/rponte/penitent/issues/72)).
 - A Jakarta EE container's `DataSource` inside a JTA transaction, with `create` or with `PlsqlPackages.using`
   ([#73](https://github.com/rponte/penitent/issues/73)).
-- `XMLTYPE`, `JSON`, `LONG`, `REF` and nested cursors ([#74](https://github.com/rponte/penitent/issues/74)).
+- Oracle types the library does not map yet, each with its own issue, grouped in
+  [#74](https://github.com/rponte/penitent/issues/74): `XMLTYPE` ([#122](https://github.com/rponte/penitent/issues/122)),
+  the `JSON` type of 21c and later ([#123](https://github.com/rponte/penitent/issues/123)), `LONG`
+  ([#124](https://github.com/rponte/penitent/issues/124)), the object-relational `REF`, not `REF CURSOR`
+  ([#125](https://github.com/rponte/penitent/issues/125)), and a nested cursor column, `CURSOR(...)`
+  ([#121](https://github.com/rponte/penitent/issues/121)).
 - Synonyms with a `db link`, which are currently ignored during resolution
   ([#75](https://github.com/rponte/penitent/issues/75)).
 - A `default` method of a non-public interface on the module path: the package must be open to the library, and
   otherwise the call is a `PlsqlMappingException` saying so ([#77](https://github.com/rponte/penitent/issues/77)).
 - A collection column in a cursor, and a collection of collections as an attribute, beyond the clear error
   ([#79](https://github.com/rponte/penitent/issues/79)).
-- A signature or a type that changes in the database after the proxy described it, measured once, by hand, on 23ai
-  and 19c, not by a test that runs: a changed signature fails with Oracle's error until the application restarts; two
-  parameters of the same type that swap places give a wrong result with no error when binding by position; a
-  `%ROWTYPE`'s changed table closes the connection. The recovery with HikariCP and a body with state are Validated
-  above. See [Changing PL/SQL while the application runs](deploying.md),
-  [#81](https://github.com/rponte/penitent/issues/81), [#116](https://github.com/rponte/penitent/issues/116) and
-  [#118](https://github.com/rponte/penitent/issues/118).
+- A `%ROWTYPE` whose table changed after the proxy described it, as a deploy does: the database closes the
+  connection, with `ORA-03138`, or `No more data to read from socket` with driver 19, measured once, by hand, on 23ai
+  and 19c, not by a test that runs. It cannot be told apart from a network failure, and is left to the pool
+  ([#118](https://github.com/rponte/penitent/issues/118)). A changed routine or object type is Validated above.
+- Two parameters of the same type that swap places in the routine, after a deploy: binding by position, each value
+  goes to the other parameter, with no error, measured by hand on 23ai and 19c; binding by name gives the right
+  result. A limit of binding by position, not a gap in the tests: see
+  [Changing PL/SQL while the application runs](deploying.md).
 - `java.util.Date`, `java.sql.Date` and `java.sql.Timestamp` for a local time that the JVM's time zone skips: they
   hold an instant in that zone, so they cannot represent it. Declare `LocalDateTime` or `LocalDate`. A limit of those
   Java types, not a gap in the tests.
