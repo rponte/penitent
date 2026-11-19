@@ -217,8 +217,9 @@ json.echo("{ \"b\" : 2 }");   // {"b":2}
   }
   ```
 
-  It works with every driver. In a block, though, each text goes as a `VARCHAR2`, so a document above 32,767 bytes
-  fails with `ORA-06502`: a limit of PL/SQL, which only the JSON type of drivers 21 and later lifts.
+  It works with every driver. A document of any size goes in, but a block's `:result` is a `VARCHAR2`, so a
+  document above 32,767 bytes that comes back fails with `ORA-06502`: only the JSON type of drivers 21 and later
+  brings back a larger one.
 - **Not supported, refused before the call:** a collection of `JSON` and a RECORD with a `JSON` field, which no
   driver can describe, and a `%ROWTYPE` of a table with a `JSON` column: read such rows through a cursor, where a
   `JSON` column is supported. An OBJECT cannot have a `JSON` attribute: Oracle itself refuses it. Two versions of

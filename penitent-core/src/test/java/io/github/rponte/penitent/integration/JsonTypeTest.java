@@ -254,10 +254,13 @@ class JsonTypeTest extends OracleIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("through a block, a text goes as a VARCHAR2, so above 32,767 bytes it fails: a limit of PL/SQL")
-	void through_blocks_up_to_32k() {
+	@DisplayName("through a block, a large document goes in, but a :result above 32,767 bytes fails: the block registers it"
+			+ " as a VARCHAR2")
+	void through_blocks_result_up_to_32k() {
 		String large = "{\"text\":\"" + "z".repeat(50_000) + "\"}";
-		assertThatThrownBy(() -> pkg(JsonThroughBlocks.class).echo(large)).hasMessageContaining("ORA-06502");
+		JsonThroughBlocks blocks = pkg(JsonThroughBlocks.class);
+		assertThat(blocks.lengthOf(large)).isEqualByComparingTo(String.valueOf(large.length()));
+		assertThatThrownBy(() -> blocks.echo(large)).hasMessageContaining("ORA-06502");
 	}
 
 	@Test
