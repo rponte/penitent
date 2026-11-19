@@ -6,6 +6,57 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+Changing PL/SQL under a running application, and stubs of everything a call sends. A routine or a type that changed
+since a proxy described it now says so, and a new page explains what a deploy does to the calls, and how a pool
+recovers. A block's types resolve as PL/SQL resolves them. The mocks stub standalone routines, records, `%ROWTYPE` and
+`INDEX BY`, write and match every scalar type, and are measured on Oracle 21c and 19c, besides 23ai.
+
+### Upgrading from 0.30.0
+
+1. `penitent-test`: apply `penitent-mock-schema.sql` again, now version 2, or call `PlsqlMocks.prepare`. Until then,
+   `begin()` refuses the schema, saying so.
+2. `penitent-test`: to stub a standalone function or procedure, a DBA runs `ALTER USER <schema> ENABLE EDITIONS FOR
+   FUNCTION` and `FOR PROCEDURE`, as `penitent-mock-admin.sql` now does. Stubs of packages need nothing.
+3. `penitent-test`: `thenRaise("NO_DATA_FOUND")` becomes `thenRaise(PredefinedError.NO_DATA_FOUND)`, and
+   `when(() -> m.p(...))` becomes `doNothing().when(m).p(...)`.
+4. A JavaBean with both `isX()` and `getX()` for one property is refused: keep one of them.
+5. With `penitent-spring`, a routine that changed since the proxy described it fails with a `PlsqlMappingException`,
+   no longer a `BadSqlGrammarException`.
+
+### Added
+
+- A block's `@PlsqlType` and `resultType` resolve a type as PL/SQL does: of another schema, as `OTHER.TYPE_T`,
+  `OTHER.PKG.RECORD_T` or `OTHER.TABLE%ROWTYPE`, and through a private or public synonym of a type, a package or a
+  table. They were looked up in the session's schema only, and `OTHER.TYPE_T` was read as a type of a package `OTHER`.
+- `penitent-test`: a stub matches, and `verify` counts, an argument by value for every scalar type a stub writes:
+  text of any length and LOBs, compared with `DBMS_LOB.COMPARE`, bytes, time zones, intervals and the binary
+  numbers, and an enum, a `UUID`, a `@PlsqlBoolean`, a `java.util.Date` and a converter, through the parameter's
+  mapping. `verify` binds the value matched, rather than writing it in the query.
+- `penitent-test`: a stub returns, and sets as an `OUT`, time zones, intervals, a `RAW`, a `BLOB` up to 16 KB and a
+  `CLOB` above 32 KB, which were refused or did not compile. They are written as `TIMESTAMP` literals with an offset
+  or a region, `TO_DSINTERVAL` and `TO_YMINTERVAL`, `HEXTORAW`, and `TO_CLOB` pieces joined with `||`.
+- `penitent-test`: a stub's value, returned or set as an `OUT`, goes through the application's mapping, as a call
+  would send it: an enum, a `UUID`, a `java.util.Date`, a `java.sql.Timestamp`, an `Optional` and a converter on the
+  method or the parameter, which were refused or not applied, now work.
+- `penitent-test`: a stub can return a `RECORD` of a package, a `%ROWTYPE` and an `INDEX BY PLS_INTEGER`, and set
+  one as an `OUT`, which were refused for having no constructor in PL/SQL. They are written as qualified expressions:
+  an `INDEX BY` with named indexes, and a `%ROWTYPE` as a `RECORD` of the table's columns that the mocks declare in
+  the test's edition, which Oracle assigns to it. A collection of records, which was refused too, works as well.
+- `penitent-test`: the mocks are measured on Oracle 21c and 19c, besides 23ai. On 19c, the Autonomous Database Free
+  needs no change: its `ADMIN` runs `penitent-mock-admin.sql`. The module's tests, skipped on both until now, pass
+  there.
+- `penitent-test`: stubs of standalone functions and procedures, outside any package, from an interface with
+  `@PlsqlSchema`, with the same API as a routine of a package. The whole routine is rewritten in the test's edition.
+- `penitent-test`: `PlsqlError`, the exception a stub raises: an Oracle predefined exception, from the enum
+  `PredefinedError`, with its code, or an exception a package declares in its spec, from `PlsqlError.declared`, which
+  the PL/SQL that calls the routine catches by name. A name that does not exist is reported as the likely mistake.
+- `penitent-test`: the `doXxx()` family, as in Mockito, for stubs of procedures: `doNothing()`, `doThrow(code,
+  message)` and `doRaise(error)`, as in `doNothing().when(freights).quote(eq("CE"), out(value))`; and
+  `doReturn(value)` for functions. The answer comes before the call, so a stub that raises compiles the package once.
+- `penitent-test`: `anyInt()`, `anyLong()`, `anyShort()`, `anyByte()`, `anyDouble()`, `anyFloat()` and `anyBoolean()`
+  match any value of a parameter of a primitive type, in a stub and in `verify`. `any()` returns `null`, which Java
+  unboxes before the call reaches the mock, and failed with a `NullPointerException`.
+
 ### Changed
 
 - A routine or a type that changed in the database after a proxy described it, as a deploy under a running
@@ -30,8 +81,6 @@ All notable changes to this project are listed here. The format follows
   be applied again, which `PlsqlMocks.prepare` does; the script drops the table of version 1, which holds only the
   calls of tests, and creates it again. It finds that table in the session's current schema, so another user may
   apply it with the current schema set to the owner, as a migration tool such as Flyway does.
-- `penitent-test`: the package the mocks compile in the test's edition for a `%ROWTYPE` declares `LITERAL_T` next to
-  `ROW_T`, which the generated PL/SQL in the log shows.
 - `penitent-test`: `penitent-mock-admin.sql` also enables editions for functions and procedures, each in a statement
   of its own, for stubs of standalone routines. A schema prepared before keeps working for stubs of packages; a stub of
   a standalone routine there is refused, saying what a DBA has to run.
@@ -41,47 +90,27 @@ All notable changes to this project are listed here. The format follows
 - The call log's `Type names from` line, which named the internal class that gives types other names in a test with
   mocks. It showed up once, at the first call that built a composite value, as if it were about that call; each call
   that binds a type by another name still shows it, with `-> type name`.
-- `penitent-test`: `thenRaise(String)` and `doRaise(String)`, replaced by `thenRaise(PlsqlError)` and
-  `doRaise(PlsqlError)`: `thenRaise("NO_DATA_FOUND")` becomes `thenRaise(PredefinedError.NO_DATA_FOUND)`.
+- `penitent-test`: `thenRaise(String)`, replaced by `thenRaise(PlsqlError)`: `thenRaise("NO_DATA_FOUND")` becomes
+  `thenRaise(PredefinedError.NO_DATA_FOUND)`.
 - `penitent-test`: `when(Runnable)`, the lambda that stubbed a procedure, replaced by the `doXxx()` family:
   `when(() -> m.p(...))` becomes `doNothing().when(m).p(...)`, and `when(() -> m.p(...)).thenThrow(code, message)`
   becomes `doThrow(code, message).when(m).p(...)`.
 
-### Added
-
-- A block's `@PlsqlType` and `resultType` resolve a type as PL/SQL does: of another schema, as `OTHER.TYPE_T`,
-  `OTHER.PKG.RECORD_T` or `OTHER.TABLE%ROWTYPE`, and through a private or public synonym of a type, a package or a
-  table. They were looked up in the session's schema only, and `OTHER.TYPE_T` was read as a type of a package `OTHER`.
-- `penitent-test`: a stub matches, and `verify` counts, an argument by value for every scalar type a stub writes:
-  text of any length and LOBs, compared with `DBMS_LOB.COMPARE`, bytes, time zones, intervals and the binary
-  numbers, and an enum, a `UUID`, a `@PlsqlBoolean`, a `java.util.Date` and a converter, through the parameter's
-  mapping. `verify` binds the value matched, rather than writing it in the query.
-- `penitent-test`: a stub returns, and sets as an `OUT`, time zones, intervals, a `RAW`, a `BLOB` up to 16 KB and a
-  `CLOB` above 32 KB, which were refused or did not compile. They are written as `TIMESTAMP` literals with an offset
-  or a region, `TO_DSINTERVAL` and `TO_YMINTERVAL`, `HEXTORAW`, and `TO_CLOB` pieces joined with `||`.
-- `penitent-test`: a stub's value, returned or set as an `OUT`, goes through the application's mapping, as a call
-  would send it: an enum, a `UUID`, a `java.util.Date`, a `java.sql.Timestamp`, an `Optional` and a converter on the
-  method or the parameter, which were refused or not applied, now work.
-- `penitent-test`: a stub can return a `RECORD` of a package, a `%ROWTYPE` and an `INDEX BY PLS_INTEGER`, and set
-  one as an `OUT`, which were refused for having no constructor in PL/SQL. They are written as qualified expressions:
-  an `INDEX BY` with named indexes, and a `%ROWTYPE` as a `RECORD` of the table's columns that the mocks declare in
-  the test's edition, which Oracle assigns to it. A collection of records, which was refused too, works as well.
-- `penitent-test`: the mocks are measured on Oracle 19c, on the Autonomous Database Free, with no change: its `ADMIN`
-  runs `penitent-mock-admin.sql`, and the module's tests, skipped on 19c until now, pass there.
-- `penitent-test`: stubs of standalone functions and procedures, outside any package, from an interface with
-  `@PlsqlSchema`, with the same API as a routine of a package. The whole routine is rewritten in the test's edition.
-- `penitent-test`: `PlsqlError`, the exception a stub raises: an Oracle predefined exception, from the enum
-  `PredefinedError`, with its code, or an exception a package declares in its spec, from `PlsqlError.declared`, which
-  the PL/SQL that calls the routine catches by name. A name that does not exist is reported as the likely mistake.
-- `penitent-test`: the `doXxx()` family, as in Mockito, for stubs of procedures: `doNothing()`, `doThrow(code,
-  message)` and `doRaise(name)`, as in `doNothing().when(freights).quote(eq("CE"), out(value))`; and `doReturn(value)`
-  for functions. The answer comes before the call, so a stub that raises compiles the package once.
-- `penitent-test`: `anyInt()`, `anyLong()`, `anyShort()`, `anyByte()`, `anyDouble()`, `anyFloat()` and `anyBoolean()`
-  match any value of a parameter of a primitive type, in a stub and in `verify`. `any()` returns `null`, which Java
-  unboxes before the call reaches the mock, and failed with a `NullPointerException`.
-
 ### Fixed
 
+- `NaN` and the infinities sent to a `BINARY_DOUBLE` or a `BINARY_FLOAT` parameter failed in the driver, with a
+  `NumberFormatException` or an overflow, since the value was bound as a `NUMBER`. Such a parameter is bound with its
+  type now, and a block binds a `NaN` or an infinity as a `BINARY_DOUBLE`. Sent to a `NUMBER`, which holds neither,
+  the value is refused before the call, naming the parameter.
+- A `%ROWTYPE` of a table with an invisible column failed to bind, asking the Java type to cover that column, which
+  PL/SQL leaves out of a `%ROWTYPE`. It is left out now.
+- A `%ROWTYPE` with a column of an object type or a collection failed to bind, with `ORA-17059` when sending it and a
+  conversion error when reading it: its columns were all taken as scalars. Such a column now binds as the attribute
+  of an object type does.
+- An OBJECT, a package RECORD, a `%ROWTYPE` or a collection whose name needs quotes for more than its case, such as
+  `CREATE TYPE "Two Words_T"`, failed with `ORA-17060` or `ORA-17074`: on driver 23 for every form, and on drivers 21
+  and 19 for a `%ROWTYPE`. Such a name is now bound with every part in quotes, the owner included, which every driver
+  resolves. A mixed-case name, such as `"Mixed"`, already bound, since the driver reads a name with its exact case.
 - `penitent-test`: a stub that returns an object type with a `TIMESTAMP WITH TIME ZONE` or `WITH LOCAL TIME ZONE`
   attribute, refused as "a oracle.sql.TIMESTAMPTZ cannot be written as PL/SQL", and one with a `BOOLEAN` attribute on
   Oracle 23ai, whose body did not compile with `PLS-00306`, since the driver gives the attribute as a number.
@@ -91,33 +120,20 @@ All notable changes to this project are listed here. The format follows
 - `penitent-test`: dropping the test's edition at `end()` failed now and then on Oracle 19c, on the Autonomous
   Database, with `ORA-00060`, a deadlock, or `ORA-00604` over `ORA-04043`. The drop is tried again on those errors, up
   to 3 times, with a warning in the log each time; any other error still fails at once.
-- `NaN` and the infinities sent to a `BINARY_DOUBLE` or a `BINARY_FLOAT` parameter failed in the driver, with a
-  `NumberFormatException` or an overflow, since the value was bound as a `NUMBER`. Such a parameter is bound with its
-  type now, and a block binds a `NaN` or an infinity as a `BINARY_DOUBLE`. Sent to a `NUMBER`, which holds neither,
-  the value is refused before the call, naming the parameter.
 - `penitent-test`: a call to a stubbed routine failed with `ORA-40478` when its arguments, recorded for `verify`,
   went above 4,000 bytes, such as a `VARCHAR2` of 5,000 characters or a large `CLOB`. The arguments are recorded in a
   `CLOB` now, and the message of a call no stub matches shows their first 1,500 characters.
 - `penitent-test`: a stub that returned a `Boolean` for a routine mapped with `@PlsqlBoolean`, or as `1` or `0`,
   generated a body that did not compile, writing `TRUE` where a `VARCHAR2` or a `NUMBER` was due. A stub that
   returned `NaN` or an infinity failed with a `NumberFormatException`. Both are written as a call would send them now.
-- A `%ROWTYPE` of a table with an invisible column failed to bind, asking the Java type to cover that column, which
-  PL/SQL leaves out of a `%ROWTYPE`. It is left out now.
-- A `%ROWTYPE` with a column of an object type or a collection failed to bind, with `ORA-17059` when sending it and a
-  conversion error when reading it: its columns were all taken as scalars. Such a column now binds as the attribute
-  of an object type does.
 - `penitent-test`: a routine stubbed in one test through two interfaces that bind it differently, by position and by
   name or in another order, lost the stubs of the first interface without a word. It is now refused with a clear
   message, and the stubs made before it still answer.
 - `penitent-test`: a stub of a routine bound by name failed to find the routine in the body, when the Java method
   declared its parameters in another order than the routine, or left out one with a `DEFAULT`.
-- An OBJECT, a package RECORD, a `%ROWTYPE` or a collection whose name needs quotes for more than its case, such as
-  `CREATE TYPE "Two Words_T"`, failed with `ORA-17060` or `ORA-17074`: on driver 23 for every form, and on drivers 21
-  and 19 for a `%ROWTYPE`. Such a name is now bound with every part in quotes, the owner included, which every driver
-  resolves. A mixed-case name, such as `"Mixed"`, already bound, since the driver reads a name with its exact case.
 - `penitent-test`: on Oracle 21c, a stub of a routine with a `BOOLEAN` parameter failed to compile, with
   `PLS-00382`: the call was recorded through SQL, which takes a `BOOLEAN` only from 23ai on. It is now recorded as
-  `'true'` or `'false'`, and `verify` compares it as that text, on every version. The mocks are now measured on 21c.
+  `'true'` or `'false'`, and `verify` compares it as that text, on every version.
 
 ## [0.30.0]
 
