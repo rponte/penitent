@@ -67,6 +67,12 @@
 			<artifactId>flyway-database-oracle</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<!-- the JSON converter of the Types page: Jackson 3, as Spring Boot 4 manages it; tests only -->
+		<dependency>
+			<groupId>tools.jackson.core</groupId>
+			<artifactId>jackson-databind</artifactId>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 
 	<build>

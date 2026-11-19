@@ -166,6 +166,9 @@ public final class ScalarCodec {
 	 *
 	 * @param declared the Java type the value becomes, or the converter's database type
 	 */
+	/** {@code OracleTypes.JSON}, the type of a JSON column in a cursor, as drivers 21 and later give it. */
+	private static final int JSON_COLUMN = 2016;
+
 	public static Object read(CallableStatement statement, int position, Class<?> declared) throws SQLException {
 		Object value = isLocalTemporal(declared) ? statement.getObject(position, declared) : statement.getObject(position);
 		// Driver 21 returns false for a null BOOLEAN, and only wasNull() tells them apart.
@@ -179,6 +182,11 @@ public final class ScalarCodec {
 	 * no such check, because the dictionary already refused it before the call.
 	 */
 	public static Object read(ResultSet rs, int column, Class<?> declared) throws SQLException {
+		// a JSON column, from 21c on, as its text: getObject fails with ORA-18722 on driver 23, and with "getOracleObject
+		// not implemented" on driver 21, unless the connection sets oracle.jdbc.jsonDefaultGetObjectType
+		if (rs.getMetaData().getColumnType(column) == JSON_COLUMN) {
+			return rs.getString(column);
+		}
 		if (isLocalTemporal(declared)) {
 			int type = rs.getMetaData().getColumnType(column);
 			if (type == java.sql.Types.DATE || type == java.sql.Types.TIMESTAMP) {

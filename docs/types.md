@@ -21,6 +21,7 @@ section. The [compatibility table](compatibility.md) lists every pair of types t
 | `TIMESTAMP WITH TIME ZONE`, `TIMESTAMP WITH LOCAL TIME ZONE` | `OffsetDateTime`, `ZonedDateTime`, `Instant` |
 | `INTERVAL DAY TO SECOND`, `INTERVAL YEAR TO MONTH` | `Duration`, `Period` |
 | `BOOLEAN` | `boolean`, `Boolean` |
+| `JSON`, from Oracle 21c on | `String`, the JSON text: see [JSON](#json) |
 
 How values cross:
 
@@ -134,6 +135,64 @@ A few more details:
   not change any value either.
 - **`java.util.Date`, `java.sql.Date` and `java.sql.Timestamp` are the exception:** they hold an instant in the JVM's
   time zone. Prefer `java.time`.
+
+## JSON
+
+Oracle 21c added a `JSON` type, which stores a document in a binary form of its own, OSON. A parameter, a return
+value or a cursor column of that type maps to a `String`, holding the document's JSON text:
+
+<!-- snippet: fixture -->
+```sql
+FUNCTION echo(p_doc JSON) RETURN JSON;
+```
+
+<!-- snippet: untested -->
+```java
+String echo(String doc);
+
+json.echo("{ \"b\" : 2 }");   // {"b":2}
+```
+
+- **The text that comes back is the database's,** with its own spacing. **A number keeps its value, not its written
+  form,** since the type stores numbers as `NUMBER`s: `{"price":24.90,"n":1.5e3}` comes back as
+  `{"price":24.9,"n":1500}`, and a number of more than about 38 significant digits loses the rest, with no error.
+  Keep such a value, such as a large identifier, as a JSON string. A `VARCHAR2` or `CLOB` column checked with
+  `IS JSON` keeps the text as written.
+- **To work with objects,** convert the text with the JSON library of your application, in a
+  [converter](converters.md). With Jackson:
+
+  <!-- snippet: types/json-converter -->
+  ```java
+  public static class OrderJson implements PlsqlConverter<Order, String> {
+
+      private static final JsonMapper JSON = JsonMapper.builder().build();
+
+      @Override
+      public String toDatabase(Order order) {
+          return order == null ? null : JSON.writeValueAsString(order);
+      }
+
+      @Override
+      public Order fromDatabase(String json) {
+          return json == null ? null : JSON.readValue(json, Order.class);
+      }
+  }
+  ```
+
+  <!-- snippet: types/json-converter-use -->
+  ```java
+  @PlsqlRoutine("ECHO")
+  @PlsqlConvert(OrderJson.class)
+  Order echo(@PlsqlConvert(OrderJson.class) Order pDoc);
+  ```
+
+- **It needs driver 21 or later,** which knows the type; with driver 19, a routine that takes or returns a `JSON` is
+  refused before the call. A document of any size goes both ways, a scalar at the top, such as `42`, included.
+- **Not supported, refused before the call:** a collection of `JSON` and a RECORD with a `JSON` field, which no
+  driver can describe, and a `%ROWTYPE` of a table with a `JSON` column: read such rows through a cursor, where a
+  `JSON` column is supported. An OBJECT cannot have a `JSON` attribute: Oracle itself refuses it. Two versions of
+  a routine, one taking `JSON` and one `VARCHAR2`, both fit a `String`, so a method that calls them is refused as
+  ambiguous: call the one you want through an [anonymous block](anonymous-blocks.md).
 
 ## Composite types
 

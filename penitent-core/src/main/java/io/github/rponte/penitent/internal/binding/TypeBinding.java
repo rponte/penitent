@@ -153,6 +153,7 @@ public final class TypeBinding {
 		String oracleType = type.bindName();
 		requireDeclaredTypeToAgree(javaType, type);
 		List<OracleAttribute> oracleAttributes = readAttributes(dictionary, type);
+		requireNoJson(type, oracleAttributes);
 
 		Map<String, JavaProperty> properties = JavaProperties.of(javaType);
 
@@ -267,6 +268,21 @@ public final class TypeBinding {
 			return ValueConversion.NUMERIC_BOOLEAN;
 		}
 		return ValueConversion.from(annotation);
+	}
+
+	/**
+	 * A RECORD with a JSON field, or a {@code %ROWTYPE} of a table with a JSON column, which Oracle allows from 21c on:
+	 * the driver cannot describe either, and fails with {@code ORA-17060}. An OBJECT cannot have one, which Oracle
+	 * itself refuses.
+	 */
+	private static void requireNoJson(CompositeType type, List<OracleAttribute> attributes) {
+		List<String> json = attributes.stream().filter(a -> "JSON".equals(a.typeName())).map(OracleAttribute::name)
+				.toList();
+		if (json.isEmpty()) {
+			return;
+		}
+		throw new PlsqlMappingException(
+				io.github.rponte.penitent.internal.metadata.RoutineValidation.jsonRefusal(type, json));
 	}
 
 	/**

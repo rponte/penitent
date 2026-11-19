@@ -139,6 +139,82 @@ public final class RoutineValidation {
 	 * OF}: a {@code FOR i IN 1..p.COUNT} in the routine would read the wrong element, or not even
 	 * find the last one. That is why it is only supported for reading.
 	 */
+	/**
+	 * Oracle's JSON type, from 21c on, crosses with a type of the driver's own, which only drivers 21 and later know:
+	 * driver 19 refuses it as an invalid column type. It reads nothing from the dictionary.
+	 */
+	public void requireJsonToBeSupported(Method method, int driverMajorVersion) {
+		for (Argument argument : boundArguments(method)) {
+			if (argument.isJson() && driverMajorVersion < 21) {
+				throw new PlsqlMappingException(nameOf(argument) + " is Oracle's JSON type, which driver "
+						+ driverMajorVersion + " does not know: use driver 21 or later");
+			}
+		}
+	}
+
+	private List<Argument> boundArguments(Method method) {
+		List<Argument> arguments = new java.util.ArrayList<>(
+				routine.parameters().subList(0, Math.min(method.getParameterCount(), routine.parameters().size())));
+		routine.returnValue().ifPresent(arguments::add);
+		return arguments;
+	}
+
+	/**
+	 * A call that failed with {@code ORA-17074} or {@code ORA-17060}, the driver's errors for a type it cannot
+	 * describe, because of JSON: a collection of JSON, which a package may declare though a schema cannot, a RECORD
+	 * with a JSON field, or a {@code %ROWTYPE} of a table with a JSON column. It is looked into only once a call has
+	 * failed, so that a call that works reads nothing more from the dictionary; with no JSON found, the original error
+	 * goes on.
+	 */
+	public void explainUndescribableJson(Method method, Dictionary dictionary, java.sql.SQLException cause) {
+		for (Argument argument : boundArguments(method)) {
+			if (argument.isCollection() && "JSON".equals(
+					RoutineMetadata.collectionTypeOf(dictionary, argument, routine.schema()).scalarElement())) {
+				throw new PlsqlMappingException(nameOf(argument) + " is " + JSON_COLLECTION, cause);
+			}
+			if (argument.isStruct()) {
+				CompositeType type = argument.compositeType(routine.schema());
+				List<String> json = jsonAttributesOf(dictionary, type);
+				if (!json.isEmpty()) {
+					throw new PlsqlMappingException(nameOf(argument) + ": " + jsonRefusal(type, json), cause);
+				}
+			}
+		}
+	}
+
+	/** Why a collection of JSON is refused, after "is". */
+	public static final String JSON_COLLECTION = "a collection of JSON, which the Oracle driver cannot describe"
+			+ " (ORA-17074): pass the documents one at a time, or as one JSON array";
+
+	/** The JSON fields of a RECORD, or the JSON columns behind a {@code %ROWTYPE}; an OBJECT cannot have any. */
+	private static List<String> jsonAttributesOf(Dictionary dictionary, CompositeType type) {
+		return switch (type.kind()) {
+			case PLSQL_RECORD -> dictionary.strings("""
+					select attr_name from all_plsql_type_attrs
+					 where owner = ? and package_name = ? and type_name = ? and attr_type_name = 'JSON'
+					 order by attr_no
+					""", type.schema(), type.container(), type.simpleName());
+			case ROWTYPE -> dictionary.strings("""
+					select column_name from all_tab_columns
+					 where owner = ? and table_name = ? and column_id is not null and data_type = 'JSON'
+					 order by column_id
+					""", type.schema(), type.simpleName());
+			case OBJECT -> List.of();
+		};
+	}
+
+	/**
+	 * Why a RECORD with a JSON field, or a {@code %ROWTYPE} of a table with a JSON column, which Oracle allows from 21c
+	 * on, is refused: the driver cannot describe either, and fails with {@code ORA-17060}.
+	 */
+	public static String jsonRefusal(CompositeType type, List<String> json) {
+		boolean row = type.kind() == CompositeType.Kind.ROWTYPE;
+		return type.bindName() + " has " + (row ? "a JSON column " : "a JSON field ") + json
+				+ ", which the Oracle driver cannot describe (ORA-17060): "
+				+ (row ? "read the rows through a cursor, where a JSON column is supported"
+						: "declare the field as VARCHAR2 or CLOB, or pass the document as a parameter of its own");
+	}
+
 	public void requireCollectionsToBeSupported(Method method, Dictionary dictionary, PlsqlConverters converters) {
 		Parameter[] javaParameters = method.getParameters();
 		List<Argument> params = routine.parameters();

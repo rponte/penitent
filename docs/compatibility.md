@@ -164,6 +164,11 @@ Where the PL/SQL guarantees the value is never `null`, driver 23 works as it is.
 | `NUMBER` as return value | `boolean`, `Boolean`, as `1`/`0` or the literals of `@PlsqlBoolean` on the method. Any other value is a `PlsqlMappingException` | Validated |
 | `VARCHAR2` as parameter and return value | `boolean`, `Boolean`, by the literals of `@PlsqlBoolean` on the parameter or on the method | Validated |
 | `BOOLEAN` with `@PlsqlBoolean` | The annotation has no effect | Validated |
+| `JSON`, from Oracle 21c on, with driver 21 or later: as `IN`, `OUT`, `IN OUT` and return value, `null` included, above 32 KB, a scalar at the top, bound by name; the text is the database's, and a number keeps its value, not its written form; a record through a converter of the application's own, with Jackson | `String`, the JSON text | Validated, on 23ai and 21c |
+| `JSON` with driver 19, which does not know the type | Refused before the call, naming the driver | Not supported, with a clear error |
+| A collection of `JSON`, a RECORD with a `JSON` field, a `%ROWTYPE` of a table with a `JSON` column, which no driver can describe (`ORA-17074`, `ORA-17060`) | Refused, naming the field or the column | Not supported, with a clear error |
+| Two versions of a routine, one taking `JSON` and one `VARCHAR2`, for a `String` | Refused as ambiguous | Not supported, with a clear error |
+| Text that is not JSON | `PlsqlExecutionException`: the database's `ORA-26327` with driver 23, the driver's own `ORA-17001` with driver 21 | Validated |
 
 `null` crosses as `null` for scalars, and a primitive rejects `NULL` with `PlsqlMappingException`, instead of making up a `false` or a `0` (validated).
 
@@ -251,6 +256,7 @@ Where the PL/SQL guarantees the value is never `null`, driver 23 works as it is.
 | Strongly typed `REF CURSOR` | Validated |
 | `Set<T>` or `Collection<T>` return value | Not supported, with a clear error |
 | `CLOB` column in `String` | Validated |
+| `JSON` column in `String`, `null` included, from Oracle 21c on, with driver 21 or later | Validated |
 | `TIMESTAMP` column in `LocalDateTime` | Validated |
 | Column with time zone in `OffsetDateTime`, `ZonedDateTime` or `Instant` | Validated |
 | Column with time zone in `LocalDateTime`, or `TIMESTAMP` in `Instant`: rejected when reading, with the column in the message | Validated |
