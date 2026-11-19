@@ -19,6 +19,8 @@ final class Jdbc {
 	static final int ORACLE_TIMESTAMPLTZ = -102;
 	static final int ORACLE_INTERVALYM = -103;
 	static final int ORACLE_INTERVALDS = -104;
+	/** {@code OracleTypes.JSON}: the JSON type of Oracle 21c and later, which drivers 21 and later know. */
+	static final int ORACLE_JSON = 2016;
 
 	/**
 	 * {@code OracleTypes.PLSQL_BOOLEAN}, for every {@code BOOLEAN} the library binds, not the standard
@@ -88,7 +90,17 @@ final class Jdbc {
 		}
 	}
 
-	static int sqlTypeOf(Argument argument) {
+	/** The driver's major version, such as 19, 21 or 23, as the connection reports it. */
+	static int driverMajorVersion(java.sql.Connection connection) {
+		try {
+			return connection.getMetaData().getDriverMajorVersion();
+		} catch (java.sql.SQLException e) {
+			throw new io.github.rponte.penitent.internal.metadata.Dictionary.SqlFailure(null, e,
+					io.github.rponte.penitent.exception.PlsqlFailure.Phase.PREPARATION);
+		}
+	}
+
+		static int sqlTypeOf(Argument argument) {
 		return switch (argument.dataType()) {
 			// RECORD and %ROWTYPE travel as STRUCT, with the qualified name
 			case "OBJECT", "PL/SQL RECORD" -> Types.STRUCT;
@@ -113,6 +125,9 @@ final class Jdbc {
 			case "BLOB" -> Types.BLOB;
 			case "RAW" -> Types.BINARY; // OracleTypes.RAW: as VARBINARY, ORA-17012
 			case "INTERVAL DAY TO SECOND" -> ORACLE_INTERVALDS;
+			// as VARCHAR, a JSON parameter yields PLS-00306 and a JSON return value PLS-00382: the database does not
+			// convert text to JSON for a bind, so it goes with its own type, as the JSON text
+			case "JSON" -> ORACLE_JSON;
 			case "INTERVAL YEAR TO MONTH" -> ORACLE_INTERVALYM;
 			default -> Types.VARCHAR;
 		};

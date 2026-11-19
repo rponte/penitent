@@ -61,12 +61,22 @@ final class RoutineCall {
 		try {
 			return call(routine, method, arguments, ReturnType.of(method) != void.class, connection);
 		} catch (SqlFailure e) {
+			SQLException cause = e.failure().cause();
+			if (cause.getErrorCode() == UNRESOLVED_TYPE || cause.getErrorCode() == INVALID_NAME_PATTERN) {
+				new RoutineValidation(routine).explainUndescribableJson(method, new Dictionary(connection), cause);
+			}
 			if (described) {
-				explainChange(method, routine, e.failure().cause(), connection);
+				explainChange(method, routine, cause, connection);
 			}
 			throw StaleTypes.explained(e);
 		}
 	}
+
+	/** {@code ORA-17060}: the driver could not describe a type, such as a RECORD with a JSON field. */
+	private static final int UNRESOLVED_TYPE = 17060;
+
+	/** {@code ORA-17074}: the driver could not resolve a type's name, such as a collection of JSON. */
+	private static final int INVALID_NAME_PATTERN = 17074;
 
 	/** Oracle's errors that a call with a signature the routine no longer has raises, from its {@code PLS-} code. */
 	private static final List<String> SIGNATURE_CHANGED = List.of("PLS-00306", "PLS-00222", "PLS-00302");
@@ -199,8 +209,12 @@ final class RoutineCall {
 		if (argument.isStruct()) {
 			types.binding(javaType, argument.compositeType(schema), connection).resolveNested(connection);
 		} else if (argument.isCollection()) {
-			resolveElements(types.collectionType(argument, schema, connection), RoutineMetadata.elementTypeOf(generic),
-					connection);
+			CollectionType collection = types.collectionType(argument, schema, connection);
+			if ("JSON".equals(collection.scalarElement())) {
+				throw new PlsqlMappingException((argument.isReturnValue() ? "the return value" : argument.name()) + " is "
+						+ RoutineValidation.JSON_COLLECTION);
+			}
+			resolveElements(collection, RoutineMetadata.elementTypeOf(generic), connection);
 		}
 	}
 
@@ -243,6 +257,7 @@ final class RoutineCall {
 			validation.requireConvertersToFit(method, dictionary, types.converters());
 			validation.requireTemporalElementsToAgree(method, dictionary, types.converters());
 			validation.requireNestingToAgree(method, dictionary);
+			validation.requireJsonToBeSupported(method, Jdbc.driverMajorVersion(connection));
 		}
 		CallLog.described(routine.qualifiedName(), start);
 		warnIfNullBooleanMisread(routine, method, connection);
@@ -390,6 +405,9 @@ final class RoutineCall {
 			bindNull(statement, position, parameter, schema, connection);
 		} else if (parameter.isBoolean() && bindable instanceof Boolean) {
 			statement.setObject(position, bindable, Jdbc.ORACLE_PLSQL_BOOLEAN);
+		} else if (parameter.isJson()) {
+			// the JSON text, with the JSON type, which the database parses; as plain text, PLS-00306
+			statement.setObject(position, bindable, Jdbc.ORACLE_JSON);
 		} else if (ValueEncoder.binaryFloatingPoint(parameter) && bindable instanceof Number number) {
 			// bound with its type: as the default NUMBER, a NaN or an infinity fails in the driver
 			Jdbc.setBinaryFloatingPoint(statement, position, number, parameter.dataType());

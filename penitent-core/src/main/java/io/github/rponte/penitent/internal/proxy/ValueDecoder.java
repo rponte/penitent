@@ -53,13 +53,19 @@ final class ValueDecoder {
 		} else {
 			AppliedConverter applied = target.converter();
 			value = applied == null
-					? ScalarCodec.decode(ScalarCodec.read(statement, position, target.type()), target.type(),
+					? ScalarCodec.decode(read(statement, position, argument, target.type()), target.type(),
 							target.conversion(), connection)
-					: applied.fromDatabase(ScalarCodec.decode(ScalarCodec.read(statement, position,
+					: applied.fromDatabase(ScalarCodec.decode(read(statement, position, argument,
 							applied.databaseType()), applied.databaseType(), target.conversion(), connection));
 		}
 		received(log, outName, value);
 		return value;
+	}
+
+	/** A JSON value as its text: the driver's {@code getObject} gives its own type, which needs a connection property. */
+	private static Object read(CallableStatement statement, int position, Argument argument, Class<?> declared)
+			throws SQLException {
+		return argument.isJson() ? statement.getString(position) : ScalarCodec.read(statement, position, declared);
 	}
 
 	/** A null {@code outName} means the function's return value. */

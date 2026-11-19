@@ -45,7 +45,7 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 	public record Argument(int position, String name, String dataType, String inOut, String typeOwner, String typeName,
 			String typeSubname, boolean defaulted) {
 
-		boolean isReturnValue() {
+		public boolean isReturnValue() {
 			return position == 0;
 		}
 
@@ -119,6 +119,11 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 			return "BOOLEAN".equals(dataType) || "PL/SQL BOOLEAN".equals(dataType);
 		}
 
+		/** Oracle's JSON type, from 21c on, which a value crosses as its JSON text. */
+		public boolean isJson() {
+			return "JSON".equals(dataType);
+		}
+
 		public boolean isIn() {
 			return "IN".equals(inOut) || "IN/OUT".equals(inOut);
 		}
@@ -154,6 +159,9 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 			}
 			if (dataType.contains("BOOLEAN")) {
 				return javaType == boolean.class || javaType == Boolean.class;
+			}
+			if (isJson()) {
+				return CharSequence.class.isAssignableFrom(javaType);
 			}
 			if (dataType.contains("CHAR") || dataType.endsWith("CLOB")) {
 				return CharSequence.class.isAssignableFrom(javaType) || javaType.isEnum()

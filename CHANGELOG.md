@@ -6,6 +6,15 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Oracle's `JSON` type, from 21c on, as a `String` holding the JSON text: an `IN`, `OUT` or `IN OUT` parameter, a
+  return value and a cursor column, with driver 21 or later. It failed with `PLS-00306` or `PLS-00382`, and a cursor
+  column with `ORA-18722`. The text that comes back is the database's, which keeps a number's value but not its
+  written form. A collection of `JSON`, a RECORD with a `JSON` field and a `%ROWTYPE` of a table with a `JSON`
+  column, which no driver can describe, are refused with a clear message, and so is the type with driver 19, before
+  the call. To map the text to an object, use a converter with the application's JSON library.
+
 ## [0.31.0]
 
 Changing PL/SQL under a running application, and stubs of everything a call sends. A routine or a type that changed
