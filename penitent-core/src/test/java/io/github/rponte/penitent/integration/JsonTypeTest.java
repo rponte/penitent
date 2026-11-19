@@ -12,6 +12,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import io.github.rponte.penitent.PlsqlBind;
+import io.github.rponte.penitent.PlsqlBlock;
 import io.github.rponte.penitent.convert.PlsqlConvert;
 import io.github.rponte.penitent.PlsqlOut;
 import io.github.rponte.penitent.PlsqlPackage;
@@ -79,6 +80,30 @@ class JsonTypeTest extends OracleIntegrationTest {
 		Order echo(@PlsqlConvert(OrderJson.class) Order pDoc);
 		// end-snippet
 	}
+
+	// snippet: types/json-block
+	interface JsonThroughBlocks {
+
+		// IN: the text becomes JSON in the database, with JSON(...)
+		@PlsqlBlock("begin :result := fixture_json.length_of(JSON(:doc)); end;")
+		BigDecimal lengthOf(String doc);
+
+		// return value: the JSON becomes text in the database, with JSON_SERIALIZE
+		@PlsqlBlock("begin :result := JSON_SERIALIZE(fixture_json.echo(JSON(:doc)) RETURNING CLOB); end;")
+		String echo(String doc);
+
+		// OUT: into a JSON variable of the block, then as text
+		@PlsqlBlock("""
+				declare
+				    v_doc JSON;
+				begin
+				    fixture_json.out_doc(v_doc);
+				    :result := JSON_SERIALIZE(v_doc RETURNING CLOB);
+				end;
+				""")
+		String outDoc();
+	}
+	// end-snippet
 
 	@PlsqlPackage(value = "FIXTURE_JSON", bind = PlsqlBind.BY_NAME)
 	interface JsonByName {
@@ -220,12 +245,28 @@ class JsonTypeTest extends OracleIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("through anonymous blocks that convert in the database, with any driver, driver 19 included")
+	void through_blocks_with_any_driver() {
+		JsonThroughBlocks blocks = pkg(JsonThroughBlocks.class);
+		assertThat(blocks.lengthOf("{\"a\":1}")).isEqualByComparingTo("7");
+		assertThat(blocks.echo("{ \"b\" : 2 }")).isEqualTo("{\"b\":2}");
+		assertThat(blocks.outDoc()).isEqualTo("{\"out\":true}");
+	}
+
+	@Test
+	@DisplayName("through a block, a text goes as a VARCHAR2, so above 32,767 bytes it fails: a limit of PL/SQL")
+	void through_blocks_up_to_32k() {
+		String large = "{\"text\":\"" + "z".repeat(50_000) + "\"}";
+		assertThatThrownBy(() -> pkg(JsonThroughBlocks.class).echo(large)).hasMessageContaining("ORA-06502");
+	}
+
+	@Test
 	@DisplayName("driver 19 does not know the JSON type: refused before the call, naming the driver")
 	void driver_before_21_is_refused() {
 		assumeTrue(DRIVER_MAJOR_VERSION < 21, "a driver before 21");
 		assertThatThrownBy(() -> pkg(Json.class).echo("{\"a\":1}"))
 				.isInstanceOf(PlsqlMappingException.class)
-				.hasMessageContaining("JSON")
-				.hasMessageContaining("driver 21");
+				.hasMessageContaining("is Oracle's JSON type, which driver 19 does not know: use driver 21 or later, or"
+						+ " call the routine through a @PlsqlBlock that converts the text in the database");
 	}
 }

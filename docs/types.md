@@ -186,8 +186,39 @@ json.echo("{ \"b\" : 2 }");   // {"b":2}
   Order echo(@PlsqlConvert(OrderJson.class) Order pDoc);
   ```
 
-- **It needs driver 21 or later,** which knows the type; with driver 19, a routine that takes or returns a `JSON` is
-  refused before the call. A document of any size goes both ways, a scalar at the top, such as `42`, included.
+- **It needs driver 21 or later,** which knows the type. A document of any size goes both ways, a scalar at the
+  top, such as `42`, included. With driver 19, a routine that takes or returns a `JSON` is refused before the call.
+- **With driver 19,** call the routine through an [anonymous block](anonymous-blocks.md) that converts the text in
+  the database, where the driver sees only text: `JSON(...)` makes a parameter a document, `JSON_SERIALIZE` makes a
+  document text again, and a block's variable takes an `OUT`:
+
+  <!-- snippet: types/json-block -->
+  ```java
+  interface JsonThroughBlocks {
+
+      // IN: the text becomes JSON in the database, with JSON(...)
+      @PlsqlBlock("begin :result := fixture_json.length_of(JSON(:doc)); end;")
+      BigDecimal lengthOf(String doc);
+
+      // return value: the JSON becomes text in the database, with JSON_SERIALIZE
+      @PlsqlBlock("begin :result := JSON_SERIALIZE(fixture_json.echo(JSON(:doc)) RETURNING CLOB); end;")
+      String echo(String doc);
+
+      // OUT: into a JSON variable of the block, then as text
+      @PlsqlBlock("""
+              declare
+                  v_doc JSON;
+              begin
+                  fixture_json.out_doc(v_doc);
+                  :result := JSON_SERIALIZE(v_doc RETURNING CLOB);
+              end;
+              """)
+      String outDoc();
+  }
+  ```
+
+  It works with every driver. In a block, though, each text goes as a `VARCHAR2`, so a document above 32,767 bytes
+  fails with `ORA-06502`: a limit of PL/SQL, which only the JSON type of drivers 21 and later lifts.
 - **Not supported, refused before the call:** a collection of `JSON` and a RECORD with a `JSON` field, which no
   driver can describe, and a `%ROWTYPE` of a table with a `JSON` column: read such rows through a cursor, where a
   `JSON` column is supported. An OBJECT cannot have a `JSON` attribute: Oracle itself refuses it. Two versions of
