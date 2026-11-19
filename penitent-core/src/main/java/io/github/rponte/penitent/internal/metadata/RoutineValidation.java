@@ -147,7 +147,8 @@ public final class RoutineValidation {
 		for (Argument argument : boundArguments(method)) {
 			if (argument.isJson() && driverMajorVersion < 21) {
 				throw new PlsqlMappingException(nameOf(argument) + " is Oracle's JSON type, which driver "
-						+ driverMajorVersion + " does not know: use driver 21 or later");
+						+ driverMajorVersion + " does not know: use driver 21 or later, or call the routine through a"
+						+ " @PlsqlBlock that converts the text in the database, with JSON(...) and JSON_SERIALIZE");
 			}
 		}
 	}
