@@ -195,7 +195,7 @@ Add the module with the `test` scope:
 <dependency>
     <groupId>io.github.rponte</groupId>
     <artifactId>penitent-test</artifactId>
-    <version>0.30.0</version>
+    <version>0.31.0</version>
     <scope>test</scope>
 </dependency>
 ```

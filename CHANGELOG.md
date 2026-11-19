@@ -6,6 +6,8 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.31.0]
+
 Changing PL/SQL under a running application, and stubs of everything a call sends. A routine or a type that changed
 since a proxy described it now says so, and a new page explains what a deploy does to the calls, and how a pool
 recovers. A block's types resolve as PL/SQL resolves them. The mocks stub standalone routines, records, `%ROWTYPE` and
@@ -351,7 +353,8 @@ driven by the database dictionary: see the [README](https://github.com/rponte/pe
 
 - Spring Boot 4.1.2 for the versions the library is built and tested with.
 
-[Unreleased]: https://github.com/rponte/penitent/compare/v0.30.0...HEAD
+[Unreleased]: https://github.com/rponte/penitent/compare/v0.31.0...HEAD
+[0.31.0]: https://github.com/rponte/penitent/compare/v0.30.0...v0.31.0
 [0.30.0]: https://github.com/rponte/penitent/compare/v0.29.0...v0.30.0
 [0.29.0]: https://github.com/rponte/penitent/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/rponte/penitent/compare/v0.27.0...v0.28.0
