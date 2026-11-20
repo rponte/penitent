@@ -22,6 +22,8 @@ BEGIN
 				PROCEDURE wrap(p_doc IN OUT JSON);
 				FUNCTION big(p_size NUMBER) RETURN JSON;
 				FUNCTION scalar RETURN JSON;
+				FUNCTION beyond_number RETURN JSON;
+				FUNCTION beyond_number_rows RETURN SYS_REFCURSOR;
 				FUNCTION rows RETURN SYS_REFCURSOR;
 				FUNCTION kind(p_value JSON) RETURN VARCHAR2;
 				FUNCTION kind(p_value VARCHAR2) RETURN VARCHAR2;
@@ -52,6 +54,14 @@ BEGIN
 					RETURN JSON(l_text);
 				END;
 				FUNCTION scalar RETURN JSON IS BEGIN RETURN JSON('42'); END;
+				-- 23ai takes a number beyond NUMBER's range, as a double; 21c refuses it, with ORA-01426, when called
+				FUNCTION beyond_number RETURN JSON IS BEGIN RETURN JSON('{"big":1e200}'); END;
+				FUNCTION beyond_number_rows RETURN SYS_REFCURSOR IS
+					l_rows SYS_REFCURSOR;
+				BEGIN
+					OPEN l_rows FOR SELECT 1 AS id, JSON('{"big":1e200}') AS doc FROM dual;
+					RETURN l_rows;
+				END;
 				FUNCTION rows RETURN SYS_REFCURSOR IS
 					l_rows SYS_REFCURSOR;
 				BEGIN

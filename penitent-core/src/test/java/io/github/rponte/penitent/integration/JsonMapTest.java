@@ -69,6 +69,12 @@ class JsonMapTest extends OracleIntegrationTest {
 		@PlsqlRoutine("NULL_DOC")
 		Map<String, Object> nullDoc();
 
+		@PlsqlRoutine("BEYOND_NUMBER")
+		String beyondNumberText();
+
+		@PlsqlRoutine("BEYOND_NUMBER")
+		Map<String, Object> beyondNumber();
+
 		@PlsqlRoutine("BIG")
 		Map<String, Object> big(BigDecimal pSize);
 	}
@@ -83,6 +89,15 @@ class JsonMapTest extends OracleIntegrationTest {
 	@PlsqlPackage("FIXTURE_JSON")
 	interface Rows {
 		List<Row> rows();
+
+		@PlsqlRoutine("BEYOND_NUMBER_ROWS")
+		List<TextRow> beyondNumberRows();
+
+		@PlsqlRoutine("BEYOND_NUMBER_ROWS")
+		List<Row> beyondNumberMapRows();
+	}
+
+	record TextRow(BigDecimal id, String doc) {
 	}
 
 	record Row(BigDecimal id, Map<String, Object> doc) {
@@ -305,6 +320,27 @@ class JsonMapTest extends OracleIntegrationTest {
 		assertThatThrownBy(() -> documents().echoMap(Map.of("big", new BigDecimal("1e200"))))
 				.isInstanceOf(PlsqlMappingException.class)
 				.hasMessageContaining(expected);
+	}
+
+	@Test
+	@DisplayName("a number beyond NUMBER's range built in the database, which 23ai keeps as a double: its text comes back,"
+			+ " written by the driver with drivers 21 and later and by the database with driver 19, and a Map refuses it")
+	void number_out_of_range_from_the_database() {
+		assumeTrue(DATABASE_MAJOR_VERSION >= 23, "21c refuses such a number itself, with ORA-01426");
+		assertThat(documents().beyondNumberText())
+				.isEqualTo(DRIVER_MAJOR_VERSION >= 21 ? "{\"big\":1.0E200}" : "{\"big\":1E+200}");
+		assertThatThrownBy(() -> documents().beyondNumber())
+				.isInstanceOf(PlsqlMappingException.class)
+				.hasMessageContaining("the return value of PLSQL_TEST.FIXTURE_JSON.BEYOND_NUMBER: the document holds a"
+						+ " number that the driver's JSON parser does not read");
+		if (DRIVER_MAJOR_VERSION >= 21) {
+			assertThat(pkg(Rows.class).beyondNumberRows())
+					.containsExactly(new TextRow(new BigDecimal("1"), "{\"big\":1.0E200}"));
+			assertThatThrownBy(() -> pkg(Rows.class).beyondNumberMapRows())
+					.isInstanceOf(PlsqlMappingException.class)
+					.hasMessageContaining("cursor column DOC: the document holds a number that the driver's JSON parser"
+							+ " does not read");
+		}
 	}
 
 	@Test
