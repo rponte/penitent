@@ -26,7 +26,10 @@ All notable changes to this project are listed here. The format follows
   `LocalDate`, a document that does not fit the declared type, and a `Map` or a `List` with narrower type arguments,
   such as `Map<String, String>`, are refused with a clear message. A number beyond the range of `NUMBER`, such as
   `1e200`, which the parser of drivers 21 and later does not take before sending the text, is refused with a clear
-  message, as a `String` too: it escaped as the driver's `IllegalArgumentException`, with no message.
+  message, as a `String` too: it escaped as the driver's `IllegalArgumentException`, with no message. The Types page's
+  "Moving between drivers and databases" shows what a JSON text sent does with each driver and database, such as an
+  empty string, which is `NULL` with driver 19 and an error with drivers 21 and later; making it the same everywhere
+  is [#140](https://github.com/rponte/penitent/issues/140).
 
 ## [0.31.0]
 

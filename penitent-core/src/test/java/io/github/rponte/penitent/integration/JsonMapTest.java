@@ -324,9 +324,14 @@ class JsonMapTest extends OracleIntegrationTest {
 
 	@Test
 	@DisplayName("a number beyond NUMBER's range built in the database, which 23ai keeps as a double: its text comes back,"
-			+ " written by the driver with drivers 21 and later and by the database with driver 19, and a Map refuses it")
+			+ " written by the driver with drivers 21 and later and by the database with driver 19, and a Map refuses it;"
+			+ " 21c refuses to build it, with ORA-01426")
 	void number_out_of_range_from_the_database() {
-		assumeTrue(DATABASE_MAJOR_VERSION >= 23, "21c refuses such a number itself, with ORA-01426");
+		if (DATABASE_MAJOR_VERSION < 23) {
+			assertThatThrownBy(() -> documents().beyondNumberText()).as("21c refuses such a number itself")
+					.hasMessageContaining("ORA-01426: numeric overflow");
+			return;
+		}
 		assertThat(documents().beyondNumberText())
 				.isEqualTo(DRIVER_MAJOR_VERSION >= 21 ? "{\"big\":1.0E200}" : "{\"big\":1E+200}");
 		assertThatThrownBy(() -> documents().beyondNumber())
