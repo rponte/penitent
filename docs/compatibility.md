@@ -172,6 +172,9 @@ Where the PL/SQL guarantees the value is never `null`, driver 23 works as it is.
 | A collection of `JSON`, a RECORD with a `JSON` field, a `%ROWTYPE` of a table with a `JSON` column, which no driver can describe (`ORA-17074`, `ORA-17060`) | Refused, naming the field or the column | Not supported, with a clear error |
 | Two versions of a routine, one taking `JSON` and one `VARCHAR2`, for a `String` | Refused as ambiguous | Not supported, with a clear error |
 | Text that is not JSON | `PlsqlExecutionException`: the database's `ORA-26327` with driver 23, the driver's own `ORA-17001` with driver 21 | Validated |
+| `JSON` as a `Map<String, Object>` for an object, a `List<Object>` for an array, a number or a `Boolean` for a scalar at the top, with drivers 23, 21 and 19: `IN` and return value, `null` included, above 32 KB, nested objects and arrays, the keys' order; `OUT` and `IN OUT` with driver 21 or later | `LinkedHashMap`, `ArrayList`; every number inside a `BigDecimal`, with the value Oracle keeps | Validated |
+| `JSON` as a `Map`: a value JSON has no form for, such as a `LocalDate`, or `NaN`; a document that does not fit the declared type; a `Map` or a `List` with other type arguments than `Object`, or a `HashMap` | Refused with a clear message, naming where the value is, as in `$.items[0].when`, before the call when it can be | Not supported, with a clear error |
+| `JSON` with a number beyond the range of `NUMBER`, such as `1e200`, as a `String` or a `Map`: the database's parser takes it, the driver's does not | Refused with a clear message: on the way in with drivers 21 and later, on the way back with driver 19 on 23ai; with driver 19 on 21c, the database refuses it itself, with `ORA-01426` | Not supported by the driver, with a clear error |
 
 `null` crosses as `null` for scalars, and a primitive rejects `NULL` with `PlsqlMappingException`, instead of making up a `false` or a `0` (validated).
 
@@ -260,6 +263,7 @@ Where the PL/SQL guarantees the value is never `null`, driver 23 works as it is.
 | `Set<T>` or `Collection<T>` return value | Not supported, with a clear error |
 | `CLOB` column in `String` | Validated |
 | `JSON` column in `String`, `null` included, from Oracle 21c on, with driver 21 or later | Validated |
+| `JSON` column in a `Map<String, Object>`, a `List<Object>`, a number or a `Boolean` of a record or a JavaBean, `null` included, with driver 21 or later; a `Map` or a `List` with other type arguments is refused | Validated |
 | `TIMESTAMP` column in `LocalDateTime` | Validated |
 | Column with time zone in `OffsetDateTime`, `ZonedDateTime` or `Instant` | Validated |
 | Column with time zone in `LocalDateTime`, or `TIMESTAMP` in `Instant`: rejected when reading, with the column in the message | Validated |

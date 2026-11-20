@@ -11,6 +11,7 @@ import io.github.rponte.penitent.convert.PlsqlConverters;
 import io.github.rponte.penitent.exception.PlsqlMappingException;
 import io.github.rponte.penitent.internal.convert.AppliedConverter;
 import io.github.rponte.penitent.internal.convert.ScalarCodec;
+import io.github.rponte.penitent.internal.convert.JsonCodec;
 import io.github.rponte.penitent.internal.driver.DriverProfile;
 import io.github.rponte.penitent.internal.metadata.RoutineMetadata.Argument;
 
@@ -153,6 +154,44 @@ public final class RoutineValidation {
 						+ " type, which driver " + driver.driver() + " cannot bring back: use driver 21 or later, or"
 						+ " call the routine through a @PlsqlBlock, with a JSON variable that JSON_SERIALIZE returns");
 			}
+		}
+	}
+
+	/**
+	 * A JSON value declared as a type the library reads and writes ({@link JsonCodec#accepts}), and a {@code Map} or a
+	 * {@code List} with type arguments that describe a document: {@code Map<String, Object>} and {@code List<Object>}.
+	 * A parameter's type already picks the routine's version; the return value's is checked here. A converter's
+	 * database type is the converter's to fit, as for any other type. It reads nothing from the dictionary.
+	 */
+	public void requireJsonTypesToFit(Method method, PlsqlConverters converters) {
+		Parameter[] javaParameters = method.getParameters();
+		List<Argument> params = routine.parameters();
+		for (int i = 0; i < javaParameters.length && i < params.size(); i++) {
+			Argument param = params.get(i);
+			if (param.isJson() && RoutineMetadata.converterOf(method, javaParameters[i], converters) == null) {
+				requireJsonType(param, OutParameters.isDeclaredBy(javaParameters[i])
+						? OutParameters.valueTypeOf(javaParameters[i])
+						: javaParameters[i].getParameterizedType());
+			}
+		}
+		java.util.Optional<Argument> returned = routine.returnValue().filter(Argument::isJson);
+		if (returned.isPresent() && RoutineMetadata.converterOfReturn(method, converters) == null) {
+			requireJsonType(returned.get(), ReturnType.genericOf(method));
+		}
+	}
+
+	private void requireJsonType(Argument argument, java.lang.reflect.Type declared) {
+		Class<?> raw = declared instanceof java.lang.reflect.ParameterizedType parameterized
+				? (Class<?>) parameterized.getRawType()
+				: declared instanceof Class<?> type ? type : Object.class;
+		if (raw != Object.class && !JsonCodec.accepts(raw)) {
+			throw new PlsqlMappingException(nameOf(argument) + " is Oracle's JSON type, which maps to String for its"
+					+ " text, Map<String, Object> for an object, List<Object> for an array, or a number or a Boolean for"
+					+ " a scalar, not " + declared.getTypeName());
+		}
+		String problem = JsonCodec.typeArgumentProblem(declared);
+		if (problem != null) {
+			throw new PlsqlMappingException(nameOf(argument) + " is Oracle's JSON type, " + problem);
 		}
 	}
 

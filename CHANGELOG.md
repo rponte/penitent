@@ -17,8 +17,16 @@ All notable changes to this project are listed here. The format follows
   comes back through `JSON_SERIALIZE`; an `OUT` or an `IN OUT` is refused, with the way around it, a `@PlsqlBlock`
   with a `JSON` variable, which the Types page shows. A cursor with a `JSON` column fails inside driver 19, before
   the library sees any column: its message, for a driver before 21 and a database of 21c or later, now names the
-  likely type and the way around it, `JSON_SERIALIZE` in the query. To map the text to an object, use a converter
-  with the application's JSON library.
+  likely type and the way around it, `JSON_SERIALIZE` in the query. To map the text to your own classes, use a
+  converter with the application's JSON library.
+- Oracle's `JSON` type as the document itself, with no JSON library: a `Map<String, Object>` for an object, a
+  `List<Object>` for an array, and a number or a `Boolean` for a scalar at the top, in every place a `String` goes,
+  with every driver. The library parses and writes the text with the driver's own JSON API, `oracle.sql.json`. Inside
+  a `Map` or a `List`, every number is a `BigDecimal`, as the type stores it. A value JSON has no form for, such as a
+  `LocalDate`, a document that does not fit the declared type, and a `Map` or a `List` with narrower type arguments,
+  such as `Map<String, String>`, are refused with a clear message. A number beyond the range of `NUMBER`, such as
+  `1e200`, which the driver's parser does not take, is refused with a clear message too, as a `String` as well: it
+  escaped as the driver's `IllegalArgumentException`, with no message.
 
 ## [0.31.0]
 

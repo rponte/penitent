@@ -18,6 +18,7 @@ import io.github.rponte.penitent.convert.PlsqlConverters;
 import io.github.rponte.penitent.exception.PlsqlMappingException;
 import io.github.rponte.penitent.internal.binding.JavaProperties.Assignment;
 import io.github.rponte.penitent.internal.binding.JavaProperties.JavaProperty;
+import io.github.rponte.penitent.internal.convert.JsonCodec;
 import io.github.rponte.penitent.internal.convert.AppliedConverter;
 import io.github.rponte.penitent.internal.convert.ConverterLookup;
 import io.github.rponte.penitent.internal.convert.ScalarCodec;
@@ -169,6 +170,13 @@ public final class CursorBinding {
 			Connection connection) throws SQLException {
 		AppliedConverter applied = ConverterLookup.find(converters, property.annotation(PlsqlConvert.class),
 				property.type(), property.elementType(), javaType.getSimpleName() + "." + property.name());
+		if (applied == null && ScalarCodec.isJsonColumn(rs, column)) {
+			String problem = JsonCodec.typeArgumentProblem(property.genericType());
+			if (problem != null) {
+				throw new PlsqlMappingException(javaType.getSimpleName() + "." + property.name() + ": cursor column "
+						+ label + " is Oracle's JSON type, " + problem);
+			}
+		}
 		Object raw = ScalarCodec.read(rs, column,
 				applied == null || applied.elementWise() ? property.type() : applied.databaseType());
 		if (applied == null && raw instanceof Struct struct && JavaProperties.isComposite(property.type())) {

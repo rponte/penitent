@@ -43,6 +43,9 @@ public final class JavaProperties {
 		/** The {@code T} of {@code List<T>} or {@code T[]}; null when it is neither. */
 		Class<?> elementType();
 
+		/** The declared type with its type arguments, such as {@code Map<String, Object>}. */
+		java.lang.reflect.Type genericType();
+
 		Method reader();
 
 		Method writer();
@@ -113,6 +116,11 @@ public final class JavaProperties {
 				}
 
 				@Override
+				public java.lang.reflect.Type genericType() {
+					return component.getGenericType();
+				}
+
+				@Override
 				public Method reader() {
 					return component.getAccessor();
 				}
@@ -157,6 +165,11 @@ public final class JavaProperties {
 				@Override
 				public Class<?> elementType() {
 					return elementClassOf(method.getGenericReturnType(), method.getReturnType());
+				}
+
+				@Override
+				public java.lang.reflect.Type genericType() {
+					return method.getGenericReturnType();
 				}
 
 				@Override

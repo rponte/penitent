@@ -23,6 +23,7 @@ import io.github.rponte.penitent.convert.PlsqlConverters;
 import io.github.rponte.penitent.exception.PlsqlMappingException;
 import io.github.rponte.penitent.internal.convert.AppliedConverter;
 import io.github.rponte.penitent.internal.convert.ConverterLookup;
+import io.github.rponte.penitent.internal.convert.JsonCodec;
 import io.github.rponte.penitent.internal.driver.Carrier;
 import io.github.rponte.penitent.internal.driver.Carriers;
 
@@ -163,7 +164,7 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 				return javaType == boolean.class || javaType == Boolean.class;
 			}
 			if (isJson()) {
-				return CharSequence.class.isAssignableFrom(javaType);
+				return JsonCodec.accepts(javaType);
 			}
 			if (dataType.contains("CHAR") || dataType.endsWith("CLOB")) {
 				return CharSequence.class.isAssignableFrom(javaType) || javaType.isEnum()
