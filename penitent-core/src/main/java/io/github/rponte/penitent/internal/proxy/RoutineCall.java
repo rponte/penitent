@@ -21,6 +21,7 @@ import io.github.rponte.penitent.exception.PlsqlMappingException;
 import io.github.rponte.penitent.internal.Caches;
 import io.github.rponte.penitent.internal.binding.TypeNameIntegration;
 import io.github.rponte.penitent.internal.convert.AppliedConverter;
+import io.github.rponte.penitent.internal.convert.JsonCodec;
 import io.github.rponte.penitent.internal.convert.ScalarCodec;
 import io.github.rponte.penitent.internal.driver.Carrier;
 import io.github.rponte.penitent.internal.driver.Carriers;
@@ -262,6 +263,7 @@ final class RoutineCall {
 			validation.requireTemporalElementsToAgree(method, dictionary, types.converters());
 			validation.requireNestingToAgree(method, dictionary);
 			validation.requireJsonToBeSupported(method, DriverProfile.of(connection));
+			validation.requireJsonTypesToFit(method, types.converters());
 		}
 		CallLog.described(routine.qualifiedName(), start);
 		warnIfNullBooleanMisread(routine, method, connection);
@@ -350,11 +352,23 @@ final class RoutineCall {
 		}
 	}
 
-	/** The value that actually goes to the database. A whole collection that is null does not go through the converter. */
+	/**
+	 * The value that actually goes to the database. A whole collection that is null does not go through the converter.
+	 * A JSON value goes as its text, which {@link JsonCodec#text} writes from a {@code Map}, a {@code List} or a scalar.
+	 */
 	private Object toDatabase(Object value, Method method, java.lang.reflect.Parameter javaParameter,
 			Argument parameter, RoutineMetadata routine) {
-		return converted(RoutineMetadata.converterOf(method, javaParameter, types.converters()), value,
+		Object converted = converted(RoutineMetadata.converterOf(method, javaParameter, types.converters()), value,
 				parameter.name(), routine);
+		if (!parameter.isJson()) {
+			return converted;
+		}
+		try {
+			return JsonCodec.text(converted);
+		} catch (ScalarCodec.ConversionException e) {
+			throw new PlsqlMappingException(parameter.name() + " of " + routine.qualifiedName() + ": " + e.getMessage(),
+					e);
+		}
 	}
 
 	/** {@code value} through {@code applied}, element by element where it applies to the elements of a list. */
@@ -419,13 +433,30 @@ final class RoutineCall {
 		} else if (parameter.isBoolean() && bindable instanceof Boolean) {
 			statement.setObject(position, bindable, Jdbc.ORACLE_PLSQL_BOOLEAN);
 		} else if (parameter.isJson()) {
-			// the JSON text, with the JSON type, which the database parses; as plain text, PLS-00306
-			statement.setObject(position, bindable, Jdbc.ORACLE_JSON);
+			// the JSON text, with the JSON type; as plain text, PLS-00306
+			bindJson(statement, position, bindable, parameter);
 		} else if (ValueEncoder.binaryFloatingPoint(parameter) && bindable instanceof Number number) {
 			// bound with its type: as the default NUMBER, a NaN or an infinity fails in the driver
 			Jdbc.setBinaryFloatingPoint(statement, position, number, parameter.dataType());
 		} else {
 			statement.setObject(position, ScalarCodec.forDriver(bindable));
+		}
+	}
+
+	/**
+	 * The JSON text with the JSON type, which drivers 21 and later parse into OSON, Oracle's binary form, before
+	 * sending it. Their parser keeps numbers as Oracle {@code NUMBER}s, and refuses one beyond that range, such as
+	 * {@code 1e200}, with an {@code IllegalArgumentException} and no message, though the database's own parser takes
+	 * it.
+	 */
+	private static void bindJson(CallableStatement statement, int position, Object text, Argument parameter)
+			throws SQLException {
+		try {
+			statement.setObject(position, text, Jdbc.ORACLE_JSON);
+		} catch (IllegalArgumentException e) {
+			throw new PlsqlMappingException(parameter.name() + " is Oracle's JSON type, and the driver, which parses the"
+					+ " text before sending it, does not take a number in it beyond the range of Oracle's NUMBER, about"
+					+ " 1e-130 to 1e126: keep such a number as a JSON string", e);
 		}
 	}
 

@@ -21,7 +21,7 @@ section. The [compatibility table](compatibility.md) lists every pair of types t
 | `TIMESTAMP WITH TIME ZONE`, `TIMESTAMP WITH LOCAL TIME ZONE` | `OffsetDateTime`, `ZonedDateTime`, `Instant` |
 | `INTERVAL DAY TO SECOND`, `INTERVAL YEAR TO MONTH` | `Duration`, `Period` |
 | `BOOLEAN` | `boolean`, `Boolean` |
-| `JSON`, from Oracle 21c on | `String`, the JSON text: see [JSON](#json) |
+| `JSON`, from Oracle 21c on | `String`, the JSON text, or `Map<String, Object>`, `List<Object>`, a number or `Boolean`: see [JSON](#json) |
 
 How values cross:
 
@@ -139,7 +139,8 @@ A few more details:
 ## JSON
 
 Oracle 21c added a `JSON` type, which stores a document in a binary form of its own, OSON. A parameter, a return
-value or a cursor column of that type maps to a `String`, holding the document's JSON text:
+value or a cursor column of that type maps to a `String`, holding the document's JSON text, or to the document
+itself, as a `Map` or a `List` (see [As a Map or a List](#as-a-map-or-a-list)):
 
 <!-- snippet: fixture -->
 ```sql
@@ -158,7 +159,7 @@ json.echo("{ \"b\" : 2 }");   // {"b":2}
   `{"price":24.9,"n":1500}`, and a number of more than about 38 significant digits loses the rest, with no error.
   Keep such a value, such as a large identifier, as a JSON string. A `VARCHAR2` or `CLOB` column checked with
   `IS JSON` keeps the text as written.
-- **To work with objects,** convert the text with the JSON library of your application, in a
+- **To work with your own classes,** convert the text with the JSON library of your application, in a
   [converter](converters.md). With Jackson:
 
   <!-- snippet: types/json-converter -->
@@ -186,6 +187,7 @@ json.echo("{ \"b\" : 2 }");   // {"b":2}
   Order echo(@PlsqlConvert(OrderJson.class) Order pDoc);
   ```
 
+- **As a Map or a List,** see [below](#as-a-map-or-a-list): with no JSON library at all.
 - **Drivers 21 and later** know the type, and bind it as such, in every place above. A document of any size goes
   both ways, a scalar at the top, such as `42`, included.
 - **Driver 19 does not know the type,** so Penitent converts the text in the database, where the driver sees only
@@ -234,6 +236,65 @@ json.echo("{ \"b\" : 2 }");   // {"b":2}
   a routine, one taking `JSON` and one `VARCHAR2`, both fit a `String`, so a method that calls them is refused as
   ambiguous: call the one you want through an [anonymous block](anonymous-blocks.md).
 
+
+### As a Map or a List
+
+Without a JSON library, declare the document's own shape: Penitent parses and writes the text with the driver's
+JSON API, `oracle.sql.json`, which every supported driver ships.
+
+| The document's top | Java type |
+|---|---|
+| an object | `Map<String, Object>`, a `LinkedHashMap` that keeps the keys' order |
+| an array | `List<Object>`, an `ArrayList` |
+| a number | `BigDecimal`, `Long`, `Integer` or another numeric type, converted exactly |
+| `true` or `false` | `Boolean` |
+| any | `String`, its JSON text |
+
+<!-- snippet: types/json-map -->
+```java
+@PlsqlPackage("FIXTURE_JSON")
+interface Orders {
+    Map<String, Object> echo(Map<String, Object> pDoc);   // an object
+
+    @PlsqlRoutine("ECHO")
+    List<Object> echoArray(List<Object> pDoc);            // an array
+
+    BigDecimal scalar();                                  // a number at the top
+}
+```
+
+<!-- snippet: types/json-map-use -->
+```java
+Map<String, Object> order = new LinkedHashMap<>();
+order.put("id", 7);
+order.put("total", new BigDecimal("24.90"));
+order.put("items", List.of("pen", "ink"));
+
+Map<String, Object> back = orders.echo(order);
+Object id = back.get("id");         // BigDecimal 7
+Object total = back.get("total");   // BigDecimal 24.9: the value, not its written form
+Object items = back.get("items");   // List ["pen", "ink"]
+```
+
+- **Inside a `Map` or a `List`,** an object is a `Map<String, Object>`, an array a `List<Object>`, a string a
+  `String`, `true` and `false` a `Boolean`, `null` a `null`, and **every number a `BigDecimal`:** the JSON type stores
+  numbers as `NUMBER`s, so an integer and a decimal look the same, and `24.90` comes back as `24.9`. Cast with
+  `((BigDecimal) map.get("id")).intValueExact()`, not `(Integer) map.get("id")`.
+- **On the way in,** a `Map` with `String` keys, a `List`, a `CharSequence`, a `Boolean`, a finite number and
+  `null` go as they are, at any depth. Anything else, such as a `LocalDate`, is refused before the call, naming where
+  it is, as in `$.items[0].when`: convert it to a `String` yourself, or use a [converter](converters.md).
+- **A document that does not fit the declared type is refused,** naming what it is: an array read as a `Map`, a
+  number read as a `List`, or a JSON string read as anything but `String`, whose text keeps its quotes.
+- **Only `Map<String, Object>` and `List<Object>`,** or their wildcards, describe a document, whose values are of
+  many types. A `Map<String, String>`, a `List<String>`, or a `HashMap` is refused before the call, and in a
+  cursor's record, before the row is read.
+- **A number beyond the range of `NUMBER`,** about `1e-130` to `1e126`, such as `1e200`, is not taken by the
+  driver's parser. Drivers 21 and later parse the text before sending it, so it is refused on the way in. With
+  driver 19, whose call converts the text in the database, 23ai's parser takes it, and it is refused on the way
+  back; 21c's refuses it itself, with `ORA-01426`. A `String` parameter refuses it the same way. Keep such a number
+  as a JSON string.
+- **The same mapping works with every driver,** since the document crosses JDBC as text. With driver 19, the limits
+  above apply: no `OUT`, no `IN OUT` and no cursor column.
 ## Composite types
 
 An OBJECT type, a RECORD declared in a package and a table's `%ROWTYPE` all map to a Java `record` or a JavaBean.

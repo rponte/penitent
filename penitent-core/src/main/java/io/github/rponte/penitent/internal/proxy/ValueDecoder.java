@@ -11,6 +11,7 @@ import java.util.List;
 
 import io.github.rponte.penitent.exception.PlsqlMappingException;
 import io.github.rponte.penitent.internal.binding.OracleArrays;
+import io.github.rponte.penitent.internal.convert.JsonCodec;
 import io.github.rponte.penitent.internal.convert.AppliedConverter;
 import io.github.rponte.penitent.internal.convert.ScalarCodec;
 import io.github.rponte.penitent.internal.convert.ScalarCodec.ValueConversion;
@@ -62,10 +63,14 @@ final class ValueDecoder {
 		return value;
 	}
 
-	/** A JSON value as its text: the driver's {@code getObject} gives its own type, which needs a connection property. */
+	/**
+	 * A JSON value from its text, as the declared type takes it: see {@link JsonCodec#read}. The driver's
+	 * {@code getObject} gives its own type, which needs a connection property.
+	 */
 	private static Object read(CallableStatement statement, int position, Argument argument, Class<?> declared)
 			throws SQLException {
-		return argument.isJson() ? statement.getString(position) : ScalarCodec.read(statement, position, declared);
+		return argument.isJson() ? JsonCodec.read(statement.getString(position), declared)
+				: ScalarCodec.read(statement, position, declared);
 	}
 
 	/** A null {@code outName} means the function's return value. */

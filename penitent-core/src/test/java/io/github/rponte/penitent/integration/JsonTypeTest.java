@@ -24,8 +24,8 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * Oracle's {@code JSON} type, from 21c on, mapped as {@code String}: the JSON text. The database stores it in a binary
  * form, so the text that comes back is the database's, with its own spacing and number forms. These tests need a
- * database and a driver of 21 or later, which know the type; {@link #driver_before_21_is_refused} covers the older
- * driver.
+ * database of 21c or later; the ones named {@code driver_19_*} cover driver 19, which does not know the type, and
+ * the rest need driver 21 or later. {@link JsonMapTest} covers the type as a {@code Map}, a {@code List} or a scalar.
  */
 class JsonTypeTest extends OracleIntegrationTest {
 
