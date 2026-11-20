@@ -46,19 +46,32 @@ final class Jdbc {
 	}
 
 	/**
-	 * Runs the statement. An {@link AssertionError} from the driver is its own internal check failing in
-	 * the middle of a response, so the connection is left at an unknown point of the protocol: it is
-	 * aborted, so that the pool replaces it instead of handing it to the next call, which would fail with
-	 * "Protocol violation" for no reason of its own. The error then goes the way of any other failure of
-	 * the call, through the translator, as a {@code SQLException} that says what happened and keeps the
-	 * driver's error as its cause. Only {@code AssertionError} is caught: any other {@code Error} is not
-	 * the driver's to explain.
+	 * Runs the statement, and treats anything but a {@code SQLException} that the driver throws as the driver's own
+	 * failure.
 	 *
-	 * <p>The known case is a cursor with a {@code BOOLEAN} column, the SQL type of 23ai: before driver
-	 * 23, the driver does not know the type code of the column, 252, and fails while describing it. The
-	 * database turns a {@code BOOLEAN} into a {@code NUMBER} for such a driver in a plain query, but not
-	 * in a cursor opened in PL/SQL, which is the only kind the library reads, and the library never sees
-	 * the query inside it: the conversion has to be in the query.
+	 * <p><b>Why any {@code RuntimeException}, and not only some.</b> JDBC lets a driver report a failure of the
+	 * database or of the call only as a {@code SQLException}. So an {@link AssertionError} or a
+	 * {@code RuntimeException} out of {@code execute()} is the driver failing itself, in the middle of a response,
+	 * and the connection is left at an unknown point of the protocol. Nothing but the driver runs inside
+	 * {@code execute()}, so the rule cannot catch a failure of the library or of the application. Which exception it
+	 * is depends on the driver's state, not on the cause: driver 19 fails a cursor with a JSON column with an
+	 * {@code AssertionError} or, measured in the same test class, with an {@code ArrayIndexOutOfBoundsException}.
+	 * Catching only the first let the second through, and the broken connection went back to the pool, to fail the
+	 * next, unrelated call with "Protocol violation".
+	 *
+	 * <p><b>What it does.</b> The connection is aborted, so that the pool replaces it instead of handing it to the
+	 * next call. The failure then goes the way of any other failure of the call, through the translator, as a
+	 * {@code SQLException} that says what happened and keeps the driver's exception as its cause. Any other
+	 * {@code Error}, such as an {@code OutOfMemoryError}, is not the driver's to explain, and goes as it is.
+	 *
+	 * <p><b>The known cases,</b> which the message explains, are columns of a type the driver does not know, in a
+	 * cursor opened in PL/SQL, the only kind the library reads, and whose query it never sees, so the conversion has
+	 * to be in the query:
+	 * <ul>
+	 * <li>a {@code BOOLEAN} column, the SQL type of 23ai, before driver 23: type code 252;</li>
+	 * <li>a {@code JSON} column, the type of 21c, before driver 21: the driver reports no type code, so the message
+	 * says "such as JSON", for a driver before 21 and a database of 21c or later.</li>
+	 * </ul>
 	 */
 	static void execute(CallableStatement statement, String sql) {
 		try {
@@ -66,10 +79,7 @@ final class Jdbc {
 		} catch (SQLException e) {
 			throw new SqlFailure(sql, e, PlsqlFailure.Phase.EXECUTION);
 		} catch (AssertionError | RuntimeException e) {
-			// a driver throws only SQLException: anything else is its own failure, which leaves the connection in a
-			// state no later call can trust, so it never goes back to the pool. Driver 19 fails a cursor with a JSON
-			// column with an AssertionError or an ArrayIndexOutOfBoundsException, as its state goes. The versions are
-			// read first: the connection is aborted next
+			// the driver's own failure, as the Javadoc explains; the versions are read first, then the connection aborted
 			String failure = driverFailure(e, statement);
 			abortConnectionOf(statement, e);
 			throw new SqlFailure(sql, new SQLException(failure, e), PlsqlFailure.Phase.EXECUTION);
