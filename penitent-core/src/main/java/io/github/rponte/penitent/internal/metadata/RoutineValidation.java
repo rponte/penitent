@@ -11,6 +11,7 @@ import io.github.rponte.penitent.convert.PlsqlConverters;
 import io.github.rponte.penitent.exception.PlsqlMappingException;
 import io.github.rponte.penitent.internal.convert.AppliedConverter;
 import io.github.rponte.penitent.internal.convert.ScalarCodec;
+import io.github.rponte.penitent.internal.driver.DriverProfile;
 import io.github.rponte.penitent.internal.metadata.RoutineMetadata.Argument;
 
 /**
@@ -145,11 +146,11 @@ public final class RoutineValidation {
 	 * {@code JSON_SERIALIZE}; an {@code OUT} or an {@code IN OUT} takes only a JSON bind, which needs the driver's
 	 * type, or a block's variable. It reads nothing from the dictionary.
 	 */
-	public void requireJsonToBeSupported(Method method, int driverMajorVersion) {
+	public void requireJsonToBeSupported(Method method, DriverProfile driver) {
 		for (Argument argument : boundArguments(method)) {
-			if (argument.isJson() && argument.isOut() && !argument.isReturnValue() && driverMajorVersion < 21) {
+			if (argument.isJson() && argument.isOut() && !argument.isReturnValue() && !driver.knowsJson()) {
 				throw new PlsqlMappingException(nameOf(argument) + " is an " + argument.inOut() + " of Oracle's JSON"
-						+ " type, which driver " + driverMajorVersion + " cannot bring back: use driver 21 or later, or"
+						+ " type, which driver " + driver.driver() + " cannot bring back: use driver 21 or later, or"
 						+ " call the routine through a @PlsqlBlock, with a JSON variable that JSON_SERIALIZE returns");
 			}
 		}
