@@ -288,11 +288,16 @@ Object items = back.get("items");   // List ["pen", "ink"]
 - **Only `Map<String, Object>` and `List<Object>`,** or their wildcards, describe a document, whose values are of
   many types. A `Map<String, String>`, a `List<String>`, or a `HashMap` is refused before the call, and in a
   cursor's record, before the row is read.
-- **A number beyond the range of `NUMBER`,** about `1e-130` to `1e126`, such as `1e200`, is not taken by the
-  driver's parser. Drivers 21 and later parse the text before sending it, so it is refused on the way in. With
-  driver 19, whose call converts the text in the database, 23ai's parser takes it, and it is refused on the way
-  back; 21c's refuses it itself, with `ORA-01426`. A `String` parameter refuses it the same way. Keep such a number
-  as a JSON string.
+- **A number beyond the range of `NUMBER`,** about `1e-130` to `1e126`, such as `1e200`, is not read by the
+  driver's JSON parser, and where the database parses it depends on the driver:
+
+  | Driver | Database | `String` | `Map` or `List` |
+  |---|---|---|---|
+  | 21 or later | any | refused on the way in: the driver parses the text before sending it | the same |
+  | 19 | 23ai | works: the text comes back, as `{"big":1E+200}` | refused on the way back, by the driver's parser |
+  | 19 | 21c | the database refuses it, with `ORA-01426` | the same |
+
+  Keep such a number as a JSON string.
 - **The same mapping works with every driver,** since the document crosses JDBC as text. With driver 19, the limits
   above apply: no `OUT`, no `IN OUT` and no cursor column.
 ## Composite types

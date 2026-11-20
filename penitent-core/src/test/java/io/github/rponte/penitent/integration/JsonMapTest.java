@@ -43,6 +43,9 @@ class JsonMapTest extends OracleIntegrationTest {
 		Map<String, Object> parse(String pDoc);
 
 		@PlsqlRoutine("ECHO")
+		String echoText(String pDoc);
+
+		@PlsqlRoutine("ECHO")
 		String text(Map<String, Object> pDoc);
 
 		@PlsqlRoutine("ECHO")
@@ -270,7 +273,8 @@ class JsonMapTest extends OracleIntegrationTest {
 	@DisplayName("a number beyond the range of Oracle's NUMBER, such as 1e200, which the database's parser takes but the"
 			+ " driver's does not, is refused with a clear message: on the way in with drivers 21 and later, which parse"
 			+ " the text before sending it, and on the way back with driver 19 on 23ai, whose call converts it in the"
-			+ " database. On 21c, the database's parser refuses it too, with ORA-01426")
+			+ " database, where a String still takes its text. On 21c, the database's parser refuses it too, with"
+			+ " ORA-01426")
 	void number_out_of_range() {
 		String expected = DRIVER_MAJOR_VERSION >= 21
 				? "P_DOC is Oracle's JSON type, and the driver, which parses the text before sending it, does not take a"
@@ -281,10 +285,19 @@ class JsonMapTest extends OracleIntegrationTest {
 						+ " String for its text";
 		if (DRIVER_MAJOR_VERSION < 21 && DATABASE_MAJOR_VERSION < 23) {
 			// with driver 19 the database parses the text, and 21c's parser refuses the number itself
+			assertThatThrownBy(() -> documents().echoText("{\"big\":1e200}")).hasMessageContaining("ORA-01426");
 			assertThatThrownBy(() -> documents().parse("{\"big\":1e200}")).hasMessageContaining("ORA-01426");
 			assertThatThrownBy(() -> documents().echoMap(Map.of("big", new BigDecimal("1e200"))))
 					.hasMessageContaining("ORA-01426");
 			return;
+		}
+		if (DRIVER_MAJOR_VERSION < 21) {
+			// with driver 19 on 23ai, the database takes it, and the text comes back: no parser of the driver is involved
+			assertThat(documents().echoText("{\"big\":1e200}")).isEqualTo("{\"big\":1E+200}");
+		} else {
+			assertThatThrownBy(() -> documents().echoText("{\"big\":1e200}"))
+					.isInstanceOf(PlsqlMappingException.class)
+					.hasMessageContaining(expected);
 		}
 		assertThatThrownBy(() -> documents().parse("{\"big\":1e200}"))
 				.isInstanceOf(PlsqlMappingException.class)

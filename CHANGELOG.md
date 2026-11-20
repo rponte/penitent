@@ -25,8 +25,8 @@ All notable changes to this project are listed here. The format follows
   a `Map` or a `List`, every number is a `BigDecimal`, as the type stores it. A value JSON has no form for, such as a
   `LocalDate`, a document that does not fit the declared type, and a `Map` or a `List` with narrower type arguments,
   such as `Map<String, String>`, are refused with a clear message. A number beyond the range of `NUMBER`, such as
-  `1e200`, which the driver's parser does not take, is refused with a clear message too, as a `String` as well: it
-  escaped as the driver's `IllegalArgumentException`, with no message.
+  `1e200`, which the parser of drivers 21 and later does not take before sending the text, is refused with a clear
+  message, as a `String` too: it escaped as the driver's `IllegalArgumentException`, with no message.
 
 ## [0.31.0]
 
