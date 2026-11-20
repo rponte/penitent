@@ -6,6 +6,7 @@ import java.sql.Types;
 
 import io.github.rponte.penitent.exception.PlsqlFailure;
 import io.github.rponte.penitent.internal.binding.OracleArrays;
+import io.github.rponte.penitent.internal.driver.DriverProfile;
 import io.github.rponte.penitent.internal.metadata.Dictionary.SqlFailure;
 import io.github.rponte.penitent.internal.metadata.RoutineMetadata.Argument;
 
@@ -94,32 +95,24 @@ final class Jdbc {
 					+ " null, and declare Boolean,"
 					+ " or use driver 23. The connection was discarded";
 		}
-		if (olderDriverThanDatabase(statement)) {
+		DriverProfile driver = profileOf(statement);
+		if (driver != null && driver.olderDriverThanDatabase()) {
 			// the known case is a cursor with a JSON column, the type of 21c, which driver 19 fails to describe with
 			// oacdty: 0, before the library sees any column; the code does not name the type, hence "such as"
 			return "the Oracle driver failed an internal check (" + message + "): a column of a type that driver "
-					+ driverMajorVersion(connectionOf(statement)) + " does not know, such as JSON, makes it fail: convert"
+					+ driver.driver() + " does not know, such as JSON, makes it fail: convert"
 					+ " it in the query, as in JSON_SERIALIZE(doc RETURNING CLOB), or use driver 21 or later. The"
 					+ " connection was discarded";
 		}
 		return "the Oracle driver failed an internal check (" + message + "). The connection was discarded";
 	}
 
-	/** A driver before 21 talking to a database of 21c or later, which has types the driver does not know. */
-	private static boolean olderDriverThanDatabase(CallableStatement statement) {
+	/** The profile, or null when the broken connection cannot tell it: the message then goes without the hint. */
+	private static DriverProfile profileOf(CallableStatement statement) {
 		try {
-			java.sql.DatabaseMetaData metadata = statement.getConnection().getMetaData();
-			return metadata.getDriverMajorVersion() < 21 && metadata.getDatabaseMajorVersion() >= 21;
+			return DriverProfile.of(statement.getConnection());
 		} catch (SQLException | RuntimeException e) {
-			return false;
-		}
-	}
-
-	private static java.sql.Connection connectionOf(CallableStatement statement) {
-		try {
-			return statement.getConnection();
-		} catch (SQLException e) {
-			throw new SqlFailure(null, e, PlsqlFailure.Phase.EXECUTION);
+			return null;
 		}
 	}
 
@@ -128,16 +121,6 @@ final class Jdbc {
 			statement.getConnection().abort(Runnable::run);
 		} catch (SQLException | RuntimeException e) {
 			failure.addSuppressed(e);
-		}
-	}
-
-	/** The driver's major version, such as 19, 21 or 23, as the connection reports it. */
-	static int driverMajorVersion(java.sql.Connection connection) {
-		try {
-			return connection.getMetaData().getDriverMajorVersion();
-		} catch (java.sql.SQLException e) {
-			throw new io.github.rponte.penitent.internal.metadata.Dictionary.SqlFailure(null, e,
-					io.github.rponte.penitent.exception.PlsqlFailure.Phase.PREPARATION);
 		}
 	}
 

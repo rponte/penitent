@@ -23,6 +23,8 @@ import io.github.rponte.penitent.convert.PlsqlConverters;
 import io.github.rponte.penitent.exception.PlsqlMappingException;
 import io.github.rponte.penitent.internal.convert.AppliedConverter;
 import io.github.rponte.penitent.internal.convert.ConverterLookup;
+import io.github.rponte.penitent.internal.driver.Carrier;
+import io.github.rponte.penitent.internal.driver.Carriers;
 
 /**
  * The signature of a routine, read from the Oracle data dictionary.
@@ -635,22 +637,25 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 	 * declares. A parameter with DEFAULT at the end can be omitted in a positional call, and Oracle
 	 * fills it in.
 	 *
-	 * <p>With {@code jsonAsText}, for a driver before 21, which does not know Oracle's JSON type, a JSON parameter's
-	 * placeholder is {@code JSON(?)}, and a JSON return value comes back through
-	 * {@code JSON_SERIALIZE(... RETURNING CLOB)}: the database converts the text, and the driver sees only text.
+	 * <p>An argument of a type that the driver does not know takes the placeholder and the return value of its
+	 * {@link Carrier}, such as {@code JSON(?)} and {@code JSON_SERIALIZE(... RETURNING CLOB)} for Oracle's JSON type
+	 * with driver 19: the database converts the value, and the driver sees only a type it knows.
 	 */
-	public String callStatement(int providedArgumentCount, boolean expectsResult, boolean jsonAsText) {
+	public String callStatement(int providedArgumentCount, boolean expectsResult, Carriers carriers) {
 		String prefix = expectsResult ? "{? = call " : "{call ";
 		List<Argument> params = parameters();
 		String call = callName();
 		if (providedArgumentCount > 0) {
 			call += java.util.stream.IntStream.range(0, providedArgumentCount)
 					.mapToObj(i -> (byName ? quoted(params.get(i).name()) + " => " : "")
-							+ (jsonAsText && params.get(i).isJson() ? "JSON(?)" : "?"))
+							+ carriers.of(params.get(i)).map(Carrier::placeholder).orElse("?"))
 					.collect(Collectors.joining(", ", "(", ")"));
 		}
-		if (expectsResult && jsonAsText && returnValue().filter(Argument::isJson).isPresent()) {
-			call = "JSON_SERIALIZE(" + call + " RETURNING CLOB)";
+		if (expectsResult) {
+			java.util.Optional<Carrier> carrier = returnValue().flatMap(carriers::of);
+			if (carrier.isPresent()) {
+				call = carrier.get().result(call);
+			}
 		}
 		return prefix + call + "}";
 	}
