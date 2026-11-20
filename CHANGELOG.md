@@ -12,9 +12,13 @@ All notable changes to this project are listed here. The format follows
   return value and a cursor column, with driver 21 or later. It failed with `PLS-00306` or `PLS-00382`, and a cursor
   column with `ORA-18722`. The text that comes back is the database's, which keeps a number's value but not its
   written form. A collection of `JSON`, a RECORD with a `JSON` field and a `%ROWTYPE` of a table with a `JSON`
-  column, which no driver can describe, are refused with a clear message, and so is the type with driver 19, before
-  the call, with the way around it: a `@PlsqlBlock` that converts the text in the database, which the Types page
-  shows. To map the text to an object, use a converter with the application's JSON library.
+  column, which no driver can describe, are refused with a clear message. With driver 19, which does not know the
+  type, the call converts the text in the database: a `JSON` parameter goes as `JSON(?)`, and a `JSON` return value
+  comes back through `JSON_SERIALIZE`; an `OUT` or an `IN OUT` is refused, with the way around it, a `@PlsqlBlock`
+  with a `JSON` variable, which the Types page shows. A cursor with a `JSON` column fails inside driver 19, before
+  the library sees any column: its message, for a driver before 21 and a database of 21c or later, now names the
+  likely type and the way around it, `JSON_SERIALIZE` in the query. To map the text to an object, use a converter
+  with the application's JSON library.
 
 ## [0.31.0]
 

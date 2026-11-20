@@ -186,11 +186,19 @@ json.echo("{ \"b\" : 2 }");   // {"b":2}
   Order echo(@PlsqlConvert(OrderJson.class) Order pDoc);
   ```
 
-- **It needs driver 21 or later,** which knows the type. A document of any size goes both ways, a scalar at the
-  top, such as `42`, included. With driver 19, a routine that takes or returns a `JSON` is refused before the call.
-- **With driver 19,** call the routine through an [anonymous block](anonymous-blocks.md) that converts the text in
-  the database, where the driver sees only text: `JSON(...)` makes a parameter a document, `JSON_SERIALIZE` makes a
-  document text again, and a block's variable takes an `OUT`:
+- **Drivers 21 and later** know the type, and bind it as such, in every place above. A document of any size goes
+  both ways, a scalar at the top, such as `42`, included.
+- **Driver 19 does not know the type,** so Penitent converts the text in the database, where the driver sees only
+  text: a `JSON` parameter goes as `JSON(?)`, and a `JSON` return value comes back through
+  `JSON_SERIALIZE(... RETURNING CLOB)`, which the call log shows. That works for a document of any size, by position
+  and by name. An `OUT` or an `IN OUT` takes only a bind of the JSON type itself, which driver 19 cannot make, so it
+  is refused before the call. A cursor with a `JSON` column fails inside driver 19 itself, while the call runs,
+  before Penitent sees any column: Penitent discards the connection, which the failure leaves broken, and its message
+  names the likely type, `JSON`, and the way around it. Convert the column in the query, with
+  `JSON_SERIALIZE(doc RETURNING CLOB)`, or use driver 21 or later.
+- **For an `OUT` with driver 19,** call the routine through an [anonymous block](anonymous-blocks.md), whose
+  variable takes the document, and whose `JSON_SERIALIZE` makes it text again; the same goes for any conversion of
+  your own:
 
   <!-- snippet: types/json-block -->
   ```java

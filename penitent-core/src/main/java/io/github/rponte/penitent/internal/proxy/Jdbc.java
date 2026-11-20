@@ -65,13 +65,18 @@ final class Jdbc {
 			statement.execute();
 		} catch (SQLException e) {
 			throw new SqlFailure(sql, e, PlsqlFailure.Phase.EXECUTION);
-		} catch (AssertionError e) {
+		} catch (AssertionError | RuntimeException e) {
+			// a driver throws only SQLException: anything else is its own failure, which leaves the connection in a
+			// state no later call can trust, so it never goes back to the pool. Driver 19 fails a cursor with a JSON
+			// column with an AssertionError or an ArrayIndexOutOfBoundsException, as its state goes. The versions are
+			// read first: the connection is aborted next
+			String failure = driverFailure(e, statement);
 			abortConnectionOf(statement, e);
-			throw new SqlFailure(sql, new SQLException(driverFailure(e), e), PlsqlFailure.Phase.EXECUTION);
+			throw new SqlFailure(sql, new SQLException(failure, e), PlsqlFailure.Phase.EXECUTION);
 		}
 	}
 
-	private static String driverFailure(AssertionError e) {
+	private static String driverFailure(Throwable e, CallableStatement statement) {
 		String message = String.valueOf(e.getMessage());
 		if (message.contains("oacdty: 252")) {
 			return "the Oracle driver before 23 cannot read a BOOLEAN column in a cursor (" + message
@@ -79,10 +84,36 @@ final class Jdbc {
 					+ " null, and declare Boolean,"
 					+ " or use driver 23. The connection was discarded";
 		}
+		if (olderDriverThanDatabase(statement)) {
+			// the known case is a cursor with a JSON column, the type of 21c, which driver 19 fails to describe with
+			// oacdty: 0, before the library sees any column; the code does not name the type, hence "such as"
+			return "the Oracle driver failed an internal check (" + message + "): a column of a type that driver "
+					+ driverMajorVersion(connectionOf(statement)) + " does not know, such as JSON, makes it fail: convert"
+					+ " it in the query, as in JSON_SERIALIZE(doc RETURNING CLOB), or use driver 21 or later. The"
+					+ " connection was discarded";
+		}
 		return "the Oracle driver failed an internal check (" + message + "). The connection was discarded";
 	}
 
-	private static void abortConnectionOf(CallableStatement statement, AssertionError failure) {
+	/** A driver before 21 talking to a database of 21c or later, which has types the driver does not know. */
+	private static boolean olderDriverThanDatabase(CallableStatement statement) {
+		try {
+			java.sql.DatabaseMetaData metadata = statement.getConnection().getMetaData();
+			return metadata.getDriverMajorVersion() < 21 && metadata.getDatabaseMajorVersion() >= 21;
+		} catch (SQLException | RuntimeException e) {
+			return false;
+		}
+	}
+
+	private static java.sql.Connection connectionOf(CallableStatement statement) {
+		try {
+			return statement.getConnection();
+		} catch (SQLException e) {
+			throw new SqlFailure(null, e, PlsqlFailure.Phase.EXECUTION);
+		}
+	}
+
+	private static void abortConnectionOf(CallableStatement statement, Throwable failure) {
 		try {
 			statement.getConnection().abort(Runnable::run);
 		} catch (SQLException | RuntimeException e) {
