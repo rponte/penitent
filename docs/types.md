@@ -154,7 +154,10 @@ String echo(String doc);
 json.echo("{ \"b\" : 2 }");   // {"b":2}
 ```
 
-- **The text that comes back is the database's,** with its own spacing. **A number keeps its value, not its written
+- **The text that comes back is written from the stored form,** not kept as you sent it, and without its spacing: by
+  the driver, with drivers 21 and later, and by the database's `JSON_SERIALIZE`, with driver 19. The two may write a
+  number differently: `1e200`, beyond `NUMBER`'s range, which 23ai keeps, comes back as `1.0E200` from the driver
+  and as `1E+200` from the database. **A number keeps its value, not its written
   form,** since the type stores numbers as `NUMBER`s: `{"price":24.90,"n":1.5e3}` comes back as
   `{"price":24.9,"n":1500}`, and a number of more than about 38 significant digits loses the rest, with no error.
   Keep such a value, such as a large identifier, as a JSON string. A `VARCHAR2` or `CLOB` column checked with
