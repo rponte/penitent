@@ -140,15 +140,17 @@ public final class RoutineValidation {
 	 * find the last one. That is why it is only supported for reading.
 	 */
 	/**
-	 * Oracle's JSON type, from 21c on, crosses with a type of the driver's own, which only drivers 21 and later know:
-	 * driver 19 refuses it as an invalid column type. It reads nothing from the dictionary.
+	 * Oracle's JSON type, from 21c on, crosses with a type of the driver's own, which only drivers 21 and later know.
+	 * Before driver 21, a call converts an IN and a return value in the database, with {@code JSON(?)} and
+	 * {@code JSON_SERIALIZE}; an {@code OUT} or an {@code IN OUT} takes only a JSON bind, which needs the driver's
+	 * type, or a block's variable. It reads nothing from the dictionary.
 	 */
 	public void requireJsonToBeSupported(Method method, int driverMajorVersion) {
 		for (Argument argument : boundArguments(method)) {
-			if (argument.isJson() && driverMajorVersion < 21) {
-				throw new PlsqlMappingException(nameOf(argument) + " is Oracle's JSON type, which driver "
-						+ driverMajorVersion + " does not know: use driver 21 or later, or call the routine through a"
-						+ " @PlsqlBlock that converts the text in the database, with JSON(...) and JSON_SERIALIZE");
+			if (argument.isJson() && argument.isOut() && !argument.isReturnValue() && driverMajorVersion < 21) {
+				throw new PlsqlMappingException(nameOf(argument) + " is an " + argument.inOut() + " of Oracle's JSON"
+						+ " type, which driver " + driverMajorVersion + " cannot bring back: use driver 21 or later, or"
+						+ " call the routine through a @PlsqlBlock, with a JSON variable that JSON_SERIALIZE returns");
 			}
 		}
 	}

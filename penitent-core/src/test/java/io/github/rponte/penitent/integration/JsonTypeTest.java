@@ -263,13 +263,74 @@ class JsonTypeTest extends OracleIntegrationTest {
 		assertThatThrownBy(() -> blocks.echo(large)).hasMessageContaining("ORA-06502");
 	}
 
+	private Json jsonWithDriver19() {
+		assumeTrue(DRIVER_MAJOR_VERSION < 21, "a driver before 21, which does not know the JSON type");
+		return pkg(Json.class);
+	}
+
 	@Test
-	@DisplayName("driver 19 does not know the JSON type: refused before the call, naming the driver")
-	void driver_before_21_is_refused() {
-		assumeTrue(DRIVER_MAJOR_VERSION < 21, "a driver before 21");
-		assertThatThrownBy(() -> pkg(Json.class).echo("{\"a\":1}"))
+	@DisplayName("driver 19: an IN and a return value, converted in the database, with JSON(?) and JSON_SERIALIZE")
+	void driver_19_in_and_return() {
+		Json json = jsonWithDriver19();
+		assertThat(json.echo("{ \"b\" : 2 }")).isEqualTo("{\"b\":2}");
+		assertThat(json.lengthOf("{\"a\":1}")).isEqualByComparingTo("7");
+		assertThat(json.scalar()).isEqualTo("42");
+	}
+
+	@Test
+	@DisplayName("driver 19: null both ways")
+	void driver_19_nulls() {
+		Json json = jsonWithDriver19();
+		assertThat(json.lengthOf(null)).isNull();
+		assertThat(json.nullDoc()).isNull();
+		assertThat(json.echo(null)).isNull();
+	}
+
+	@Test
+	@DisplayName("driver 19: a document above 32 KB, both ways")
+	void driver_19_large_document() {
+		Json json = jsonWithDriver19();
+		assertThat(json.big(BigDecimal.valueOf(100_000))).hasSize(100_000 + "{\"text\":\"\"}".length());
+		String sent = "{\"text\":\"" + "y".repeat(100_000) + "\"}";
+		assertThat(json.lengthOf(sent)).isEqualByComparingTo(String.valueOf(sent.length()));
+	}
+
+	@Test
+	@DisplayName("driver 19: binding by name")
+	void driver_19_by_name() {
+		assumeTrue(DRIVER_MAJOR_VERSION < 21, "a driver before 21, which does not know the JSON type");
+		assertThat(pkg(JsonByName.class).echo("{\"a\":1}")).isEqualTo("{\"a\":1}");
+	}
+
+	@Test
+	@DisplayName("driver 19: a cursor with a JSON column fails inside the driver, before any column is seen; the message"
+			+ " names the likely type and the way around it, and the connection is discarded. On 23ai only: on 21c, the"
+			+ " driver hangs instead")
+	void driver_19_cursor_column() {
+		assumeTrue(DATABASE_MAJOR_VERSION >= 23, "on 21c, driver 19 hangs reading such a cursor");
+		Json json = jsonWithDriver19();
+		// twice: the driver fails with an AssertionError or an ArrayIndexOutOfBoundsException, as its state goes
+		for (int call = 1; call <= 2; call++) {
+			assertThatThrownBy(json::rows)
+					.hasMessageContaining("a column of a type that driver 19 does not know, such as JSON, makes it fail:"
+							+ " convert it in the query, as in JSON_SERIALIZE(doc RETURNING CLOB), or use driver 21 or"
+							+ " later. The connection was discarded");
+			assertThat(json.echo("{\"after\":1}")).as("the pool is healthy after it").isEqualTo("{\"after\":1}");
+		}
+	}
+
+	@Test
+	@DisplayName("driver 19: an OUT and an IN OUT, which only the JSON type of drivers 21 and later bring back, are"
+			+ " refused before the call")
+	void driver_19_out_refused() {
+		Json json = jsonWithDriver19();
+		assertThatThrownBy(() -> json.outDoc(new PlsqlOut<>()))
 				.isInstanceOf(PlsqlMappingException.class)
-				.hasMessageContaining("is Oracle's JSON type, which driver 19 does not know: use driver 21 or later, or"
-						+ " call the routine through a @PlsqlBlock that converts the text in the database");
+				.hasMessageContaining("P_DOC of PLSQL_TEST.FIXTURE_JSON.OUT_DOC is an OUT of Oracle's JSON type, which"
+						+ " driver 19 cannot bring back: use driver 21 or later, or call the routine through a"
+						+ " @PlsqlBlock");
+		assertThatThrownBy(() -> json.wrap(PlsqlOut.of("{}")))
+				.isInstanceOf(PlsqlMappingException.class)
+				.hasMessageContaining("is an IN/OUT of Oracle's JSON type");
 	}
 }

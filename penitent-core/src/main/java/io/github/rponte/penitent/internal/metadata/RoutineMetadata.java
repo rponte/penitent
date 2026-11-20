@@ -634,17 +634,25 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 	 * function, without the package for a standalone routine, with as many placeholders as the caller supplied, not as many as the routine
 	 * declares. A parameter with DEFAULT at the end can be omitted in a positional call, and Oracle
 	 * fills it in.
+	 *
+	 * <p>With {@code jsonAsText}, for a driver before 21, which does not know Oracle's JSON type, a JSON parameter's
+	 * placeholder is {@code JSON(?)}, and a JSON return value comes back through
+	 * {@code JSON_SERIALIZE(... RETURNING CLOB)}: the database converts the text, and the driver sees only text.
 	 */
-	public String callStatement(int providedArgumentCount, boolean expectsResult) {
+	public String callStatement(int providedArgumentCount, boolean expectsResult, boolean jsonAsText) {
 		String prefix = expectsResult ? "{? = call " : "{call ";
-		if (providedArgumentCount == 0) {
-			return prefix + callName() + "}";
-		}
 		List<Argument> params = parameters();
-		String placeholders = java.util.stream.IntStream.range(0, providedArgumentCount)
-				.mapToObj(i -> byName ? quoted(params.get(i).name()) + " => ?" : "?")
-				.collect(Collectors.joining(", "));
-		return prefix + callName() + "(" + placeholders + ")}";
+		String call = callName();
+		if (providedArgumentCount > 0) {
+			call += java.util.stream.IntStream.range(0, providedArgumentCount)
+					.mapToObj(i -> (byName ? quoted(params.get(i).name()) + " => " : "")
+							+ (jsonAsText && params.get(i).isJson() ? "JSON(?)" : "?"))
+					.collect(Collectors.joining(", ", "(", ")"));
+		}
+		if (expectsResult && jsonAsText && returnValue().filter(Argument::isJson).isPresent()) {
+			call = "JSON_SERIALIZE(" + call + " RETURNING CLOB)";
+		}
+		return prefix + call + "}";
 	}
 
 	/** A name created in quotes, such as {@code "pValue"}, only matches in quotes. */

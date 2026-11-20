@@ -276,11 +276,13 @@ final class RoutineCall {
 
 	private Object call(RoutineMetadata routine, Method method, Object[] args, boolean expectsResult,
 			Connection connection) {
-		String sql = routine.callStatement(args.length, expectsResult);
+		// a driver before 21 does not know the JSON type: the call converts the text in the database
+		boolean jsonAsText = Jdbc.driverMajorVersion(connection) < 21;
+		String sql = routine.callStatement(args.length, expectsResult, jsonAsText);
 		CallLog log = CallLog.routine(routine.qualifiedName(), method, sql,
 				routine.byName() ? routine.parameters().stream().limit(args.length).map(Argument::name).toList() : null);
 		try {
-			Object result = call(routine, method, args, expectsResult, connection, sql, log);
+			Object result = call(routine, method, args, expectsResult, connection, sql, log, jsonAsText);
 			log.completed();
 			return result;
 		} catch (RuntimeException e) {
@@ -290,14 +292,14 @@ final class RoutineCall {
 	}
 
 	private Object call(RoutineMetadata routine, Method method, Object[] args, boolean expectsResult,
-			Connection connection, String sql, CallLog log) {
+			Connection connection, String sql, CallLog log, boolean jsonAsText) {
 		List<Argument> parameters = routine.parameters();
 
 		try (CallableStatement statement = connection.prepareCall(sql)) {
 
 			int offset = expectsResult ? 1 : 0;
 			if (expectsResult) {
-				registerOut(statement, 1, routine.returnValue().orElseThrow(), routine.schema(), connection);
+				registerOut(statement, 1, routine.returnValue().orElseThrow(), routine.schema(), connection, jsonAsText);
 			}
 			java.lang.reflect.Parameter[] javaParameters = method.getParameters();
 			for (int i = 0; i < args.length; i++) {
@@ -312,12 +314,12 @@ final class RoutineCall {
 					if (parameter.isIn()) {
 						bindValue(statement, position,
 								toDatabase(((PlsqlOut<?>) args[i]).get(), method, javaParameters[i], parameter, routine),
-								parameter, literals, routine.schema(), connection, log);
+								parameter, literals, routine.schema(), connection, log, jsonAsText);
 					}
-					registerOut(statement, position, parameter, routine.schema(), connection);
+					registerOut(statement, position, parameter, routine.schema(), connection, jsonAsText);
 				} else {
 					bindValue(statement, position, toDatabase(args[i], method, javaParameters[i], parameter, routine),
-							parameter, literals, routine.schema(), connection, log);
+							parameter, literals, routine.schema(), connection, log, jsonAsText);
 				}
 			}
 
@@ -387,8 +389,11 @@ final class RoutineCall {
 	}
 
 	private static void registerOut(CallableStatement statement, int position, Argument argument, String schema,
-			Connection connection) throws SQLException {
-		if (argument.isStruct() || argument.isCollection()) {
+			Connection connection, boolean jsonAsText) throws SQLException {
+		if (jsonAsText && argument.isJson()) {
+			// the call wraps the JSON in JSON_SERIALIZE(... RETURNING CLOB): text of any size
+			statement.registerOutParameter(position, java.sql.Types.CLOB);
+		} else if (argument.isStruct() || argument.isCollection()) {
 			statement.registerOutParameter(position, Jdbc.sqlTypeOf(argument),
 					bindTypeNameOf(argument, schema, connection));
 		} else {
@@ -398,15 +403,17 @@ final class RoutineCall {
 	}
 
 	private void bindValue(CallableStatement statement, int position, Object value, Argument parameter,
-			PlsqlBoolean literals, String schema, Connection connection, CallLog log) throws SQLException {
+			PlsqlBoolean literals, String schema, Connection connection, CallLog log, boolean jsonAsText)
+			throws SQLException {
 		Object bindable = encoder.encode(value, parameter, literals, schema, connection);
 		log.sent(parameter.name(), bindable);
 		if (bindable == null) {
-			bindNull(statement, position, parameter, schema, connection);
+			bindNull(statement, position, parameter, schema, connection, jsonAsText);
 		} else if (parameter.isBoolean() && bindable instanceof Boolean) {
 			statement.setObject(position, bindable, Jdbc.ORACLE_PLSQL_BOOLEAN);
-		} else if (parameter.isJson()) {
-			// the JSON text, with the JSON type, which the database parses; as plain text, PLS-00306
+		} else if (parameter.isJson() && !jsonAsText) {
+			// the JSON text, with the JSON type, which the database parses; as plain text, PLS-00306. As text, for a
+			// driver before 21, the call wraps the placeholder in JSON(?)
 			statement.setObject(position, bindable, Jdbc.ORACLE_JSON);
 		} else if (ValueEncoder.binaryFloatingPoint(parameter) && bindable instanceof Number number) {
 			// bound with its type: as the default NUMBER, a NaN or an infinity fails in the driver
@@ -421,8 +428,10 @@ final class RoutineCall {
 	 * routine, and without the name a composite or a collection yields {@code PLS-00306}.
 	 */
 	private static void bindNull(CallableStatement statement, int position, Argument target, String schema,
-			Connection connection) throws SQLException {
-		if (target.isStruct() || target.isCollection()) {
+			Connection connection, boolean jsonAsText) throws SQLException {
+		if (jsonAsText && target.isJson()) {
+			statement.setNull(position, java.sql.Types.VARCHAR);
+		} else if (target.isStruct() || target.isCollection()) {
 			statement.setNull(position, Jdbc.sqlTypeOf(target), bindTypeNameOf(target, schema, connection));
 		} else {
 			statement.setNull(position, Jdbc.sqlTypeOf(target));
