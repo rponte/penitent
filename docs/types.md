@@ -303,6 +303,31 @@ Object items = back.get("items");   // List ["pen", "ink"]
   Keep such a number as a JSON string.
 - **The same mapping works with every driver,** since the document crosses JDBC as text. With driver 19, the limits
   above apply: no `OUT`, no `IN OUT` and no cursor column.
+
+### Moving between drivers and databases
+
+Who parses a JSON text you send depends on the driver: drivers 21 and later parse it themselves, to bind the
+`JSON` type, and with driver 19 the database parses it, in `JSON(?)`. So some calls behave differently after you
+change the driver or the database, or when your tests run against another version than production.
+[#140](https://github.com/rponte/penitent/issues/140) is about making them behave the same; until then:
+
+| Case | Driver 23 | Driver 21 | Driver 19 |
+|---|---|---|---|
+| An empty string, `""` | `PlsqlExecutionException`, `ORA-26328` | `PlsqlExecutionException`, with no ORA code | **`null`**, with no error: Oracle's `''` is `NULL` |
+| Text that is not JSON | `PlsqlExecutionException`, `ORA-26326` | `PlsqlExecutionException`, with no ORA code | `PlsqlRoutineRaisedException`, `ORA-40441`, though the routine never ran |
+| Duplicate keys | `PlsqlExecutionException`, `ORA-26323` | `PlsqlExecutionException`, with no ORA code | `PlsqlRoutineRaisedException`: `ORA-40444` on 23ai, `ORA-40473` on 21c |
+| A number beyond `NUMBER`'s range, sent | refused | refused | on 23ai, a `String` takes it; on 21c, `ORA-01426`: see [above](#as-a-map-or-a-list) |
+| Such a number stored, read as a `String` | `1.0E200` | `1.0E200` | `1E+200` |
+| `OUT`, `IN OUT`, a cursor's `JSON` column | supported | supported | not supported: see [JSON](#json) |
+
+What stays the same everywhere: the text of every other document that comes back, as a `String` or a `Map`, with
+its numbers, dates, timestamps, `RAW` values and escapes, measured on 23ai and 21c with drivers 19, 21 and 23. So:
+
+- **Don't send an empty string for a missing document:** send `null`.
+- **Don't catch a driver's or a database's error to tell bad JSON apart:** its class and its code change with
+  them. Check the text before the call, if it may be invalid.
+- **In a cursor, `JSON_SERIALIZE(doc RETURNING CLOB)` in the query** works with every driver.
+- **Run your tests with the driver and the database version of production.**
 ## Composite types
 
 An OBJECT type, a RECORD declared in a package and a table's `%ROWTYPE` all map to a Java `record` or a JavaBean.
