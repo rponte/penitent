@@ -33,6 +33,17 @@ How values cross:
   never rounded.
 - **Large values:** a `CLOB` above 32 KB is sent in a temporary LOB, freed when the call ends. A `Clob` or `Blob`
   read from the database is a copy in memory, so you can use it after the connection is gone.
+- **A date beyond Oracle's range fails before the call,** with a `PlsqlMappingException` that names the value and
+  where it is: a parameter, an attribute, an element or a block's bind. Oracle's dates go from January 1, 4712 BC to
+  December 31, 9999, for `DATE`, `TIMESTAMP` and the types with a time zone; `java.time` counts a year 0, which is
+  1 BC, so the first day is `LocalDate.of(-4711, 1, 1)`. A type with a time zone must be within the range both in its
+  own time and in UTC, which Oracle stores. Oracle stores whatever bytes it is sent, and does not refuse such a value
+  itself: a year after 9999 would be stored as a date Oracle cannot format, or, from the year 15600 on, as another,
+  valid date.
+- **Before 1582, the fields cross as they are.** Oracle counts the days before October 15, 1582 in the Julian
+  calendar, and `java.time` in the Gregorian one, so `LocalDate.of(1500, 3, 1)` arrives as `1500-03-01`, and comes
+  back the same, though the two calendars put that day ten days apart. A `java.util.Date`, which is Julian before
+  1582 too, made from the same `LocalDate`, arrives as `1500-02-20`. Keep to one of the two types for such dates.
 
 For a type of your own, such as a `TaxId` value object, write a [converter](converters.md).
 

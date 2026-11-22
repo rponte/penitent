@@ -430,8 +430,9 @@ public final class TypeBinding {
 		if (attribute.isCollection()) {
 			return encodeCollectionAttribute(attribute, raw, connection);
 		}
+		// withContext names the attribute when the value is refused, such as a date beyond Oracle's range
 		return TemporaryLobs.forLob(attribute.oracleType(), OracleTimeZoneCodec.forComposite(attribute.oracleType(),
-				ScalarCodec.encode(raw, attribute.conversion()), connection), connection);
+				withContext(attribute, () -> ScalarCodec.encode(raw, attribute.conversion())), connection), connection);
 	}
 
 	private Object encodeCollectionAttribute(Attribute attribute, Object raw, Connection connection)
@@ -460,7 +461,7 @@ public final class TypeBinding {
 			} else {
 				// the element inherits the attribute's conversion: that is how a List<Enum> becomes a VARCHAR2_LIST
 				encoded[i] = OracleTimeZoneCodec.forComposite(collection.elementTypeName(),
-						ScalarCodec.encode(source[i], attribute.conversion()), connection);
+						withContext(attribute, () -> ScalarCodec.encode(element, attribute.conversion())), connection);
 			}
 		}
 		return OracleArrays.create(connection, TypeNameIntegration.collectionNameOf(connection, collection.bindName()),

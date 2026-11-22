@@ -31,6 +31,24 @@ All notable changes to this project are listed here. The format follows
   empty string, which is `NULL` with driver 19 and an error with drivers 21 and later; making it the same everywhere
   is [#140](https://github.com/rponte/penitent/issues/140).
 
+### Fixed
+
+- A date beyond Oracle's range, from January 1, 4712 BC to December 31, 9999, is refused before the call, with a
+  `PlsqlMappingException` that names the value and where it is: a parameter, an attribute, an element or a block's
+  parameter ([#142](https://github.com/rponte/penitent/issues/142)). It went in, and Oracle stored it: the year 10000
+  as a date Oracle cannot format (`ORA-01801`), and, from the year 15600 on, another, valid date, such as the year 20
+  for 25620, since the century goes in one byte. This came from the library's own encoding of `DATE` and `TIMESTAMP`
+  since 0.23.0 with drivers 21 and 19, and from driver 23's own, which the library's matches; drivers 21 and later
+  also stored a `TIMESTAMP WITH TIME ZONE` beyond the range invalid. `java.util.Date` and `java.sql.Timestamp`, which
+  the drivers already refused, now fail the same way on every driver. **Upgrading:** a call that sent such a date
+  failed silently; it now fails. A value already stored is read as it is.
+- `penitent-test`: a stub's date before Christ is the day the core sends for the same value
+  ([#142](https://github.com/rponte/penitent/issues/142)). A `DATE` literal was a year later, the year 0 (1 BC) did not
+  compile, and a `TIMESTAMP` literal lost its era, so a BC year became a year after Christ.
+- A parameter's value that its Oracle type does not hold, such as a `Period` with days for an
+  `INTERVAL YEAR TO MONTH`, now names the parameter in its message, as `NaN` for a `NUMBER` already did:
+  `P_VALUE is INTERVAL YEAR TO MONTH: Period P1Y2M3D has days, ...`.
+
 ## [0.31.0]
 
 Changing PL/SQL under a running application, and stubs of everything a call sends. A routine or a type that changed

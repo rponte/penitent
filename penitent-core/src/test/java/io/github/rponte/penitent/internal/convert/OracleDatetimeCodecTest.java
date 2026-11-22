@@ -1,6 +1,7 @@
 package io.github.rponte.penitent.internal.convert;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.time.LocalDate;
@@ -52,8 +53,22 @@ class OracleDatetimeCodecTest {
 	void before_christ() {
 		assertThat(unsigned(OracleDatetimeCodec.encodeDate(LocalDate.of(0, 12, 31)).toBytes()))
 				.containsExactly(100, 99, 12, 31, 1, 1, 1);
-		assertThat(unsigned(OracleDatetimeCodec.encodeDate(LocalDate.of(-4712, 1, 1)).toBytes()))
-				.containsExactly(53, 87, 1, 1, 1, 1, 1);
+		// Oracle's first day, January 1, 4712 BC, Julian day 1
+		assertThat(unsigned(OracleDatetimeCodec.encodeDate(LocalDate.of(-4711, 1, 1)).toBytes()))
+				.containsExactly(53, 88, 1, 1, 1, 1, 1);
+	}
+
+	@Test
+	@DisplayName("beyond Oracle's range, no bytes are built: the century, one byte, would wrap around into another date")
+	void beyond_the_range() {
+		// 25620 would become 100 + 256 = 356, which wraps to 100: the year 20 AD, a valid and wrong date
+		assertThatThrownBy(() -> OracleDatetimeCodec.encodeDate(LocalDate.of(25620, 6, 15)))
+				.isInstanceOf(ScalarCodec.ConversionException.class)
+				.hasMessageContaining("is beyond the range of Oracle's dates");
+		assertThatThrownBy(() -> OracleDatetimeCodec.encodeTimestamp(LocalDateTime.of(10000, 1, 1, 0, 0)))
+				.hasMessageContaining("is beyond the range of Oracle's dates");
+		assertThatThrownBy(() -> OracleDatetimeCodec.encodeDate(LocalDate.of(-4712, 12, 31)))
+				.hasMessageContaining("is beyond the range of Oracle's dates");
 	}
 
 	@Test
@@ -77,15 +92,17 @@ class OracleDatetimeCodecTest {
 				.isEqualTo(LocalDateTime.of(2025, 3, 9, 2, 30, 15));
 		assertThat(OracleDatetimeCodec.decode(new byte[] { 120, 125, 3, 9, 3, 31, 16, 7, 91, (byte) 205, 21 }))
 				.isEqualTo(LocalDateTime.of(2025, 3, 9, 2, 30, 15, 123456789));
+		// reading is not checked against Oracle's range: these bytes, a year before Oracle's first day, come back as
+		// they are, since a value already stored is the database's to hold
 		assertThat(OracleDatetimeCodec.decode(new byte[] { 53, 87, 1, 1, 1, 1, 1 }))
 				.isEqualTo(LocalDateTime.of(-4712, 1, 1, 0, 0));
 	}
 
 	@Test
-	@DisplayName("writing and reading back gives the same value, on any driver, over the whole range")
+	@DisplayName("writing and reading back gives the same value, on any driver, over Oracle's whole range")
 	void round_trip() {
 		List<String> differences = new ArrayList<>();
-		for (int year = -4713; year <= 10000; year += 37) {
+		for (int year = -4711; year <= 9999; year += 37) {
 			for (int nano : new int[] { 0, 1, 123456789, 999999999 }) {
 				LocalDateTime value = LocalDateTime.of(year, 1 + Math.floorMod(year, 12), 1 + Math.floorMod(year, 28),
 						Math.floorMod(year, 24), Math.floorMod(year, 60), Math.floorMod(year * 7, 60), nano);
@@ -104,8 +121,9 @@ class OracleDatetimeCodecTest {
 		assumeTrue(Driver23.isTheDriver(), "driver 23 is the reference");
 
 		List<String> differences = new ArrayList<>();
-		int[] years = { -4713, -4712, -1000, -1, 0, 1, 99, 100, 999, 1000, 1582, 1600, 1900, 1969, 1970, 2000, 2024,
-				2025, 2100, 9999, 10000 };
+		// Oracle's range only: beyond it, the library refuses the value, and driver 23 builds invalid bytes (#142)
+		int[] years = { -4711, -4710, -1000, -1, 0, 1, 99, 100, 999, 1000, 1582, 1600, 1900, 1969, 1970, 2000, 2024,
+				2025, 2100, 9998, 9999 };
 		int[] nanos = { 0, 1, 999, 1000000, 123456789, 999999999 };
 		for (int year : years) {
 			for (int month = 1; month <= 12; month += 11) {

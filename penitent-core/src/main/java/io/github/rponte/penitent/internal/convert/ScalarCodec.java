@@ -101,7 +101,11 @@ public final class ScalarCodec {
 			return new BooleanConverter(conversion).toDatabase(b);
 		}
 		BuiltInConverter converter = BY_TYPE.get(value.getClass());
-		return converter == null ? value : converter.toDatabase(value);
+		Object encoded = converter == null ? value : converter.toDatabase(value);
+		// every scalar on its way in passes here, after the user's converter: a parameter, an attribute, an element
+		// and a block's bind. A date beyond Oracle's range would be stored invalid, or as another date (#142)
+		OracleDatetimeLimits.requireWithinIfDate(encoded);
+		return encoded;
 	}
 
 	/**

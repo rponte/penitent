@@ -106,7 +106,8 @@ class LobsAndIntervalsTest extends OracleIntegrationTest {
 	void period_with_days() {
 		assertThatThrownBy(() -> lobs.echoIntervalYm(Period.of(1, 2, 3)))
 				.isInstanceOf(PlsqlMappingException.class)
-				.hasMessage("echoIntervalYm(Period): Period P1Y2M3D has days, which INTERVAL YEAR TO MONTH does not store");
+				.hasMessage("echoIntervalYm(Period): P_VALUE is INTERVAL YEAR TO MONTH: Period P1Y2M3D has days, which"
+						+ " INTERVAL YEAR TO MONTH does not store");
 	}
 
 	@Test
