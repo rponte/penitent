@@ -212,7 +212,13 @@ final class BlockCall {
 			log.sent(name, value);
 			statement.setObject(position, value, Jdbc.ORACLE_PLSQL_BOOLEAN);
 		} else {
-			Object bindable = ScalarCodec.encode(value, ValueConversion.from(literals));
+			Object bindable;
+			try {
+				bindable = ScalarCodec.encode(value, ValueConversion.from(literals));
+			} catch (ScalarCodec.ConversionException e) {
+				// such as a date beyond Oracle's range, named as the block's other refusals are
+				throw new PlsqlMappingException("parameter " + name + ": " + e.getMessage(), e);
+			}
 			log.sent(name, bindable);
 			if (bindable instanceof Double number && !Double.isFinite(number)) {
 				// a block's parameter has no declared type, and the driver binds a double as a NUMBER, which holds

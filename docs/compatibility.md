@@ -156,6 +156,9 @@ Where the PL/SQL guarantees the value is never `null`, driver 23 works as it is.
 | `INTERVAL YEAR TO MONTH` | `Period` | Validated |
 | `Period` with days | Rejected with `PlsqlMappingException`, before the call: `INTERVAL YEAR TO MONTH` does not store them | Validated |
 | `DATE` and `TIMESTAMP` with the JVM in a time zone with daylight saving time: a local time that zone skips (02:30 when the clocks jump) or repeats, and a day without midnight | `LocalDateTime`, `LocalDate`, unchanged as parameter, return value, `OUT`, block, cursor column, attribute and collection element | Validated |
+| `DATE`, `TIMESTAMP` and the types with a time zone at the edges of Oracle's range, January 1, 4712 BC (`LocalDate.of(-4711, 1, 1)`) and December 31, 9999, as parameter, `IN OUT`, attribute, element and a block's bind | Arrive exactly, and come back | Validated |
+| A date beyond Oracle's range, as `LocalDate`, `LocalDateTime`, `OffsetDateTime`, `ZonedDateTime`, `Instant`, `java.util.Date` or `java.sql.Timestamp`; a type with a time zone also beyond in UTC only, as `9999-12-31T23:00-03:00`. Before #142's fix, the year 10000 was stored as bytes Oracle cannot format, and the year 25620, whose century wraps around a byte, as the year 20; drivers 21 and later stored a type with a time zone beyond invalid too | Rejected with `PlsqlMappingException`, before the call, naming the value and the parameter, the attribute, the element or the block's parameter. The same on every driver | Validated |
+| A date before October 15, 1582, which Oracle counts in the Julian calendar | `LocalDate` and `LocalDateTime` keep their fields both ways; a `java.util.Date`, Julian before 1582 too, crosses by its instant, so the same day arrives with other fields: `1500-03-01` as `1500-02-20` | Validated |
 | Session `NLS_LANGUAGE` and `NLS_TERRITORY` of `AMERICA` and `BRAZIL`, as the driver derives them from the JVM locale | Dates, timestamps with and without time zone, and intervals cross unchanged, also as attribute, element and cursor column | Validated |
 | `BOOLEAN` as return value | `boolean`, `Boolean` | Validated |
 | `BOOLEAN` as parameter, including `null` | `boolean`, `Boolean` | Validated |
@@ -445,6 +448,7 @@ that text, on every version.
 | Situation | Status |
 |---|---|
 | A stub of a function returns its value, `null` included; of a date argument, matches it by value | Validated |
+| A stub with a date before Christ, from a `LocalDate` and a `LocalDateTime`, returned and matched by value, the year 0 (1 BC) and Oracle's first day included: the same day the core sends. Before #142's fix, the literal was a year later, the year 0 did not compile, and a `TIMESTAMP` lost its era. A stub's date beyond Oracle's range is rejected with `PlsqlMappingException` | Validated |
 | A stub raises an application error or a predefined exception, which arrives as `PlsqlRoutineRaisedException` | Validated |
 | A stub of a procedure sets its `OUT` value; matchers `eq`, `any` and `isNull`, the last stub that matches winning; a call mixing matchers and values refused | Validated |
 | `anyInt()`, `anyLong()`, `anyShort()`, `anyByte()`, `anyDouble()`, `anyFloat()` and `anyBoolean()` for parameters of primitive types, in a stub of a function and of a procedure, and in `verify` | Validated |

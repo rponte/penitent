@@ -37,7 +37,7 @@ final class ValueEncoder {
 			return encodeBoolean(flag, target, literals);
 		}
 		requireFinite(value, target);
-		return ScalarCodec.encode(value, ValueConversion.DEFAULT);
+		return encodeScalar(value, target);
 	}
 
 	Object encode(Object value, Argument target, PlsqlBoolean literals, String schema, Connection connection)
@@ -56,8 +56,17 @@ final class ValueEncoder {
 		if (value instanceof Boolean flag) {
 			return encodeBoolean(flag, target, literals);
 		}
-		return TemporaryLobs.forLob(target.dataType(), ScalarCodec.encode(value, ValueConversion.DEFAULT),
-				connection);
+		return TemporaryLobs.forLob(target.dataType(), encodeScalar(value, target), connection);
+	}
+
+	/** A scalar, whose refusal, such as a date beyond Oracle's range, names the parameter as {@code requireFinite} does. */
+	private static Object encodeScalar(Object value, Argument target) {
+		try {
+			return ScalarCodec.encode(value, ValueConversion.DEFAULT);
+		} catch (ScalarCodec.ConversionException e) {
+			throw new PlsqlMappingException((target.name() == null ? "the value it returns" : target.name()) + " is "
+					+ target.dataType() + ": " + e.getMessage(), e);
+		}
 	}
 
 	/** {@code BINARY_DOUBLE} or {@code BINARY_FLOAT}: the types that hold {@code NaN} and the infinities. */
@@ -132,11 +141,21 @@ final class ValueEncoder {
 			} else {
 				// a TIMESTAMP WITH LOCAL TIME ZONE element is built by the library: see OracleTimeZoneCodec
 				encoded[i] = OracleTimeZoneCodec.forComposite(type.scalarElement(),
-						ScalarCodec.encode(element, ValueConversion.from(literals)), connection);
+						encodeElement(element, i, type, literals), connection);
 			}
 		}
 		return OracleArrays.create(connection, TypeNameIntegration.collectionNameOf(connection, type.bindName()),
 				encoded);
+	}
+
+	/** An element, whose refusal, such as a date beyond Oracle's range, names its position, counted from 1. */
+	private static Object encodeElement(Object element, int index, CollectionType type, PlsqlBoolean literals) {
+		try {
+			return ScalarCodec.encode(element, ValueConversion.from(literals));
+		} catch (ScalarCodec.ConversionException e) {
+			throw new PlsqlMappingException("element " + (index + 1) + " of " + type.bindName() + ": " + e.getMessage(),
+					e);
+		}
 	}
 
 	static Object[] toArray(Object value) {

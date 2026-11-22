@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.StringJoiner;
 
+import io.github.rponte.penitent.internal.convert.OracleDatetimeLimits;
 import io.github.rponte.penitent.internal.convert.OracleIntervalCodec;
 import io.github.rponte.penitent.internal.convert.OracleTimeZoneCodec;
 
@@ -38,10 +39,24 @@ import oracle.sql.INTERVALYM;
  */
 public final class PlsqlLiterals {
 
-	private static final DateTimeFormatter TIMESTAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSSSSS",
-			Locale.ROOT);
+	/** The time of a {@code TIMESTAMP} literal; its day is written by {@link #day}, in Oracle's numbering of years. */
+	private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm:ss.SSSSSSSSS", Locale.ROOT);
 
 	private PlsqlLiterals() {
+	}
+
+	/**
+	 * A day as Oracle's {@code DATE} and {@code TIMESTAMP} literals write it, {@code SYYYY-MM-DD}, with the year in
+	 * Oracle's numbering. {@code java.time} counts a year 0, which is 1 BC, and Oracle has none: {@code java.time}'s
+	 * year {@code y <= 0} is Oracle's {@code -(1 - y)}, so {@code LocalDate.of(0, 6, 1)} is {@code -0001-06-01}, the
+	 * day the core binds for the same value. Written with {@code LocalDate.toString()}, it was a year later, and the
+	 * year 0 did not parse; with the pattern {@code yyyy}, which is the year of the era, a BC year lost its sign (#142).
+	 */
+	static String day(LocalDate date) {
+		int year = date.getYear();
+		String oracleYear = year > 0 ? String.format(Locale.ROOT, "%04d", year)
+				: "-" + String.format(Locale.ROOT, "%04d", 1 - year);
+		return oracleYear + String.format(Locale.ROOT, "-%02d-%02d", date.getMonthValue(), date.getDayOfMonth());
 	}
 
 	/** {@code NaN} or an infinity, as the constant of {@code BINARY_DOUBLE} or {@code BINARY_FLOAT}. */
@@ -108,17 +123,22 @@ public final class PlsqlLiterals {
 			return bool ? "TRUE" : "FALSE";
 		}
 		if (value instanceof LocalDate date) {
-			return "DATE '" + date + "'";
+			OracleDatetimeLimits.requireWithin(date);
+			return "DATE '" + day(date) + "'";
 		}
 		if (value instanceof LocalDateTime dateTime) {
-			return "TIMESTAMP '" + TIMESTAMP.format(dateTime) + "'";
+			OracleDatetimeLimits.requireWithin(dateTime);
+			return "TIMESTAMP '" + day(dateTime.toLocalDate()) + " " + TIME.format(dateTime) + "'";
 		}
 		if (value instanceof OffsetDateTime dateTime) {
-			return "TIMESTAMP '" + TIMESTAMP.format(dateTime) + " " + offset(dateTime.getOffset()) + "'";
+			OracleDatetimeLimits.requireWithin(dateTime);
+			return "TIMESTAMP '" + day(dateTime.toLocalDate()) + " " + TIME.format(dateTime) + " "
+					+ offset(dateTime.getOffset()) + "'";
 		}
 		if (value instanceof ZonedDateTime dateTime) {
+			OracleDatetimeLimits.requireWithin(dateTime);
 			// a region keeps the rules of daylight saving time, which an offset alone would lose
-			return "TIMESTAMP '" + TIMESTAMP.format(dateTime) + " "
+			return "TIMESTAMP '" + day(dateTime.toLocalDate()) + " " + TIME.format(dateTime) + " "
 					+ (dateTime.getZone() instanceof ZoneOffset zoneOffset ? offset(zoneOffset) : dateTime.getZone().getId())
 					+ "'";
 		}

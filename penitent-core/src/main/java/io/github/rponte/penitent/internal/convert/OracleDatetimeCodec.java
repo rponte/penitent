@@ -29,8 +29,14 @@ import oracle.sql.TIMESTAMP;
  * {@code TIMESTAMP} with a fraction of a second adds the nanoseconds in four bytes, big-endian. A year
  * before 1 is a year B.C.: {@code java.time}'s 0 is 1 B.C., and Oracle stores 100 minus its century
  * and 100 minus its year of the century. As in driver 23, the calendar is not converted, so the days
- * of 1582 that the Gregorian change skipped keep their fields, and the range is not checked here: the
- * database refuses a year it cannot store.
+ * of 1582 that the Gregorian change skipped keep their fields.
+ *
+ * <p><b>The range is checked here too,</b> as a last guard: {@link OracleDatetimeLimits}, which
+ * {@code ScalarCodec.encode} already applies to every value on its way in. Oracle does not refuse a year it
+ * cannot store: it stores the bytes it is sent (#142). The century goes in one byte, so beyond the range a
+ * year wraps around into another, valid date: 25620 would be stored as the year 20. Driver 23's own
+ * {@code DATE.of} and {@code TIMESTAMP.of} build the same bytes, so matching them byte for byte holds
+ * within the range only.
  */
 public final class OracleDatetimeCodec {
 
@@ -38,6 +44,7 @@ public final class OracleDatetimeCodec {
 	}
 
 	public static TIMESTAMP encodeTimestamp(LocalDateTime value) {
+		OracleDatetimeLimits.requireWithin(value);
 		int nanos = value.getNano();
 		byte[] bytes = new byte[nanos == 0 ? 7 : 11];
 		fill(bytes, value.toLocalDate(), value.getHour(), value.getMinute(), value.getSecond());
@@ -52,6 +59,7 @@ public final class OracleDatetimeCodec {
 
 	/** A {@code DATE} without a time: midnight, as {@code DATE.of(LocalDate)} stores it. */
 	public static DATE encodeDate(LocalDate value) {
+		OracleDatetimeLimits.requireWithin(value);
 		byte[] bytes = new byte[7];
 		fill(bytes, value, 0, 0, 0);
 		return new DATE(bytes);
