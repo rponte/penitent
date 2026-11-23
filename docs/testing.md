@@ -342,6 +342,10 @@ verify(mock, never()).quoteOf(isNull());
 A document above 32 KB is written in pieces, as a long text is. With driver 19, a stub of a `JSON` `OUT` is refused
 when you make it, with the message a call would give, since driver 19 cannot bring such an `OUT` back.
 
+**An `IN OUT` parameter** takes `out(value)`, which sets what comes back. Matching it by the value that came in, in a
+stub or in `verify`, is not supported yet ([#150](https://github.com/rponte/penitent/issues/150)): a value given for
+it counts as `any()`, so `verify(mock).stamp(PlsqlOut.of("raw"))` passes whatever came in.
+
 **Stub a standalone routine.** A function or procedure outside any package is stubbed the same way, from the
 interface with `@PlsqlSchema` the application calls it through:
 
