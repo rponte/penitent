@@ -18,6 +18,7 @@ import oracle.sql.json.OracleJsonException;
 import oracle.sql.json.OracleJsonFactory;
 import oracle.sql.json.OracleJsonGenerator;
 import oracle.sql.json.OracleJsonObject;
+import oracle.sql.json.OracleJsonParser;
 import oracle.sql.json.OracleJsonValue;
 
 /**
@@ -176,23 +177,169 @@ public final class JsonCodec {
 	}
 
 	/**
-	 * The JSON text of a value: a {@code CharSequence} as it is, since it already is the text; anything else written as
-	 * a document. Inside it, only what JSON has a form for: a {@code Map} with {@code String} keys, a {@code List}, a
-	 * {@code CharSequence}, a {@code Boolean}, a finite number and {@code null}. Anything else is refused, naming where
-	 * it is, rather than written in a form of the library's choosing.
+	 * The JSON text of a value: a {@code CharSequence} as it is, once {@link #requireValid checked}, since it already is
+	 * the text; anything else written as a document. Inside it, only what JSON has a form for: a {@code Map} with
+	 * {@code String} keys, a {@code List}, a {@code CharSequence}, a {@code Boolean}, a finite number and {@code null}.
+	 * Anything else is refused, naming where it is, rather than written in a form of the library's choosing; so is a
+	 * number beyond {@code NUMBER}'s range, and a lone surrogate, as in a text.
 	 *
-	 * @throws ScalarCodec.ConversionException for a value JSON has no form for
+	 * @throws ScalarCodec.ConversionException for a text that is not JSON, or a value JSON has no form for
 	 */
 	public static String text(Object value) {
 		if (value == null || value instanceof CharSequence) {
-			return value == null ? null : value.toString();
+			if (value == null) {
+				return null;
+			}
+			String text = value.toString();
+			requireValid(text);
+			return text;
 		}
 		StringWriter out = new StringWriter();
-		// the writer takes a number beyond the range of Oracle's NUMBER, such as 1e200: the bind or the read refuses it
 		try (OracleJsonGenerator generator = FACTORY.createJsonTextGenerator(out)) {
 			write(generator, value, "$");
 		}
 		return out.toString();
+	}
+
+	/**
+	 * A JSON text checked the same way with every driver, before the call (#140). Without it, drivers 21 and 23 parsed
+	 * the text themselves while binding, each with errors of its own, and with driver 19 the database's {@code JSON()}
+	 * took "almost JSON", lax by default, and corrected it silently: a leading zero, single quotes, a trailing comma,
+	 * {@code True}, a byte order mark, and on 23ai a comment and {@code NaN}, as the string {@code "Nan"}. Checked here,
+	 * in one pass of the driver's streaming text parser:
+	 * <ul>
+	 * <li>the JSON specification's syntax, strictly, as drivers 21 and 23 already did. The message is the parser's first
+	 * sentence, with the line and the column, which is the same in drivers 19, 21 and 23; driver 23 only adds an
+	 * {@code ORA-} code and a link, left out;</li>
+	 * <li>an empty or a blank text, which driver 19 sent as SQL {@code NULL};</li>
+	 * <li>a key twice in the same object, which the parser does not report;</li>
+	 * <li>a number beyond {@code NUMBER}'s range, which the JSON type stores numbers as. The streaming parser, unlike the
+	 * tree one, takes it; drivers 21 and 23 refused it with a bare {@code IllegalArgumentException}, and with driver 19
+	 * the database refused it on 21c, took it on 23ai, and stored {@code 1e-200} as 0 on 21c;</li>
+	 * <li>a lone UTF-16 surrogate, which is no character, and which drivers 21 and 23 silently store as {@code ?}.</li>
+	 * </ul>
+	 * The limits of the binary form are left to the driver and the database, which set them by version: a key's length
+	 * (256 bytes with driver 21, 65,535 with driver 23, and the database's own) and the depth of nesting. A new driver
+	 * or database that raises them then just works.
+	 *
+	 * @throws ScalarCodec.ConversionException with no context: whoever knows the parameter adds it
+	 */
+	static void requireValid(String text) {
+		if (text.isBlank()) {
+			throw new ScalarCodec.ConversionException("the text is empty, which is not JSON: send null for SQL NULL");
+		}
+		java.util.Deque<Frame> frames = new java.util.ArrayDeque<>();
+		try (OracleJsonParser parser = FACTORY.createJsonTextParser(new StringReader(text))) {
+			while (parser.hasNext()) {
+				OracleJsonParser.Event event = parser.next();
+				switch (event) {
+					case START_OBJECT, START_ARRAY -> frames.push(new Frame(pathOf(frames), event == OracleJsonParser.Event.START_ARRAY));
+					case END_OBJECT, END_ARRAY -> {
+						frames.pop();
+						valueDone(frames);
+					}
+					case KEY_NAME -> {
+						Frame object = frames.peek();
+						String key = parser.getString();
+						requireNoLoneSurrogate(key, object.path + " has a key that");
+						if (!object.keys.add(key)) {
+							throw new ScalarCodec.ConversionException(object.path + " has the key \"" + key
+									+ "\" twice, and the keys of a JSON object are unique");
+						}
+						object.key = key;
+					}
+					case VALUE_STRING -> {
+						requireNoLoneSurrogate(parser.getString(), pathOf(frames));
+						valueDone(frames);
+					}
+					case VALUE_DECIMAL, VALUE_DOUBLE, VALUE_FLOAT -> {
+						requireWithinNumber(parser.getBigDecimal(), pathOf(frames));
+						valueDone(frames);
+					}
+					default -> valueDone(frames);
+				}
+			}
+		} catch (OracleJsonException e) {
+			throw new ScalarCodec.ConversionException("the text is not JSON: " + firstSentence(e.getMessage()), e);
+		}
+	}
+
+	/** An object or an array being read, with its path, and for an object its keys so far. */
+	private static final class Frame {
+		final String path;
+		final boolean array;
+		final java.util.Set<String> keys = new java.util.HashSet<>();
+		String key;
+		int index;
+
+		Frame(String path, boolean array) {
+			this.path = path;
+			this.array = array;
+		}
+	}
+
+	/** The path of the value being read: {@code $} at the top, then a key or an index for each level. */
+	private static String pathOf(java.util.Deque<Frame> frames) {
+		Frame parent = frames.peek();
+		if (parent == null) {
+			return "$";
+		}
+		return parent.array ? parent.path + "[" + parent.index + "]" : parent.path + step(parent.key);
+	}
+
+	private static void valueDone(java.util.Deque<Frame> frames) {
+		Frame parent = frames.peek();
+		if (parent != null && parent.array) {
+			parent.index++;
+		}
+	}
+
+	/**
+	 * The parser's first sentence, which drivers 19, 21 and 23 write the same, as in "Unexpected character 'b' at line
+	 * 1, column 2": driver 23 adds an {@code ORA-} code before it and a link after it, and the sentences after it differ
+	 * in their punctuation.
+	 */
+	private static String firstSentence(String message) {
+		String sentence = String.valueOf(message).replaceFirst("^ORA-\\d+:\\s*", "");
+		// a period followed by a space, a line break before driver 23's link, or the end
+		java.util.regex.Matcher end = java.util.regex.Pattern.compile("\\.(\\s|$)").matcher(sentence);
+		return (end.find() ? sentence.substring(0, end.start()) : sentence).strip();
+	}
+
+	private static void requireWithinNumber(BigDecimal number, String path) {
+		try {
+			OracleNumberLimits.requireWithin(number);
+		} catch (ScalarCodec.ConversionException e) {
+			throw beyondNumber(number, path, e);
+		}
+	}
+
+	private static ScalarCodec.ConversionException beyondNumber(Object number, String path, Exception cause) {
+		return new ScalarCodec.ConversionException(path + " is " + number + ", beyond the range of Oracle's NUMBER, whose"
+				+ " magnitude goes from 1E-130 to just under 1E+126, besides 0, which the JSON type stores numbers as:"
+				+ " keep such a number as a JSON string", cause);
+	}
+
+	/**
+	 * A lone UTF-16 surrogate, half of a character beyond the Basic Multilingual Plane, such as {@code \\uD800}:
+	 * drivers 21 and 23 store it as {@code ?}, silently, measured.
+	 *
+	 * @param where the path, or the path and "has a key that", for a key
+	 */
+	private static void requireNoLoneSurrogate(String text, String where) {
+		for (int i = 0; i < text.length(); i++) {
+			char c = text.charAt(i);
+			boolean paired = Character.isHighSurrogate(c) && i + 1 < text.length()
+					&& Character.isLowSurrogate(text.charAt(i + 1));
+			if (paired) {
+				i++;
+			} else if (Character.isSurrogate(c)) {
+				String escaped = String.format(java.util.Locale.ROOT, "\\u%04X", (int) c);
+				throw new ScalarCodec.ConversionException(where + " holds a lone UTF-16 surrogate, " + escaped
+						+ ", which is no character, and which the driver would store as '?': send the whole character,"
+						+ " both surrogates");
+			}
+		}
 	}
 
 	private static void write(OracleJsonGenerator generator, Object value, String path) {
@@ -205,6 +352,7 @@ public final class JsonCodec {
 					throw new ScalarCodec.ConversionException(path + " has a key " + describe(entry.getKey())
 							+ ", and a JSON object's keys are text: use String keys");
 				}
+				requireNoLoneSurrogate(key, path + " has a key that");
 				generator.writeKey(key);
 				write(generator, entry.getValue(), path + step(key));
 			}
@@ -216,11 +364,18 @@ public final class JsonCodec {
 			}
 			generator.writeEnd();
 		} else if (value instanceof CharSequence text) {
+			requireNoLoneSurrogate(text.toString(), path);
 			generator.write(text.toString());
 		} else if (value instanceof Boolean flag) {
 			generator.write(flag);
 		} else if (value instanceof Number number) {
-			generator.write(decimal(number, path));
+			BigDecimal decimal = decimal(number, path);
+			try {
+				OracleNumberLimits.requireWithin(decimal);
+			} catch (ScalarCodec.ConversionException e) {
+				throw beyondNumber(number, path, e);
+			}
+			generator.write(decimal);
 		} else {
 			throw new ScalarCodec.ConversionException(path + " is a " + value.getClass().getName()
 					+ ", which JSON has no form for: put a String, a Number, a Boolean, a Map or a List there, or"

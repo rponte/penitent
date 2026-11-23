@@ -11,21 +11,28 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import io.github.rponte.penitent.PlsqlPackage;
 import io.github.rponte.penitent.PlsqlRoutine;
-import io.github.rponte.penitent.exception.PlsqlExecutionException;
+import io.github.rponte.penitent.exception.PlsqlMappingException;
 import io.github.rponte.penitent.exception.PlsqlRoutineRaisedException;
 
 /**
  * What a JSON text sent to a routine does, by driver and database, as the Types page's "Moving between drivers and
- * databases" describes it. Drivers 21 and later parse the text themselves; with driver 19, the database parses it,
- * in {@code JSON(?)}. These tests pin today's differences: making them the same everywhere is #140, which turns them
- * red on purpose, and then the page changes with them.
+ * databases" describes it. Drivers 21 and later parse the text themselves, and with driver 19 the database parses it,
+ * in {@code JSON(?)}, lax by default. So the library checks the text first, the same way with every driver (#140):
+ * the JSON specification's syntax, an empty text, duplicate keys, a number beyond {@code NUMBER}'s range and a lone
+ * surrogate are refused before the call, with one exception class and one message everywhere. What stays different
+ * is pinned here too: the limits of the binary form, a key's length and the depth of nesting, which each driver and
+ * database sets by version, and which the library leaves to them.
  */
 class JsonPortabilityTest extends OracleIntegrationTest {
 
 	private static final int DRIVER_MAJOR_VERSION = new oracle.jdbc.OracleDriver().getMajorVersion();
+
+	private static final String WHERE = "P_DOC of PLSQL_TEST.FIXTURE_JSON.ECHO: ";
 
 	@PlsqlPackage("FIXTURE_JSON")
 	interface Json {
@@ -42,54 +49,135 @@ class JsonPortabilityTest extends OracleIntegrationTest {
 		assumeTrue(DATABASE_MAJOR_VERSION >= 21, "the JSON type exists only from Oracle 21c on");
 	}
 
+	@ParameterizedTest(name = "{0}")
+	@CsvSource(delimiter = '|', value = {
+			"not JSON          | {bad                | Unexpected character 'b' at line 1, column 2",
+			"truncated         | [1, 2               | Invalid token EOF at line 1, column 19",
+			"trailing text     | {\"a\":1} trailing  | Unexpected character 'a' at line 1, column 11",
+			"leading zero      | {\"n\":01}          | Invalid token NUMBER at line 1, column 7",
+			"NaN               | {\"n\":NaN}         | Unexpected character 'N' at line 1, column 6",
+			"single quotes     | {'a':1}             | Unexpected character ''' at line 1, column 2",
+			"a comment         | {\"a\":1 /* c */}   | Unexpected character '/' at line 1, column 8",
+			"a trailing comma  | {\"a\":1,}          | Invalid token CURLYCLOSE at line 1, column 8",
+			"True              | {\"a\":True}        | Unexpected character 'T' at line 1, column 6" })
+	@DisplayName("the same everywhere: a text that is not JSON is refused before the call, though with driver 19 the"
+			+ " database took and corrected some of it, a leading zero, single quotes, a trailing comma, True, and on 23ai"
+			+ " a comment and NaN")
+	void not_json(String what, String text, String sentence) {
+		assertThatThrownBy(() -> pkg(Json.class).echo(text))
+				.isInstanceOf(PlsqlMappingException.class)
+				.hasMessageContaining(WHERE + "the text is not JSON: " + sentence)
+				.hasMessageNotContaining("ORA-");
+	}
+
 	@Test
-	@DisplayName("an empty string: refused by drivers 21 and later, NULL with driver 19, as Oracle's '' is NULL")
+	@DisplayName("the same everywhere: a raw tab in a string and a byte order mark, which driver 19 took on 23ai")
+	void raw_characters() {
+		assertThatThrownBy(() -> pkg(Json.class).echo("{\"s\":\"a\tb\"}"))
+				.isInstanceOf(PlsqlMappingException.class)
+				.hasMessageContaining(WHERE + "the text is not JSON: Unexpected character 0x9 at line 1, column 8");
+		assertThatThrownBy(() -> pkg(Json.class).echo("\uFEFF{\"a\":1}"))
+				.isInstanceOf(PlsqlMappingException.class)
+				.hasMessageContaining(WHERE + "the text is not JSON: Unexpected character 0xfeff at line 1, column 1");
+	}
+
+	@Test
+	@DisplayName("the same everywhere: an empty or a blank text is refused, which driver 19 sent as SQL NULL")
 	void empty_string() {
-		Json json = pkg(Json.class);
-		if (DRIVER_MAJOR_VERSION >= 23) {
-			assertThatThrownBy(() -> json.echo("")).isInstanceOf(PlsqlExecutionException.class)
-					.hasMessageContaining("ORA-26328: Invalid token EOF");
-		} else if (DRIVER_MAJOR_VERSION >= 21) {
-			assertThatThrownBy(() -> json.echo("")).isInstanceOf(PlsqlExecutionException.class)
-					.hasMessageContaining("Invalid token EOF").hasMessageNotContaining("ORA-");
-		} else {
-			assertThat(json.echo("")).isNull();
+		for (String text : new String[] { "", "   " }) {
+			assertThatThrownBy(() -> pkg(Json.class).echo(text))
+					.isInstanceOf(PlsqlMappingException.class)
+					.hasMessageContaining(WHERE + "the text is empty, which is not JSON: send null for SQL NULL");
 		}
+		assertThat(pkg(Json.class).echo(null)).isNull();
 	}
 
 	@Test
-	@DisplayName("text that is not JSON: the driver's error with drivers 21 and later, the database's with driver 19,"
-			+ " reported as raised by the routine")
-	void not_json() {
-		Json json = pkg(Json.class);
-		if (DRIVER_MAJOR_VERSION >= 23) {
-			assertThatThrownBy(() -> json.echo("{bad")).isInstanceOf(PlsqlExecutionException.class)
-					.hasMessageContaining("ORA-26326: Unexpected character 'b'");
-		} else if (DRIVER_MAJOR_VERSION >= 21) {
-			assertThatThrownBy(() -> json.echo("{bad")).isInstanceOf(PlsqlExecutionException.class)
-					.hasMessageContaining("Unexpected character 'b'").hasMessageNotContaining("ORA-");
-		} else {
-			assertThatThrownBy(() -> json.echo("{bad")).isInstanceOf(PlsqlRoutineRaisedException.class)
-					.hasMessageContaining("ORA-40441: JSON syntax error");
-		}
-	}
-
-	@Test
-	@DisplayName("duplicate keys: the driver's error with drivers 21 and later, and with driver 19 the database's,"
-			+ " whose code changes with the database")
+	@DisplayName("the same everywhere: duplicate keys, whose error code changed with the driver and, with driver 19, with"
+			+ " the database")
 	void duplicate_keys() {
-		Json json = pkg(Json.class);
-		String doc = "{\"a\":1,\"a\":2}";
-		if (DRIVER_MAJOR_VERSION >= 23) {
-			assertThatThrownBy(() -> json.echo(doc)).isInstanceOf(PlsqlExecutionException.class)
-					.hasMessageContaining("ORA-26323: JSON object contains duplicate key: a");
-		} else if (DRIVER_MAJOR_VERSION >= 21) {
-			assertThatThrownBy(() -> json.echo(doc)).isInstanceOf(PlsqlExecutionException.class)
-					.hasMessageContaining("JSON object contains duplicate key: a").hasMessageNotContaining("ORA-");
+		assertThatThrownBy(() -> pkg(Json.class).echo("{\"a\":1,\"a\":2}"))
+				.isInstanceOf(PlsqlMappingException.class)
+				.hasMessageContaining(WHERE + "$ has the key \"a\" twice, and the keys of a JSON object are unique");
+		assertThatThrownBy(() -> pkg(Json.class).echo("{\"o\":{\"a\":1,\"a\":2}}"))
+				.hasMessageContaining(WHERE + "$.o has the key \"a\" twice");
+	}
+
+	@Test
+	@DisplayName("the same everywhere: a number beyond NUMBER's range, which driver 19 on 23ai took, and on 21c refused"
+			+ " when too large and stored as 0 when too small")
+	void numbers_beyond() {
+		assertThatThrownBy(() -> pkg(Json.class).echo("{\"big\":1e200}"))
+				.isInstanceOf(PlsqlMappingException.class)
+				.hasMessageContaining(WHERE + "$.big is 1E+200, beyond the range of Oracle's NUMBER");
+		assertThatThrownBy(() -> pkg(Json.class).echo("{\"tiny\":1e-200}"))
+				.isInstanceOf(PlsqlMappingException.class)
+				.hasMessageContaining(WHERE + "$.tiny is 1E-200, beyond the range of Oracle's NUMBER");
+	}
+
+	@Test
+	@DisplayName("the same everywhere: a lone surrogate, which drivers 21 and 23 stored as '?'")
+	void lone_surrogate() {
+		assertThatThrownBy(() -> pkg(Json.class).echo("{\"s\":\"\\uD800\"}"))
+				.isInstanceOf(PlsqlMappingException.class)
+				.hasMessageContaining(WHERE + "$.s holds a lone UTF-16 surrogate, \\uD800");
+		assertThat(pkg(Json.class).echo("{\"s\":\"\\uD83D\\uDE00\"}")).as("a pair is a character")
+				.isEqualTo("{\"s\":\"\uD83D\uDE00\"}");
+	}
+
+	@Test
+	@DisplayName("still different, the driver's and the database's limits: a key of 300 bytes, beyond driver 21's 256,"
+			+ " and 21c's own")
+	void key_length() {
+		String text = "{\"" + "k".repeat(300) + "\":1}";
+		if (DRIVER_MAJOR_VERSION == 21) {
+			assertThatThrownBy(() -> pkg(Json.class).echo(text))
+					.isInstanceOf(PlsqlMappingException.class)
+					.hasMessageContaining("P_DOC is Oracle's JSON type, and the driver refused the text while binding it,"
+							+ " at a limit of its own")
+					.hasMessageContaining("must not be greater than 256 bytes");
+		} else if (DRIVER_MAJOR_VERSION < 21 && DATABASE_MAJOR_VERSION < 23) {
+			assertThatThrownBy(() -> pkg(Json.class).echo(text))
+					.isInstanceOfSatisfying(PlsqlRoutineRaisedException.class,
+							e -> assertThat(e.getCode()).as("ORA-40476: JSON key too long").isEqualTo(40476));
 		} else {
-			assertThatThrownBy(() -> json.echo(doc)).isInstanceOf(PlsqlRoutineRaisedException.class)
-					.hasMessageContaining(DATABASE_MAJOR_VERSION >= 23 ? "ORA-40444: JSON processing error"
-							: "ORA-40473: duplicate key names in JSON object");
+			assertThat(pkg(Json.class).echo(text)).isEqualTo(text);
+		}
+	}
+
+	@Test
+	@DisplayName("still different: a key of 70,000 bytes, beyond driver 23's 65,535, driver 21's 256 and the database's")
+	void key_too_long_everywhere() {
+		String text = "{\"" + "k".repeat(70_000) + "\":1}";
+		if (DRIVER_MAJOR_VERSION >= 21) {
+			assertThatThrownBy(() -> pkg(Json.class).echo(text))
+					.isInstanceOf(PlsqlMappingException.class)
+					.hasMessageContaining("the driver refused the text while binding it, at a limit of its own")
+					.hasMessageContaining(DRIVER_MAJOR_VERSION >= 23 ? "65,535 bytes" : "256 bytes");
+		} else {
+			assertThatThrownBy(() -> pkg(Json.class).echo(text))
+					.isInstanceOfSatisfying(PlsqlRoutineRaisedException.class,
+							e -> assertThat(e.getCode()).isEqualTo(40476));
+		}
+	}
+
+	@Test
+	@DisplayName("still different: 10,000 levels of nesting, which driver 23 takes, driver 21 failed on with a bare"
+			+ " ArrayIndexOutOfBoundsException, and the database refuses with driver 19")
+	void nesting() {
+		String text = "[".repeat(10_000) + "]".repeat(10_000);
+		if (DRIVER_MAJOR_VERSION >= 23) {
+			assertThat(pkg(Json.class).echo(text)).isEqualTo(text);
+		} else if (DRIVER_MAJOR_VERSION == 21) {
+			assertThatThrownBy(() -> pkg(Json.class).echo(text))
+					.isInstanceOf(PlsqlMappingException.class)
+					.hasMessageContaining("the driver refused the text while binding it, at a limit of its own:"
+							+ " ArrayIndexOutOfBoundsException");
+		} else {
+			assertThatThrownBy(() -> pkg(Json.class).echo(text))
+					.isInstanceOfSatisfying(PlsqlRoutineRaisedException.class,
+							e -> assertThat(e.getCode()).as("ORA-40475: JSON data nested too many levels")
+									.isEqualTo(40475));
 		}
 	}
 

@@ -204,13 +204,12 @@ class JsonTypeTest extends OracleIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("text that is not JSON is an execution failure: the database's ORA-26327 with driver 23, the driver's"
-			+ " own ORA-17001 with driver 21, which parses the text before sending it")
+	@DisplayName("text that is not JSON is refused before the call, the same with every driver (#140); see"
+			+ " JsonPortabilityTest for every case")
 	void not_json() {
-		Json json = json();
-		assertThatThrownBy(() -> json.echo("not json"))
-				.isInstanceOfSatisfying(io.github.rponte.penitent.exception.PlsqlExecutionException.class,
-						e -> assertThat(e.getCode()).isEqualTo(DRIVER_MAJOR_VERSION >= 23 ? 26327 : 17001));
+		assertThatThrownBy(() -> pkg(Json.class).echo("not json"))
+				.isInstanceOf(PlsqlMappingException.class)
+				.hasMessageContaining("P_DOC of PLSQL_TEST.FIXTURE_JSON.ECHO: the text is not JSON: Unexpected character");
 	}
 
 	@Test
