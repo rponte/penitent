@@ -42,6 +42,17 @@ class JsonCodecTest {
 	}
 
 	@Test
+	@DisplayName("the message keeps only the parser's first sentence, the same in every driver; the parser's own failure,"
+			+ " with driver 23's ORA- code and its link, stays as the cause")
+	void the_parsers_failure_is_the_cause() {
+		assertThatThrownBy(() -> JsonCodec.text("{bad"))
+				.hasMessage("the text is not JSON: Unexpected character 'b' at line 1, column 2")
+				.hasMessageNotContaining("ORA-")
+				.cause().isInstanceOf(oracle.sql.json.OracleJsonException.class)
+				.hasMessageContaining("Unexpected character 'b' at line 1, column 2");
+	}
+
+	@Test
 	@DisplayName("a raw control character in a string, and a byte order mark, are not JSON either")
 	void raw_characters() {
 		assertThatThrownBy(() -> JsonCodec.text("{\"s\":\"a\tb\"}"))
