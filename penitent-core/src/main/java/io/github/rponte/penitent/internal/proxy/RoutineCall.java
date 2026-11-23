@@ -445,19 +445,37 @@ final class RoutineCall {
 
 	/**
 	 * The JSON text with the JSON type, which drivers 21 and later parse into OSON, Oracle's binary form, before
-	 * sending it. Their parser keeps numbers as Oracle {@code NUMBER}s, and refuses one beyond that range, such as
-	 * {@code 1e200}, with an {@code IllegalArgumentException} and no message, though the database's own parser takes
-	 * it.
+	 * sending it. The text was already checked ({@code JsonCodec.requireValid}), so what the driver still refuses here
+	 * is a limit of the binary form, which each driver sets by version (#140): a key longer than 256 bytes with driver
+	 * 21 ("the UTF-8 encoded key length must not be greater than 256 bytes"), or 65,535 with driver 23
+	 * ({@code ORA-26338}); and nesting that driver 21 does not handle, as a bare {@code ArrayIndexOutOfBoundsException}
+	 * at 10,000 levels, which driver 23 takes. Each becomes a {@code PlsqlMappingException} with the driver's own
+	 * message, rather than a runtime exception escaping, or an error that looks like the database's: the library
+	 * writes no such limit of its own, so a driver that raises it just works.
+	 *
+	 * <p>Only the driver's JSON errors are taken: its codes for JSON, {@code ORA-26300} to {@code ORA-26399} with driver
+	 * 23 and the internal error {@code ORA-17001} with driver 21, and a runtime exception. Any other failure while
+	 * binding goes as it is.
 	 */
 	private static void bindJson(CallableStatement statement, int position, Object text, Argument parameter)
 			throws SQLException {
 		try {
 			statement.setObject(position, text, Jdbc.ORACLE_JSON);
-		} catch (IllegalArgumentException e) {
-			throw new PlsqlMappingException(parameter.name() + " is Oracle's JSON type, and the driver, which parses the"
-					+ " text before sending it, does not take a number in it beyond the range of Oracle's NUMBER, about"
-					+ " 1e-130 to 1e126: keep such a number as a JSON string", e);
+		} catch (RuntimeException e) {
+			throw refusedJson(parameter, e);
+		} catch (SQLException e) {
+			int code = e.getErrorCode();
+			if (code == 17001 || (code >= 26300 && code <= 26399)) {
+				throw refusedJson(parameter, e);
+			}
+			throw e;
 		}
+	}
+
+	private static PlsqlMappingException refusedJson(Argument parameter, Exception cause) {
+		return new PlsqlMappingException(parameter.name() + " is Oracle's JSON type, and the driver refused the text"
+				+ " while binding it, at a limit of its own: " + cause.getClass().getSimpleName() + ": "
+				+ cause.getMessage(), cause);
 	}
 
 	/**

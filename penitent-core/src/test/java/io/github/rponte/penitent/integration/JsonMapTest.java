@@ -285,41 +285,18 @@ class JsonMapTest extends OracleIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("a number beyond the range of Oracle's NUMBER, such as 1e200, which the database's parser takes but the"
-			+ " driver's does not, is refused with a clear message: on the way in with drivers 21 and later, which parse"
-			+ " the text before sending it, and on the way back with driver 19 on 23ai, whose call converts it in the"
-			+ " database, where a String still takes its text. On 21c, the database's parser refuses it too, with"
-			+ " ORA-01426")
+	@DisplayName("a number beyond the range of Oracle's NUMBER, such as 1e200, which the JSON type stores numbers as, is"
+			+ " refused before the call, as a text or in a Map, the same with every driver and database (#140)")
 	void number_out_of_range() {
-		String expected = DRIVER_MAJOR_VERSION >= 21
-				? "P_DOC is Oracle's JSON type, and the driver, which parses the text before sending it, does not take a"
-						+ " number in it beyond the range of Oracle's NUMBER, about 1e-130 to 1e126: keep such a number as"
-						+ " a JSON string"
-				: "the return value of PLSQL_TEST.FIXTURE_JSON.ECHO: the document holds a number that the driver's JSON"
-						+ " parser does not read, beyond the range of Oracle's NUMBER, about 1e-130 to 1e126: declare"
-						+ " String for its text";
-		if (DRIVER_MAJOR_VERSION < 21 && DATABASE_MAJOR_VERSION < 23) {
-			// with driver 19 the database parses the text, and 21c's parser refuses the number itself
-			assertThatThrownBy(() -> documents().echoText("{\"big\":1e200}")).hasMessageContaining("ORA-01426");
-			assertThatThrownBy(() -> documents().parse("{\"big\":1e200}")).hasMessageContaining("ORA-01426");
-			assertThatThrownBy(() -> documents().echoMap(Map.of("big", new BigDecimal("1e200"))))
-					.hasMessageContaining("ORA-01426");
-			return;
-		}
-		if (DRIVER_MAJOR_VERSION < 21) {
-			// with driver 19 on 23ai, the database takes it, and the text comes back: no parser of the driver is involved
-			assertThat(documents().echoText("{\"big\":1e200}")).isEqualTo("{\"big\":1E+200}");
-		} else {
-			assertThatThrownBy(() -> documents().echoText("{\"big\":1e200}"))
-					.isInstanceOf(PlsqlMappingException.class)
-					.hasMessageContaining(expected);
-		}
+		String expected = "P_DOC of PLSQL_TEST.FIXTURE_JSON.ECHO: $.big is 1E+200, beyond the range of Oracle's NUMBER,"
+				+ " whose magnitude goes from 1E-130 to just under 1E+126, besides 0, which the JSON type stores numbers"
+				+ " as: keep such a number as a JSON string";
+		assertThatThrownBy(() -> documents().echoText("{\"big\":1e200}"))
+				.isInstanceOf(PlsqlMappingException.class).hasMessageContaining(expected);
 		assertThatThrownBy(() -> documents().parse("{\"big\":1e200}"))
-				.isInstanceOf(PlsqlMappingException.class)
-				.hasMessageContaining(expected);
+				.isInstanceOf(PlsqlMappingException.class).hasMessageContaining(expected);
 		assertThatThrownBy(() -> documents().echoMap(Map.of("big", new BigDecimal("1e200"))))
-				.isInstanceOf(PlsqlMappingException.class)
-				.hasMessageContaining(expected);
+				.isInstanceOf(PlsqlMappingException.class).hasMessageContaining(expected);
 	}
 
 	@Test

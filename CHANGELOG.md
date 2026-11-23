@@ -24,12 +24,17 @@ All notable changes to this project are listed here. The format follows
   with every driver. The library parses and writes the text with the driver's own JSON API, `oracle.sql.json`. Inside
   a `Map` or a `List`, every number is a `BigDecimal`, as the type stores it. A value JSON has no form for, such as a
   `LocalDate`, a document that does not fit the declared type, and a `Map` or a `List` with narrower type arguments,
-  such as `Map<String, String>`, are refused with a clear message. A number beyond the range of `NUMBER`, such as
-  `1e200`, which the parser of drivers 21 and later does not take before sending the text, is refused with a clear
-  message, as a `String` too: it escaped as the driver's `IllegalArgumentException`, with no message. The Types page's
-  "Moving between drivers and databases" shows what a JSON text sent does with each driver and database, such as an
-  empty string, which is `NULL` with driver 19 and an error with drivers 21 and later; making it the same everywhere
-  is [#140](https://github.com/rponte/penitent/issues/140).
+  such as `Map<String, String>`, are refused with a clear message.
+- A JSON text sent to a `JSON` parameter is checked before the call, the same way with every driver and database
+  ([#140](https://github.com/rponte/penitent/issues/140)): the JSON specification's syntax, strictly, an empty text,
+  a key twice in an object, a number beyond `NUMBER`'s range and a lone surrogate are refused with a
+  `PlsqlMappingException` that says what and where, as in `$.big is 1E+200`. A `Map`'s numbers and strings follow the
+  same rules. Drivers 21 and 23 parsed the text themselves while binding, each with errors of its own, and with
+  driver 19 the database took "almost JSON" and corrected it silently, such as `{'a':1}` and `NaN`, and stored an
+  empty string as `NULL`. The limits of the binary form, a key's length and the depth of nesting, stay the driver's
+  and the database's, which set them by version: a driver's refusal while binding, even a bare
+  `ArrayIndexOutOfBoundsException` of driver 21, becomes a `PlsqlMappingException` with the driver's message. The
+  Types page's "Moving between drivers and databases" shows what is the same everywhere and what is not.
 
 ### Fixed
 

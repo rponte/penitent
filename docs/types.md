@@ -308,43 +308,52 @@ Object items = back.get("items");   // List ["pen", "ink"]
 - **Only `Map<String, Object>` and `List<Object>`,** or their wildcards, describe a document, whose values are of
   many types. A `Map<String, String>`, a `List<String>`, or a `HashMap` is refused before the call, and in a
   cursor's record, before the row is read.
-- **A number beyond the range of `NUMBER`,** about `1e-130` to `1e126`, such as `1e200`, is not read by the
-  driver's JSON parser, and where the database parses it depends on the driver:
-
-  | Driver | Database | `String` | `Map` or `List` |
-  |---|---|---|---|
-  | 21 or later | any | refused on the way in: the driver parses the text before sending it | the same |
-  | 19 | 23ai | works: the text comes back, as `{"big":1E+200}` | refused on the way back, by the driver's parser |
-  | 19 | 21c | the database refuses it, with `ORA-01426` | the same |
-
-  Keep such a number as a JSON string.
+- **A number beyond the range of `NUMBER`,** about `1e-130` to `1e126`, such as `1e200`, is refused before the call,
+  in a text or in a `Map`, with every driver, since the `JSON` type stores numbers as `NUMBER`s. Keep such a number
+  as a JSON string. Stored in the database, as 23ai allows, it is read as a `String`, and refused as a `Map`.
 - **The same mapping works with every driver,** since the document crosses JDBC as text. With driver 19, the limits
   above apply: no `OUT`, no `IN OUT` and no cursor column.
 
 ### Moving between drivers and databases
 
-Who parses a JSON text you send depends on the driver: drivers 21 and later parse it themselves, to bind the
-`JSON` type, and with driver 19 the database parses it, in `JSON(?)`. So some calls behave differently after you
-change the driver or the database, or when your tests run against another version than production.
-[#140](https://github.com/rponte/penitent/issues/140) is about making them behave the same; until then:
+Who parses a JSON text you send depends on the driver: drivers 21 and later parse it themselves, to bind the `JSON`
+type, and with driver 19 the database parses it, in `JSON(?)`, and that one is lax by default. So Penitent checks the
+text first, the same way with every driver, and refuses before the call, with a `PlsqlMappingException` that says
+what and where ([#140](https://github.com/rponte/penitent/issues/140)):
 
-| Case | Driver 23 | Driver 21 | Driver 19 |
-|---|---|---|---|
-| An empty string, `""` | `PlsqlExecutionException`, `ORA-26328` | `PlsqlExecutionException`, with no ORA code | **`null`**, with no error: Oracle's `''` is `NULL` |
-| Text that is not JSON | `PlsqlExecutionException`, `ORA-26326` | `PlsqlExecutionException`, with no ORA code | `PlsqlRoutineRaisedException`, `ORA-40441`, though the routine never ran |
-| Duplicate keys | `PlsqlExecutionException`, `ORA-26323` | `PlsqlExecutionException`, with no ORA code | `PlsqlRoutineRaisedException`: `ORA-40444` on 23ai, `ORA-40473` on 21c |
-| A number beyond `NUMBER`'s range, sent | refused | refused | on 23ai, a `String` takes it; on 21c, `ORA-01426`: see [above](#as-a-map-or-a-list) |
-| Such a number stored, read as a `String` | `1.0E200` | `1.0E200` | `1E+200` |
-| `OUT`, `IN OUT`, a cursor's `JSON` column | supported | supported | not supported: see [JSON](#json) |
+| Case | The message, after the parameter's name |
+|---|---|
+| Text that is not JSON, by the JSON specification: a leading zero, single quotes, a trailing comma, `True`, `NaN`, a comment, a raw tab in a string, a byte order mark | `the text is not JSON: Unexpected character 'b' at line 1, column 2`, the driver's parser's first sentence, the same in drivers 19, 21 and 23 |
+| An empty or a blank text | `the text is empty, which is not JSON: send null for SQL NULL` |
+| A key twice in the same object | `$.o has the key "a" twice, and the keys of a JSON object are unique` |
+| A number beyond `NUMBER`'s range, which the type stores numbers as | `$.big is 1E+200, beyond the range of Oracle's NUMBER, …: keep such a number as a JSON string` |
+| A lone UTF-16 surrogate, such as `\uD800` | `$.s holds a lone UTF-16 surrogate, \uD800, which is no character, and which the driver would store as '?': …` |
 
-What stays the same everywhere: the text of every other document that comes back, as a `String` or a `Map`, with
-its numbers, dates, timestamps, `RAW` values and escapes, measured on 23ai and 21c with drivers 19, 21 and 23. So:
+Without this check, each driver refused such a text with an error of its own, and with driver 19 the database took
+much of it, and corrected it silently: `{"n":01}` became `{"n":1}`, `{'a':1}` became `{"a":1}`, `NaN` became the
+string `"Nan"` on 23ai, an empty string became `NULL`, and `1e-200` became `0` on 21c.
 
-- **Don't send an empty string for a missing document:** send `null`.
-- **Don't catch a driver's or a database's error to tell bad JSON apart:** its class and its code change with
-  them. Check the text before the call, if it may be invalid.
+**What still depends on the driver and the database** are the limits of the `JSON` type's binary form, which each of
+them sets by version. Penitent writes no such limit of its own, so a newer driver or database that raises one just
+works:
+
+| Case | Driver 23 | Driver 21 | Driver 19, on 23ai | Driver 19, on 21c |
+|---|---|---|---|---|
+| A key of 300 bytes | taken | `PlsqlMappingException`: the driver's 256 bytes | taken | `PlsqlRoutineRaisedException`, `ORA-40476` |
+| A key of 70,000 bytes | `PlsqlMappingException`: the driver's 65,535 bytes | `PlsqlMappingException`: 256 bytes | `PlsqlRoutineRaisedException`, `ORA-40476` | the same |
+| 10,000 levels of nesting | taken | `PlsqlMappingException`: the driver fails | `PlsqlRoutineRaisedException`, `ORA-40475` | the same |
+| A number beyond `NUMBER`'s range stored in the database, read as a `String` | `1.0E200` | `1.0E200` | `1E+200` | — |
+| `OUT`, `IN OUT`, a cursor's `JSON` column | supported | supported | not supported: see [JSON](#json) | the same |
+
+With drivers 21 and 23, the driver refuses such a text while binding it, and Penitent passes on its message. With
+driver 19, the database refuses it in `JSON(?)`, and the error arrives as the routine's, though the routine never
+ran. Everything else that comes back is the same everywhere: the text and the `Map` of a document, with its numbers,
+dates, timestamps, `RAW` values and escapes, measured on 23ai and 21c with drivers 19, 21 and 23. So:
+
+- **Keep keys short, and nesting shallow,** if more than one driver or database version may run your code.
 - **In a cursor, `JSON_SERIALIZE(doc RETURNING CLOB)` in the query** works with every driver.
 - **Run your tests with the driver and the database version of production.**
+
 ## Composite types
 
 An OBJECT type, a RECORD declared in a package and a table's `%ROWTYPE` all map to a Java `record` or a JavaBean.
