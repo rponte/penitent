@@ -457,7 +457,7 @@ final class RoutineCall {
 	 * 23 and the internal error {@code ORA-17001} with driver 21, and a runtime exception. Any other failure while
 	 * binding goes as it is.
 	 */
-	private static void bindJson(CallableStatement statement, int position, Object text, Argument parameter)
+	static void bindJson(CallableStatement statement, int position, Object text, Argument parameter)
 			throws SQLException {
 		try {
 			statement.setObject(position, text, Jdbc.ORACLE_JSON);
