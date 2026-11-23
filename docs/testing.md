@@ -342,9 +342,35 @@ verify(mock, never()).quoteOf(isNull());
 A document above 32 KB is written in pieces, as a long text is. With driver 19, a stub of a `JSON` `OUT` is refused
 when you make it, with the message a call would give, since driver 19 cannot bring such an `OUT` back.
 
-**An `IN OUT` parameter** takes `out(value)`, which sets what comes back. Matching it by the value that came in, in a
-stub or in `verify`, is not supported yet ([#150](https://github.com/rponte/penitent/issues/150)): a value given for
-it counts as `any()`, so `verify(mock).stamp(PlsqlOut.of("raw"))` passes whatever came in.
+**An `IN OUT` parameter** has a value coming in and one going out. A stub matches the first and sets the second:
+`out(value)` sets it whatever came in, and `inOut(cameIn, goesOut)` only when `cameIn` came in, compared as an `IN`
+parameter's value is, with `null` for SQL `NULL`. Both take values, not matchers:
+
+<!-- snippet: testing/in-out -->
+```java
+// whatever came in: goes out as "default"
+doNothing().when(mock).stamp(out("default"));
+// came in as "raw": goes out as "stamped". The last stub that matches wins, so this one, for "raw"
+doNothing().when(mock).stamp(inOut("raw", "stamped"));
+```
+
+A `PlsqlOut` given as it is matches by the value it holds, and sets nothing, so the parameter goes back as it came in,
+as in PL/SQL; an empty one, `new PlsqlOut<>()`, matches SQL `NULL`, and `any()` matches anything. `verify` checks what
+the code under test sent, as Mockito's does, never what went out, which the stub set: it matches an `IN OUT` by the
+value that came in, recorded at the call, so what the `PlsqlOut` holds afterwards does not count:
+
+<!-- snippet: testing/in-out-verify -->
+```java
+// what came in, recorded at the call: "stamped", which went out, does not count
+verify(mock).stamp(PlsqlOut.of("raw"));
+// SQL NULL came in
+verify(mock, never()).stamp(new PlsqlOut<>());
+```
+
+`inOut` is refused in `verify`, and on an `IN` parameter. A pure `OUT` has nothing coming in: there, `out(value)` sets
+it, `new PlsqlOut<>()` or `any()` match it, and a `PlsqlOut` with a value or `inOut` is refused, since no value could
+match. An `IN OUT` of an object type, a collection or a record is set with `out(value)` and matched with `any()` only,
+as an `IN` one is.
 
 **Stub a standalone routine.** A function or procedure outside any package is stubbed the same way, from the
 interface with `@PlsqlSchema` the application calls it through:

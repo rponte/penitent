@@ -292,9 +292,25 @@ public final class PlsqlMocks implements AutoCloseable {
 		return null;
 	}
 
-	/** In place of a {@link PlsqlOut} argument: the value the stubbed routine sets it to. */
+	/**
+	 * In place of a {@link PlsqlOut} argument, in a stub: the value the stubbed routine sets it to, whatever came in
+	 * through it. For an {@code IN OUT} parameter, {@link #inOut} matches what came in too.
+	 */
 	public static <T> PlsqlOut<T> out(T value) {
 		Recording.matcher(new Matcher.Out(value));
+		return null;
+	}
+
+	/**
+	 * In place of the {@link PlsqlOut} argument of an {@code IN OUT} parameter, in a stub: matches the call when
+	 * {@code cameIn} is the value that came in through it, compared as an {@code IN} parameter's value is, with
+	 * {@code null} matching SQL {@code NULL}, and sets it to {@code goesOut}.
+	 *
+	 * <p>Both are values, not matchers: for any value coming in, write {@code out(goesOut)}. In {@code verify}, which
+	 * matches what came in only, give the {@code IN OUT} a {@code PlsqlOut.of(cameIn)} instead.
+	 */
+	public static <T> PlsqlOut<T> inOut(T cameIn, T goesOut) {
+		Recording.matcher(new Matcher.InOut(cameIn, goesOut));
 		return null;
 	}
 
