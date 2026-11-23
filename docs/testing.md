@@ -317,6 +317,31 @@ or of the parameter, for an `OUT`. So `thenReturn(Uf.CE)` answers `'CE'`, a `UUI
 intervals, a `RAW`, a `BLOB` and a `CLOB` above the 32 KB of a PL/SQL literal are written too; bytes above 16 KB are
 refused, since a `BLOB` cannot be joined in an expression ([#93](https://github.com/rponte/penitent/issues/93)).
 
+**Oracle's JSON type,** from 21c on, takes what a call takes: a `String`, the JSON text, or a `Map`, a `List` or a
+scalar ([JSON](types.md#json)). A stub's value is checked as a call's is, so a stub refuses what a call would refuse,
+such as `{'a':1}` or a key twice, with the same message ([Moving between drivers and
+databases](types.md#moving-between-drivers-and-databases)). Matching by value, in a stub and in `verify`, compares
+documents, with Oracle's `JSON_EQUAL`: the order of an object's members, the spacing and the form of a number, `1`
+or `1.0`, do not count; the order of an array does:
+
+<!-- snippet: testing/json -->
+```java
+// a document matches by its value: { "id" : 7.0 } matches too
+when(mock.quoteOf("{\"id\":7}")).thenReturn("{\"total\":24.9}");
+// a Map, a List or a scalar, as in a call
+when(mock.quoteMap(Map.of("id", 8))).thenReturn(Map.of("total", new BigDecimal("12.5")));
+```
+
+<!-- snippet: testing/json-verify -->
+```java
+verify(mock, times(2)).quoteOf("{\"id\":7}");
+// isNull() is SQL NULL only, not the JSON null, which is "null"
+verify(mock, never()).quoteOf(isNull());
+```
+
+A document above 32 KB is written in pieces, as a long text is. With driver 19, a stub of a `JSON` `OUT` is refused
+when you make it, with the message a call would give, since driver 19 cannot bring such an `OUT` back.
+
 **Stub a standalone routine.** A function or procedure outside any package is stubbed the same way, from the
 interface with `@PlsqlSchema` the application calls it through:
 

@@ -849,3 +849,33 @@ CREATE OR REPLACE PACKAGE BODY "Freight.Dots" AS
   FUNCTION item_of(p_id NUMBER) RETURN item_rec IS BEGIN RAISE_APPLICATION_ERROR(-20460, 'real'); END;
 END "Freight.Dots";
 /
+
+-- Oracle's JSON type, from 21c on (#133): a function and a procedure with JSON, whose real code fails, and a function
+-- that calls the first from PL/SQL. Created only where the type exists; the version is checked rather than an error
+-- caught, so that a mistake in the DDL still fails here.
+BEGIN
+  IF DBMS_DB_VERSION.VERSION >= 21 THEN
+    EXECUTE IMMEDIATE q'[
+      CREATE OR REPLACE PACKAGE freight_docs AS
+        FUNCTION quote_of(p_order JSON) RETURN JSON;
+        PROCEDURE label_of(p_order JSON, p_label OUT JSON);
+        FUNCTION describe_quote(p_order JSON) RETURN VARCHAR2;
+      END freight_docs;]';
+    EXECUTE IMMEDIATE q'[
+      CREATE OR REPLACE PACKAGE BODY freight_docs AS
+        FUNCTION quote_of(p_order JSON) RETURN JSON IS
+        BEGIN
+          RAISE_APPLICATION_ERROR(-20470, 'the real quote_of');
+        END quote_of;
+        PROCEDURE label_of(p_order JSON, p_label OUT JSON) IS
+        BEGIN
+          RAISE_APPLICATION_ERROR(-20470, 'the real label_of');
+        END label_of;
+        FUNCTION describe_quote(p_order JSON) RETURN VARCHAR2 IS
+        BEGIN
+          RETURN JSON_SERIALIZE(quote_of(p_order));
+        END describe_quote;
+      END freight_docs;]';
+  END IF;
+END;
+/
