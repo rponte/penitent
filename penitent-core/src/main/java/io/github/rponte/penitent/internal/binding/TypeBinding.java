@@ -16,6 +16,7 @@ import io.github.rponte.penitent.convert.PlsqlConverters;
 import io.github.rponte.penitent.exception.PlsqlMappingException;
 import io.github.rponte.penitent.internal.Caches;
 import io.github.rponte.penitent.internal.binding.JavaProperties.JavaProperty;
+import io.github.rponte.penitent.internal.convert.OracleNumberLimits;
 import io.github.rponte.penitent.internal.convert.AppliedConverter;
 import io.github.rponte.penitent.internal.convert.ConverterLookup;
 import io.github.rponte.penitent.internal.convert.OracleTimeZoneCodec;
@@ -417,8 +418,8 @@ public final class TypeBinding {
 		// a TIMESTAMP WITH LOCAL TIME ZONE attribute is built by the library: see OracleTimeZoneCodec
 		if (attribute.converter() != null && !attribute.converter().elementWise()) {
 			return TemporaryLobs.forLob(attribute.oracleType(), OracleTimeZoneCodec.forComposite(attribute.oracleType(),
-					ScalarCodec.encode(withContext(attribute, () -> attribute.converter().toDatabase(raw)),
-							attribute.conversion()),
+					withContext(attribute, () -> withinNumber(attribute.oracleType(), ScalarCodec.encode(
+							attribute.converter().toDatabase(raw), attribute.conversion()))),
 					connection), connection);
 		}
 		if (raw == null) {
@@ -432,7 +433,8 @@ public final class TypeBinding {
 		}
 		// withContext names the attribute when the value is refused, such as a date beyond Oracle's range
 		return TemporaryLobs.forLob(attribute.oracleType(), OracleTimeZoneCodec.forComposite(attribute.oracleType(),
-				withContext(attribute, () -> ScalarCodec.encode(raw, attribute.conversion())), connection), connection);
+				withContext(attribute, () -> withinNumber(attribute.oracleType(),
+						ScalarCodec.encode(raw, attribute.conversion()))), connection), connection);
 	}
 
 	private Object encodeCollectionAttribute(Attribute attribute, Object raw, Connection connection)
@@ -451,8 +453,9 @@ public final class TypeBinding {
 		for (int i = 0; i < source.length; i++) {
 			Object element = source[i];
 			if (attribute.converter() != null) {
-				encoded[i] = OracleTimeZoneCodec.forComposite(collection.elementTypeName(), ScalarCodec.encode(
-						withContext(attribute, () -> attribute.converter().toDatabase(element)), attribute.conversion()),
+				encoded[i] = OracleTimeZoneCodec.forComposite(collection.elementTypeName(),
+						withContext(attribute, () -> withinNumber(collection.elementTypeName(), ScalarCodec.encode(
+								attribute.converter().toDatabase(element), attribute.conversion()))),
 						connection);
 			} else if (source[i] == null) {
 				encoded[i] = null;
@@ -461,7 +464,8 @@ public final class TypeBinding {
 			} else {
 				// the element inherits the attribute's conversion: that is how a List<Enum> becomes a VARCHAR2_LIST
 				encoded[i] = OracleTimeZoneCodec.forComposite(collection.elementTypeName(),
-						withContext(attribute, () -> ScalarCodec.encode(element, attribute.conversion())), connection);
+						withContext(attribute, () -> withinNumber(collection.elementTypeName(),
+								ScalarCodec.encode(element, attribute.conversion()))), connection);
 			}
 		}
 		return OracleArrays.create(connection, TypeNameIntegration.collectionNameOf(connection, collection.bindName()),
@@ -557,6 +561,18 @@ public final class TypeBinding {
 					: applied.fromDatabase(
 							ScalarCodec.decode(raw, applied.databaseType(), attribute.conversion(), connection));
 		});
+	}
+
+	/**
+	 * A number beyond {@code NUMBER}'s range, for an attribute or an element whose Oracle type holds no more: refused
+	 * here, with the attribute named by {@link #withContext}, rather than as the driver's {@code ORA-17059}. A
+	 * {@code BINARY_DOUBLE} or a {@code BINARY_FLOAT} holds it (see {@code OracleNumberLimits}).
+	 */
+	private static Object withinNumber(String oracleType, Object encoded) {
+		if (!OracleNumberLimits.isBinaryFloatingPoint(oracleType)) {
+			OracleNumberLimits.requireWithinIfNumber(encoded);
+		}
+		return encoded;
 	}
 
 	private Object withContext(Attribute attribute, java.util.function.Supplier<Object> conversion) {

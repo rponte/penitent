@@ -311,7 +311,9 @@ class JsonTypeTest extends OracleIntegrationTest {
 		Json json = jsonWithDriver19();
 		// twice: the driver fails with an AssertionError or an ArrayIndexOutOfBoundsException, as its state goes
 		for (int call = 1; call <= 2; call++) {
+			// the driver's own failure, not the routine's (#141)
 			assertThatThrownBy(json::rows)
+					.isExactlyInstanceOf(io.github.rponte.penitent.exception.PlsqlExecutionException.class)
 					.hasMessageContaining("a column of a type that driver 19 does not know, such as JSON, makes it fail:"
 							+ " convert it in the query, as in JSON_SERIALIZE(doc RETURNING CLOB), or use driver 21 or"
 							+ " later. The connection was discarded");

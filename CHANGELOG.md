@@ -48,6 +48,19 @@ All notable changes to this project are listed here. The format follows
 - A parameter's value that its Oracle type does not hold, such as a `Period` with days for an
   `INTERVAL YEAR TO MONTH`, now names the parameter in its message, as `NaN` for a `NUMBER` already did:
   `P_VALUE is INTERVAL YEAR TO MONTH: Period P1Y2M3D has days, ...`.
+- An error the driver raises itself, in the client, or a failure of the driver itself, is a `PlsqlExecutionException`,
+  never a `PlsqlRoutineRaisedException` ([#141](https://github.com/rponte/penitent/issues/141)). Only an error the
+  database sent can be the routine's: the driver keeps Oracle's report of it, an `OracleDatabaseException`, as its
+  cause. Before, a code outside the driver's old range, such as driver 23's `ORA-18722`, and a failure of the driver
+  itself, which Penitent wraps with code 0 after discarding the connection, such as driver 19 reading a `JSON`
+  column, were reported as the routine's. **Upgrading:** a `catch (PlsqlRoutineRaisedException e)` no longer catches
+  them; catch `PlsqlExecutionException`, its parent.
+- A number beyond `NUMBER`'s range, too large or too small, is refused before the call with a `PlsqlMappingException`
+  that names the value and where it is, the same on every driver
+  ([#141](https://github.com/rponte/penitent/issues/141)). The driver refused it while binding, with a message and a
+  SQLState of each driver's own, and a `Double` escaped as a bare `IllegalArgumentException`. A `BINARY_DOUBLE` or a
+  `BINARY_FLOAT` takes it. **Upgrading:** such a call failed with a `PlsqlExecutionException`; it now fails with a
+  `PlsqlMappingException`, which is not one.
 
 ## [0.31.0]
 

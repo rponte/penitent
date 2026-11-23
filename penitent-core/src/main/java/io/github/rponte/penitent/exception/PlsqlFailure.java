@@ -62,11 +62,27 @@ public record PlsqlFailure(String sql, SQLException cause, Phase phase) {
 	 * point of the call and, even with the routine running, any infrastructure failure or failure of
 	 * the call itself.
 	 *
+	 * <p><b>Only an error the database sent.</b> The driver keeps Oracle's own report of such an error,
+	 * an {@code oracle.jdbc.OracleDatabaseException}, as the cause of its {@code SQLException}: measured
+	 * with drivers 19, 21 and 23, on 23ai and 19c. An error the driver raises itself, in the client, has
+	 * none, whatever its code: {@code ORA-17001} binding a number beyond {@code NUMBER}'s range,
+	 * {@code ORA-17004}, or driver 23's {@code ORA-18722}, outside the driver's old range of codes. Nor
+	 * has a failure of the driver itself, which the library wraps with code 0 when it aborts the
+	 * connection. None of these says anything about the routine (#141).
+	 *
+	 * <p><b>A constraint the routine declares is its own.</b> A {@code NOT NULL} or a range on a formal
+	 * parameter, such as {@code POSITIVE}, {@code SIMPLE_INTEGER} or {@code PLS_INTEGER}, is checked by
+	 * Oracle when it assigns the value, before the routine's first line, as if the routine checked it
+	 * there: it counts as the routine's error, as does the same constraint on its return value.
+	 *
 	 * <p>The error stack is not part of the criterion, and an {@code ORA-06550} is always treated as
 	 * a failure of the call, even when it comes from dynamic SQL inside the routine.
 	 */
 	public boolean raisedByRoutine() {
 		if (phase != Phase.EXECUTION && phase != Phase.RESULT) {
+			return false;
+		}
+		if (!sentByTheDatabase()) {
 			return false;
 		}
 		int code = cause.getErrorCode();
@@ -76,5 +92,15 @@ public record PlsqlFailure(String sql, SQLException cause, Phase phase) {
 			}
 		}
 		return true;
+	}
+
+	/** Oracle's report anywhere in the chain of causes: the library may wrap the error to explain it. */
+	private boolean sentByTheDatabase() {
+		for (Throwable t = cause; t != null; t = t.getCause()) {
+			if (t instanceof oracle.jdbc.OracleDatabaseException) {
+				return true;
+			}
+		}
+		return false;
 	}
 }
