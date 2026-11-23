@@ -1,5 +1,7 @@
 package io.github.rponte.penitent.mock.internal;
 
+import io.github.rponte.penitent.PlsqlOut;
+
 /**
  * What an argument of a stubbed or verified call has to be, written as a PL/SQL condition on an expression: a
  * parameter, in a stub, or a recorded argument, in a verification.
@@ -58,6 +60,40 @@ public sealed interface Matcher {
 		@Override
 		public String toString() {
 			return "out(" + shown(value) + ")";
+		}
+	}
+
+	/**
+	 * A {@link PlsqlOut} given as it is, or in {@code eq()}: the value it holds is what came in through the parameter.
+	 * The session resolves it by the parameter's mode, before it is used (see {@code MockSession.resolved}): an
+	 * {@code IN OUT} matches the value as {@link Equal} does, and a pure {@code OUT}, which nothing comes in through,
+	 * takes no value.
+	 */
+	record CameIn(Object value) implements Matcher {
+		@Override
+		public String condition(String expression) {
+			return new Equal(value).condition(expression);
+		}
+
+		@Override
+		public String toString() {
+			return new Equal(value).toString();
+		}
+	}
+
+	/**
+	 * {@code inOut(cameIn, goesOut)}, for an {@code IN OUT} parameter: matches {@code cameIn} coming in, as
+	 * {@link Equal} does, and sets the parameter to {@code goesOut}.
+	 */
+	record InOut(Object cameIn, Object goesOut) implements Matcher {
+		@Override
+		public String condition(String expression) {
+			return new Equal(cameIn).condition(expression);
+		}
+
+		@Override
+		public String toString() {
+			return "inOut(" + new Equal(cameIn) + ", " + shown(goesOut) + ")";
 		}
 	}
 

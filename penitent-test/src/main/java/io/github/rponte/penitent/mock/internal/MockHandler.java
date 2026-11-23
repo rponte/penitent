@@ -73,13 +73,20 @@ public final class MockHandler implements InvocationHandler {
 	}
 
 	private static List<Matcher> matchersOf(Method method, Object[] arguments) {
-		List<Matcher> given = Recording.takeMatchers();
+		List<Matcher> given = new ArrayList<>(Recording.takeMatchers());
 		if (given.isEmpty()) {
 			List<Matcher> matchers = new ArrayList<>();
 			for (Object argument : arguments) {
-				matchers.add(argument instanceof PlsqlOut<?> ? new Matcher.Any() : new Matcher.Equal(argument));
+				// a PlsqlOut holds what came in, which the session matches by the parameter's mode
+				matchers.add(argument instanceof PlsqlOut<?> out ? new Matcher.CameIn(out.get())
+						: new Matcher.Equal(argument));
 			}
 			return matchers;
+		}
+		for (int i = 0; i < given.size(); i++) {
+			if (given.get(i) instanceof Matcher.Equal equal && equal.value() instanceof PlsqlOut<?> out) {
+				given.set(i, new Matcher.CameIn(out.get()));
+			}
 		}
 		if (given.size() != arguments.length) {
 			Recording.reset();

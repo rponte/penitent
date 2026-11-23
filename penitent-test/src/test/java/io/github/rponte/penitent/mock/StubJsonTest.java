@@ -3,6 +3,7 @@ package io.github.rponte.penitent.mock;
 import static io.github.rponte.penitent.mock.PlsqlMocks.any;
 import static io.github.rponte.penitent.mock.PlsqlMocks.doNothing;
 import static io.github.rponte.penitent.mock.PlsqlMocks.eq;
+import static io.github.rponte.penitent.mock.PlsqlMocks.inOut;
 import static io.github.rponte.penitent.mock.PlsqlMocks.isNull;
 import static io.github.rponte.penitent.mock.PlsqlMocks.never;
 import static io.github.rponte.penitent.mock.PlsqlMocks.out;
@@ -171,8 +172,8 @@ class StubJsonTest {
 	}
 
 	@Test
-	@DisplayName("a stub sets a JSON IN OUT, with driver 21 or later; with driver 19 such a stub is refused when made."
-			+ " Matching by the document that came in waits for #150")
+	@DisplayName("a stub sets a JSON IN OUT, with driver 21 or later, and matches it by the document that came in, as"
+			+ " verify counts it; with driver 19 such a stub is refused when made")
 	void sets_an_in_out() {
 		Docs mock = mocks.mock(Docs.class);
 		if (DRIVER_MAJOR_VERSION < 21) {
@@ -182,10 +183,19 @@ class StubJsonTest {
 			return;
 		}
 		doNothing().when(mock).wrapDoc(out("{\"wrapped\":true}"));
+		doNothing().when(mock).wrapDoc(inOut("{\"b\":[1,2],\"a\":1}", "{\"matched\":true}"));
 		PlsqlOut<String> doc = PlsqlOut.of("{\"a\":1}");
 		docs.wrapDoc(doc);
-
 		assertThat(doc.get()).isEqualTo("{\"wrapped\":true}");
+		PlsqlOut<String> matched = PlsqlOut.of("{ \"a\" : 1.0, \"b\" : [1, 2] }");
+		docs.wrapDoc(matched);
+		assertThat(matched.get()).isEqualTo("{\"matched\":true}");
+
+		verify(mock).wrapDoc(PlsqlOut.of("{ \"a\" : 1.0 }"));
+		verify(mock).wrapDoc(PlsqlOut.of("{\"a\":1,\"b\":[1,2]}"));
+		verify(mock, never()).wrapDoc(PlsqlOut.of("{\"a\":1,\"b\":[2,1]}"));
+		verify(mock, never()).wrapDoc(PlsqlOut.of("{\"wrapped\":true}"));
+		verify(mock, never()).wrapDoc(new PlsqlOut<>());
 	}
 
 	@Test

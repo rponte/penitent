@@ -193,6 +193,7 @@ public final class MockSession implements RowTypes {
 		requireBegun();
 		long start = System.nanoTime();
 		RoutineMetadata routine = routineOf(stub.invocation());
+		stub = new Stub(resolved(routine, stub.invocation(), false), stub.action());
 		requireMatchable(routine, byParameter(routine, stub.invocation()));
 		requireNotScripted(routine);
 		stub = written(stub, routine);
@@ -231,14 +232,18 @@ public final class MockSession implements RowTypes {
 		List<Matcher> matchers = new ArrayList<>(invocation.matchers());
 		List<Integer> outs = new ArrayList<>();
 		List<Integer> equals = new ArrayList<>();
+		List<Integer> inOuts = new ArrayList<>();
 		for (int i = 0; i < matchers.size(); i++) {
 			if (matchers.get(i) instanceof Matcher.Out out && out.value() != null) {
 				outs.add(i);
 			} else if (matchers.get(i) instanceof Matcher.Equal equal && equal.value() != null) {
 				equals.add(i);
+			} else if (matchers.get(i) instanceof Matcher.InOut inOut
+					&& (inOut.cameIn() != null || inOut.goesOut() != null)) {
+				inOuts.add(i);
 			}
 		}
-		if (!returns && outs.isEmpty() && equals.isEmpty()) {
+		if (!returns && outs.isEmpty() && equals.isEmpty() && inOuts.isEmpty()) {
 			return stub;
 		}
 		RoutineInvocationHandler handler = Views.handlerOf(describerOf(invocation.mock().type()));
@@ -255,6 +260,14 @@ public final class MockSession implements RowTypes {
 			for (int i : equals) {
 				matchers.set(i, new Matcher.Equal(literal(handler.encodeParameter(method, i,
 						((Matcher.Equal) matchers.get(i)).value(), connection), connection)));
+			}
+			for (int i : inOuts) {
+				Matcher.InOut inOut = (Matcher.InOut) matchers.get(i);
+				matchers.set(i, new Matcher.InOut(
+						inOut.cameIn() == null ? null
+								: literal(handler.encodeParameter(method, i, inOut.cameIn(), connection), connection),
+						inOut.goesOut() == null ? null
+								: literal(handler.encodeParameter(method, i, inOut.goesOut(), connection), connection)));
 			}
 		} catch (SQLException e) {
 			throw new IllegalStateException("failed to write the stub of " + routine.qualifiedName() + " as PL/SQL: "
@@ -638,6 +651,7 @@ public final class MockSession implements RowTypes {
 	 */
 	public void verify(Invocation invocation, int times) {
 		RoutineMetadata routine = routineOf(invocation);
+		invocation = resolved(routine, invocation, true);
 		requireStubbed(routine);
 		Map<String, Matcher> byParameter = byParameter(routine, invocation);
 		requireMatchable(routine, byParameter);
@@ -868,6 +882,65 @@ public final class MockSession implements RowTypes {
 
 	private Object describerOf(Class<?> type) {
 		return describers.computeIfAbsent(type, t -> PlsqlPackages.create(t, base));
+	}
+
+	/**
+	 * {@code invocation}, with each {@link PlsqlOut} argument matched by its parameter's mode (#150). An {@code IN OUT}
+	 * matches the value that came in, as an {@code IN} parameter does: a {@code PlsqlOut} given as it is by the value
+	 * it holds, {@code null} matching SQL {@code NULL}, and {@code inOut(cameIn, goesOut)} by {@code cameIn}, in a stub.
+	 * The calls are recorded as they come in, before a stub sets anything, so {@code verify} compares the value that
+	 * came in, whatever the {@code PlsqlOut} holds afterwards. A pure {@code OUT} has nothing coming in: a
+	 * {@code PlsqlOut} with a value, or {@code inOut}, is refused there, as {@code inOut} is in {@code verify}, which
+	 * matches what came in only, and on an {@code IN} parameter, which nothing goes out through.
+	 */
+	static Invocation resolved(RoutineMetadata routine, Invocation invocation, boolean verifying) {
+		Method method = invocation.method();
+		Parameter[] javaParameters = method.getParameters();
+		List<Matcher> matchers = new ArrayList<>(invocation.matchers());
+		for (int i = 0; i < javaParameters.length; i++) {
+			Matcher matcher = matchers.get(i);
+			if (!(matcher instanceof Matcher.CameIn || matcher instanceof Matcher.InOut)) {
+				continue;
+			}
+			RoutineMetadata.Argument parameter = argumentOf(routine, method, javaParameters, i);
+			String where = routine.qualifiedName() + ": " + parameter.name();
+			if (matcher instanceof Matcher.InOut) {
+				if (verifying) {
+					throw new IllegalStateException(routine.qualifiedName() + ": verify matches the value that came in"
+							+ " through " + parameter.name() + ", not the one that went out, which the stub set: give it"
+							+ " PlsqlOut.of(value), not inOut(cameIn, goesOut)");
+				}
+				if (!parameter.isIn()) {
+					throw new IllegalStateException(where + " is an OUT parameter, which nothing comes in through, so"
+							+ " inOut(cameIn, goesOut) does not fit it: set it with out(value)");
+				}
+				if (!parameter.isOut()) {
+					throw new IllegalStateException(where + " is an IN parameter, which nothing goes out through, so"
+							+ " inOut(cameIn, goesOut) does not fit it: match it by its value");
+				}
+				continue;
+			}
+			Object value = ((Matcher.CameIn) matcher).value();
+			if (parameter.isIn()) {
+				matchers.set(i, new Matcher.Equal(value));
+			} else if (value == null) {
+				matchers.set(i, new Matcher.Any());
+			} else {
+				throw new IllegalStateException(where + " is an OUT parameter, which nothing comes in through, so it"
+						+ " matches no value: give it new PlsqlOut<>() or any(), and set it in a stub with out(value)");
+			}
+		}
+		return new Invocation(invocation.mock(), method, List.copyOf(matchers));
+	}
+
+	/** The parameter of the routine that the Java parameter {@code index} binds, by name or by position. */
+	private static RoutineMetadata.Argument argumentOf(RoutineMetadata routine, Method method,
+			Parameter[] javaParameters, int index) {
+		if (!routine.byName()) {
+			return routine.parameters().get(index);
+		}
+		String name = RoutineMetadata.oracleNameOf(method, javaParameters[index]);
+		return routine.parameters().stream().filter(p -> p.name().equals(name)).findFirst().orElseThrow();
 	}
 
 	/** The matcher of each parameter of the routine, by its Oracle name, as the call would bind the arguments. */

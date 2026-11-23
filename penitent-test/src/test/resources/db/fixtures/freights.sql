@@ -890,14 +890,24 @@ BEGIN
 END;
 /
 
--- a procedure with an IN OUT parameter, which a stub sets with out(value) and verify counts by the value that came in;
--- the real procedure fails
+-- procedures with IN OUT parameters, which a stub matches by the value that came in and sets with out(value) or
+-- inOut(cameIn, goesOut), and verify counts by the value that came in; beside them, a pure OUT and an IN. The real
+-- procedures fail
 CREATE OR REPLACE PACKAGE freight_stamps AS
   PROCEDURE stamp(p_text IN OUT VARCHAR2);
+  PROCEDURE stamp_note(p_note IN OUT CLOB);
+  PROCEDURE stamp_item(p_item IN OUT freight_item_t);
+  PROCEDURE stamp_both(p_code VARCHAR2, p_text IN OUT VARCHAR2, p_label OUT VARCHAR2);
 END freight_stamps;
 /
 
 CREATE OR REPLACE PACKAGE BODY freight_stamps AS
   PROCEDURE stamp(p_text IN OUT VARCHAR2) IS BEGIN RAISE_APPLICATION_ERROR(-20480, 'the real stamp'); END;
+  PROCEDURE stamp_note(p_note IN OUT CLOB) IS BEGIN RAISE_APPLICATION_ERROR(-20480, 'the real stamp_note'); END;
+  PROCEDURE stamp_item(p_item IN OUT freight_item_t) IS BEGIN RAISE_APPLICATION_ERROR(-20480, 'the real stamp_item'); END;
+  PROCEDURE stamp_both(p_code VARCHAR2, p_text IN OUT VARCHAR2, p_label OUT VARCHAR2) IS
+  BEGIN
+    RAISE_APPLICATION_ERROR(-20480, 'the real stamp_both');
+  END;
 END freight_stamps;
 /

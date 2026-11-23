@@ -135,6 +135,13 @@ final class BodyRewriter {
 				if (matcher == null) {
 					continue;
 				}
+				if (matcher instanceof Matcher.InOut inOut) {
+					// an IN OUT: the condition on what came in, as for an IN parameter, and what goes out, set as an
+					// OUT's. The condition is tested before any stub sets anything
+					outs.append(parameter.name()).append(" := ").append(written(parameter, inOut.goesOut()))
+							.append("; ");
+					matcher = new Matcher.Equal(inOut.cameIn());
+				}
 				if (matcher instanceof Matcher.Out out) {
 					outs.append(parameter.name()).append(" := ").append(written(parameter, out.value())).append("; ");
 				} else {
