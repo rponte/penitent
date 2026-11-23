@@ -9,6 +9,7 @@ import io.github.rponte.penitent.exception.PlsqlMappingException;
 import io.github.rponte.penitent.internal.binding.OracleArrays;
 import io.github.rponte.penitent.internal.binding.TemporaryLobs;
 import io.github.rponte.penitent.internal.binding.TypeNameIntegration;
+import io.github.rponte.penitent.internal.convert.OracleNumberLimits;
 import io.github.rponte.penitent.internal.convert.OracleTimeZoneCodec;
 import io.github.rponte.penitent.internal.convert.ScalarCodec;
 import io.github.rponte.penitent.internal.convert.ScalarCodec.ValueConversion;
@@ -37,6 +38,7 @@ final class ValueEncoder {
 			return encodeBoolean(flag, target, literals);
 		}
 		requireFinite(value, target);
+		requireWithinNumber(value, target);
 		return encodeScalar(value, target);
 	}
 
@@ -56,7 +58,25 @@ final class ValueEncoder {
 		if (value instanceof Boolean flag) {
 			return encodeBoolean(flag, target, literals);
 		}
+		requireWithinNumber(value, target);
 		return TemporaryLobs.forLob(target.dataType(), encodeScalar(value, target), connection);
+	}
+
+	/**
+	 * A number beyond {@code NUMBER}'s range, for a type that holds no more than a {@code NUMBER}: refused here, where
+	 * the parameter is known, rather than as each driver's own error while binding (see {@code OracleNumberLimits}). A
+	 * {@code BINARY_DOUBLE} or a {@code BINARY_FLOAT} holds it.
+	 */
+	private static void requireWithinNumber(Object value, Argument target) {
+		if (binaryFloatingPoint(target) || target.isStruct() || target.isCollection()) {
+			return;
+		}
+		try {
+			OracleNumberLimits.requireWithinIfNumber(value);
+		} catch (ScalarCodec.ConversionException e) {
+			throw new PlsqlMappingException((target.name() == null ? "the value it returns" : target.name()) + " is "
+					+ target.dataType() + ": " + e.getMessage(), e);
+		}
 	}
 
 	/** A scalar, whose refusal, such as a date beyond Oracle's range, names the parameter as {@code requireFinite} does. */
@@ -148,10 +168,17 @@ final class ValueEncoder {
 				encoded);
 	}
 
-	/** An element, whose refusal, such as a date beyond Oracle's range, names its position, counted from 1. */
+	/**
+	 * An element, whose refusal names its position, counted from 1: a date beyond Oracle's range, or a number beyond
+	 * {@code NUMBER}'s, unless the element is a {@code BINARY_DOUBLE} or a {@code BINARY_FLOAT}.
+	 */
 	private static Object encodeElement(Object element, int index, CollectionType type, PlsqlBoolean literals) {
 		try {
-			return ScalarCodec.encode(element, ValueConversion.from(literals));
+			Object encoded = ScalarCodec.encode(element, ValueConversion.from(literals));
+			if (!OracleNumberLimits.isBinaryFloatingPoint(type.scalarElement())) {
+				OracleNumberLimits.requireWithinIfNumber(encoded);
+			}
+			return encoded;
 		} catch (ScalarCodec.ConversionException e) {
 			throw new PlsqlMappingException("element " + (index + 1) + " of " + type.bindName() + ": " + e.getMessage(),
 					e);

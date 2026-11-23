@@ -55,6 +55,27 @@ customers.register(1, "Ana");    // the INSERT breaks the primary key: getCode()
 
 That includes an error in the query of a cursor the routine returns, which only shows up when the cursor is read.
 
+### Constraints the routine declares on its parameters
+
+A constraint on a formal parameter is part of the routine's contract, so a value that breaks it is the routine's
+error too, a `PlsqlRoutineRaisedException`, as if the routine checked it on its first line:
+
+| The routine declares | The value | What arrives |
+|---|---|---|
+| `p_qty POSITIVE` (or `NATURAL`, or a subtype with a `RANGE`) | `-1` | `PlsqlRoutineRaisedException`, code `6502` |
+| `p_id SIMPLE_INTEGER` (or `POSITIVEN`, or any `NOT NULL` subtype) | `null` | `PlsqlRoutineRaisedException`, code `6502` |
+| `p_count PLS_INTEGER` | `3_000_000_000L` | `PlsqlRoutineRaisedException`, code `1426`, numeric overflow |
+
+Oracle checks them when it assigns the value, before the routine's first line: the stack shows only `at line 1`. They
+are checked the same way whether the call comes from Java or from PL/SQL.
+
+**A size or a precision is not checked on a parameter.** Following Oracle's "Formal Parameters of Constrained
+Subtypes", a parameter inherits a `NOT NULL` and a range, but not a size nor a precision. A parameter declared as
+`t.code%TYPE`, of a `VARCHAR2(3)` column, or as a `VARCHAR2(3)` or `NUMBER(3)` subtype, takes a value of any size.
+Such a value fails only where the routine stores or copies it: `ORA-12899` for the column, `ORA-06502` for a local
+variable, both the routine's errors. The same holds for a return value: a `NUMBER(3)` subtype is checked, a
+`VARCHAR2(3)` one is not.
+
 ## Other database failures
 
 What happens before the routine runs, and the errors that say nothing about its logic, arrive as
@@ -63,10 +84,14 @@ What happens before the routine runs, and the errors that say nothing about its 
 - connecting, reading the dictionary or preparing the call;
 - a call that does not compile (`ORA-06550`) or a package that is invalid (`ORA-04063`);
 - concurrency: `ORA-00054` (resource busy), `ORA-00060` (deadlock) and `ORA-08177` (serialization);
-- connection, driver and system errors.
+- connection, driver and system errors;
+- **any error the driver raises itself, in the client,** whatever its code, such as driver 23's `ORA-18722`, and a
+  failure of the driver itself, after which Penitent discards the connection. Only an error the database sent can
+  be the routine's: the driver keeps Oracle's own report of it, an `oracle.jdbc.OracleDatabaseException`, as the
+  cause of the `SQLException`, and Penitent looks for it.
 
 The full list of codes is in `PlsqlFailure`. A code outside the list, even one Penitent does not know, is treated as
-the routine's error.
+the routine's error, as long as the database sent it.
 
 ## Your own exceptions
 

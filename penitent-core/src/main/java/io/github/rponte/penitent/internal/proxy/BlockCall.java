@@ -21,6 +21,7 @@ import io.github.rponte.penitent.exception.PlsqlMappingException;
 import io.github.rponte.penitent.internal.binding.JavaProperties;
 import io.github.rponte.penitent.internal.binding.OracleArrays;
 import io.github.rponte.penitent.internal.binding.TypeNameIntegration;
+import io.github.rponte.penitent.internal.convert.OracleNumberLimits;
 import io.github.rponte.penitent.internal.convert.AppliedConverter;
 import io.github.rponte.penitent.internal.convert.ConverterLookup;
 import io.github.rponte.penitent.internal.convert.ScalarCodec.ValueConversion;
@@ -227,6 +228,12 @@ final class BlockCall {
 			} else if (bindable instanceof Float number && !Float.isFinite(number)) {
 				Jdbc.setBinaryFloatingPoint(statement, position, number, "BINARY_FLOAT");
 			} else {
+				// a block's parameter has no declared type: the driver binds a finite number as a NUMBER
+				try {
+					OracleNumberLimits.requireWithinIfNumber(bindable);
+				} catch (ScalarCodec.ConversionException e) {
+					throw new PlsqlMappingException("parameter " + name + ": " + e.getMessage(), e);
+				}
 				statement.setObject(position, ScalarCodec.forDriver(bindable));
 			}
 		}

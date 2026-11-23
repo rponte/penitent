@@ -14,8 +14,14 @@ import io.github.rponte.penitent.exception.PlsqlFailure.Phase;
 
 class PlsqlFailureTest {
 
+	/** An error as the database sends it: the driver keeps Oracle's own report as the cause, on every version. */
 	private static PlsqlFailure during(Phase phase, int code) {
-		return new PlsqlFailure("sql", new SQLException("ORA", "72000", code), phase);
+		return new PlsqlFailure("sql", fromTheDatabase(code), phase);
+	}
+
+	private static SQLException fromTheDatabase(int code) {
+		return new SQLException("ORA-" + code, "72000", code,
+				new oracle.jdbc.OracleDatabaseException(0, code, "ORA-" + code, "sql", "sql"));
 	}
 
 	@ParameterizedTest
@@ -66,6 +72,30 @@ class PlsqlFailureTest {
 		assertThat(during(Phase.RESULT, 1476).raisedByRoutine()).isTrue();
 		assertThat(during(Phase.RESULT, 17008).raisedByRoutine()).isFalse();
 		assertThat(during(Phase.RESULT, 3113).raisedByRoutine()).isFalse();
+	}
+
+	@ParameterizedTest
+	@ValueSource(ints = { 17001, 17004, 18722, 20001, 1403 })
+	@DisplayName("an error the driver raises itself, in the client, never came from the routine, whatever its code:"
+			+ " only an error the database sent carries Oracle's report, an OracleDatabaseException, as its cause")
+	void not_from_the_database(int code) {
+		PlsqlFailure failure = new PlsqlFailure("sql", new SQLException("client", "99999", code), Phase.EXECUTION);
+		assertThat(failure.raisedByRoutine()).isFalse();
+	}
+
+	@Test
+	@DisplayName("a failure of the driver itself, which the library wraps with code 0, never came from the routine")
+	void failure_of_the_driver() {
+		SQLException wrapped = new SQLException("the Oracle driver failed an internal check (oacdty: 0)",
+				new AssertionError("oacdty: 0"));
+		assertThat(new PlsqlFailure("sql", wrapped, Phase.EXECUTION).raisedByRoutine()).isFalse();
+	}
+
+	@Test
+	@DisplayName("a database error the library wraps to explain it keeps its origin, anywhere in the chain of causes")
+	void wrapped_database_error() {
+		SQLException explained = new SQLException("explained", "72000", 20001, fromTheDatabase(20001));
+		assertThat(new PlsqlFailure("sql", explained, Phase.EXECUTION).raisedByRoutine()).isTrue();
 	}
 
 	@Test

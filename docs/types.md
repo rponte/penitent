@@ -31,6 +31,12 @@ How values cross:
   absent is just `null`.
 - **A value that does not fit fails,** such as `300` read into a `byte` or a fraction into a `BigInteger`. It is
   never rounded.
+- **A number beyond `NUMBER`'s range fails before the call,** with a `PlsqlMappingException` that names the value and
+  where it is: a `BigDecimal`, a `BigInteger`, a `Double` or a `Float` whose magnitude is above just under `1E+126`, or
+  below `1E-130` without being 0. Penitent asks the driver's own conversion, so it refuses exactly what the driver
+  would, with one message on every driver instead of each driver's own. A `BINARY_DOUBLE` or a `BINARY_FLOAT`
+  parameter, attribute or element holds such a value, and takes it. **Digits beyond 40 are dropped, with no error,**
+  as Oracle does: `12345678901234567890123456789012345678909` arrives as `…678900`.
 - **Large values:** a `CLOB` above 32 KB is sent in a temporary LOB, freed when the call ends. A `Clob` or `Blob`
   read from the database is a copy in memory, so you can use it after the connection is gone.
 - **A date beyond Oracle's range fails before the call,** with a `PlsqlMappingException` that names the value and
