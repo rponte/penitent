@@ -15,6 +15,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.math.BigDecimal;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import javax.sql.DataSource;
@@ -51,6 +52,10 @@ class StubJsonTest {
 		Map<String, Object> quoteMap(Map<String, Object> pOrder);
 
 		void labelOf(String pOrder, PlsqlOut<String> pLabel);
+
+		void wrapDoc(PlsqlOut<String> pDoc);
+
+		List<Object> listOf(List<Object> pItems);
 
 		String describeQuote(String pOrder);
 	}
@@ -166,6 +171,35 @@ class StubJsonTest {
 	}
 
 	@Test
+	@DisplayName("a stub sets a JSON IN OUT, with driver 21 or later; with driver 19 such a stub is refused when made."
+			+ " Matching by the document that came in waits for #150")
+	void sets_an_in_out() {
+		Docs mock = mocks.mock(Docs.class);
+		if (DRIVER_MAJOR_VERSION < 21) {
+			assertThatThrownBy(() -> doNothing().when(mock).wrapDoc(out("{\"wrapped\":true}")))
+					.isInstanceOf(PlsqlMappingException.class)
+					.hasMessageContaining("P_DOC of PLSQL_TEST.FREIGHT_DOCS.WRAP_DOC is an IN/OUT of Oracle's JSON type");
+			return;
+		}
+		doNothing().when(mock).wrapDoc(out("{\"wrapped\":true}"));
+		PlsqlOut<String> doc = PlsqlOut.of("{\"a\":1}");
+		docs.wrapDoc(doc);
+
+		assertThat(doc.get()).isEqualTo("{\"wrapped\":true}");
+	}
+
+	@Test
+	@DisplayName("a List at the top, as a stub's value and as a matcher's, by document equality")
+	void list_at_the_top() {
+		Docs mock = mocks.mock(Docs.class);
+		when(mock.listOf(List.of(1, "a"))).thenReturn(List.of(new BigDecimal("2.50"), true));
+
+		assertThat(docs.listOf(List.of(new BigDecimal("1.0"), "a"))).containsExactly(new BigDecimal("2.5"), true);
+		verify(mock).listOf(List.of(1, "a"));
+		verify(mock, never()).listOf(List.of("a", 1));
+	}
+
+	@Test
 	@DisplayName("verify counts calls by document equality, a scalar at the top included, on 21c as on 23ai")
 	void verify_by_document() {
 		Docs mock = mocks.mock(Docs.class);
@@ -218,6 +252,15 @@ class StubJsonTest {
 		assertThatThrownBy(() -> when(mock.quoteOf("{\"a\":1,\"a\":2}")).thenReturn("{}"))
 				.isInstanceOf(PlsqlMappingException.class)
 				.hasMessageContaining("$ has the key \"a\" twice");
+		assertThatThrownBy(() -> when(mock.quoteOf(any())).thenReturn("{\"big\":1e200}"))
+				.isInstanceOf(PlsqlMappingException.class)
+				.hasMessageContaining("$.big is 1E+200, beyond the range of Oracle's NUMBER");
+		assertThatThrownBy(() -> when(mock.quoteMap(Map.of("s", "a\uD800"))).thenReturn(Map.of()))
+				.isInstanceOf(PlsqlMappingException.class)
+				.hasMessageContaining("$.s holds a lone UTF-16 surrogate, \\uD800");
+		assertThatThrownBy(() -> when(mock.quoteMap(any())).thenReturn(Map.of("tiny", 1e-200)))
+				.isInstanceOf(PlsqlMappingException.class)
+				.hasMessageContaining("$.tiny is 1.0E-200, beyond the range of Oracle's NUMBER");
 		if (DRIVER_MAJOR_VERSION >= 21) {
 			// with driver 19, a stub of a JSON OUT is refused before its value is looked at: see sets_an_out
 			assertThatThrownBy(() -> doNothing().when(mock).labelOf(any(), out("")))

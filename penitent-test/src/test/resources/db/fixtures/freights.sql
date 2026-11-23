@@ -859,7 +859,9 @@ BEGIN
       CREATE OR REPLACE PACKAGE freight_docs AS
         FUNCTION quote_of(p_order JSON) RETURN JSON;
         PROCEDURE label_of(p_order JSON, p_label OUT JSON);
+        PROCEDURE wrap_doc(p_doc IN OUT JSON);
         FUNCTION describe_quote(p_order JSON) RETURN VARCHAR2;
+        FUNCTION list_of(p_items JSON) RETURN JSON;
       END freight_docs;]';
     EXECUTE IMMEDIATE q'[
       CREATE OR REPLACE PACKAGE BODY freight_docs AS
@@ -871,11 +873,31 @@ BEGIN
         BEGIN
           RAISE_APPLICATION_ERROR(-20470, 'the real label_of');
         END label_of;
+        PROCEDURE wrap_doc(p_doc IN OUT JSON) IS
+        BEGIN
+          RAISE_APPLICATION_ERROR(-20470, 'the real wrap_doc');
+        END wrap_doc;
         FUNCTION describe_quote(p_order JSON) RETURN VARCHAR2 IS
         BEGIN
           RETURN JSON_SERIALIZE(quote_of(p_order));
         END describe_quote;
+        FUNCTION list_of(p_items JSON) RETURN JSON IS
+        BEGIN
+          RAISE_APPLICATION_ERROR(-20470, 'the real list_of');
+        END list_of;
       END freight_docs;]';
   END IF;
 END;
+/
+
+-- a procedure with an IN OUT parameter, which a stub sets with out(value) and verify counts by the value that came in;
+-- the real procedure fails
+CREATE OR REPLACE PACKAGE freight_stamps AS
+  PROCEDURE stamp(p_text IN OUT VARCHAR2);
+END freight_stamps;
+/
+
+CREATE OR REPLACE PACKAGE BODY freight_stamps AS
+  PROCEDURE stamp(p_text IN OUT VARCHAR2) IS BEGIN RAISE_APPLICATION_ERROR(-20480, 'the real stamp'); END;
+END freight_stamps;
 /

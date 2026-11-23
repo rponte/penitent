@@ -177,4 +177,15 @@ class StubTemporalAndBinaryTest {
 		assertThat(digest.get()).containsExactly(7);
 		assertThat(manifest.get()).isEqualTo(MANIFEST);
 	}
+
+	@Test
+	@DisplayName("a stub's Period with days, which INTERVAL YEAR TO MONTH does not hold, is refused, naming the value it"
+			+ " returns, as a call names its parameter")
+	void period_with_days() {
+		Extras mock = mocks.mock(Extras.class);
+		assertThatThrownBy(() -> when(mock.warrantyOf(BigDecimal.ONE)).thenReturn(Period.of(1, 2, 3)))
+				.isInstanceOf(io.github.rponte.penitent.exception.PlsqlMappingException.class)
+				.hasMessageContaining("the value it returns is INTERVAL YEAR TO MONTH: Period P1Y2M3D has days, which"
+						+ " INTERVAL YEAR TO MONTH does not store");
+	}
 }

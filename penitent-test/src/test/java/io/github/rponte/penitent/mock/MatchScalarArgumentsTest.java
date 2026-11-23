@@ -159,4 +159,15 @@ class MatchScalarArgumentsTest {
 		matches(Args::takesDate, Date.from(Instant.parse("2026-11-17T13:30:15Z")), new Date(0));
 		matches(Args::takesCode, new StubScalarMappingTest.Code("7"), new StubScalarMappingTest.Code("8"));
 	}
+
+	@Test
+	@DisplayName("a Period with days as a matcher's value is refused, naming the parameter, as a call does")
+	void period_with_days() {
+		Args mock = mocks.mock(Args.class);
+		org.assertj.core.api.Assertions.assertThatThrownBy(
+				() -> PlsqlMocks.when(mock.takesMonths(java.time.Period.of(1, 2, 3))).thenReturn(BigDecimal.ONE))
+				.isInstanceOf(io.github.rponte.penitent.exception.PlsqlMappingException.class)
+				.hasMessageContaining("P_VALUE is INTERVAL YEAR TO MONTH: Period P1Y2M3D has days, which INTERVAL YEAR TO"
+						+ " MONTH does not store");
+	}
 }
