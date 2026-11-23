@@ -655,6 +655,21 @@ public final class MockSession implements RowTypes {
 				}
 				Matcher matcher = byParameter.get(parameter.name());
 				String recorded = "JSON_VALUE(ARGS, '$[" + index + "]' RETURNING " + jsonType(parameter) + ")";
+				if (parameter.isJson()) {
+					// recorded as {"v": document}, or {} for SQL NULL (see BodyRewriter.recordedJson): compared as
+					// documents, object with object, and NULL by the member's absence, apart from the JSON null
+					boolean byValue = matcher instanceof Matcher.Equal equal && equal.value() != null;
+					if (byValue) {
+						sql.append(" AND JSON_EQUAL(JSON_QUERY(ARGS, '$[").append(index)
+								.append("]' RETURNING CLOB), JSON_OBJECT('v' VALUE JSON(?) RETURNING CLOB))");
+						binds.add(expected(parameter, handler.encodeParameter(invocation.method(),
+								javaIndexes.get(parameter.name()), ((Matcher.Equal) matcher).value(), connection)));
+					} else if (matcher instanceof Matcher.IsNull || matcher instanceof Matcher.Equal) {
+						sql.append(" AND NOT JSON_EXISTS(ARGS, '$[").append(index).append("].v')");
+					}
+					index++;
+					continue;
+				}
 				if (matcher instanceof Matcher.Equal equal && equal.value() != null) {
 					Expected expected = expected(parameter, parameter.isBoolean() ? equal.value()
 							: handler.encodeParameter(invocation.method(), javaIndexes.get(parameter.name()),

@@ -119,7 +119,8 @@ final class BodyRewriter {
 			for (int i = 0; i < recorded.size(); i++) {
 				RoutineMetadata.Argument argument = recorded.get(i);
 				arguments.add(composite(argument) ? "'" + NOT_RECORDED + "'"
-						: argument.isBoolean() ? "l_penitent_flag_" + (i + 1) : argument.name());
+						: argument.isBoolean() ? "l_penitent_flag_" + (i + 1)
+						: argument.isJson() ? recordedJson(argument.name()) : argument.name());
 			}
 			code.append(arguments);
 		}
@@ -135,19 +136,25 @@ final class BodyRewriter {
 					continue;
 				}
 				if (matcher instanceof Matcher.Out out) {
-					outs.append(parameter.name()).append(" := ").append(PlsqlLiterals.of(out.value())).append("; ");
+					outs.append(parameter.name()).append(" := ").append(written(parameter, out.value())).append("; ");
 				} else {
-					// a LOB has no =: DBMS_LOB.COMPARE, which gives NULL when either side is, as = would
-					String check = lob(parameter) && matcher instanceof Matcher.Equal equal && equal.value() != null
-							? "DBMS_LOB.COMPARE(" + parameter.name() + ", " + PlsqlLiterals.of(equal.value()) + ") = 0"
-							: matcher.condition(parameter.name());
+					boolean byValue = matcher instanceof Matcher.Equal equal && equal.value() != null;
+					// a LOB has no =: DBMS_LOB.COMPARE, which gives NULL when either side is, as = would. Nor has JSON:
+					// JSON_EQUAL, which gives NULL for a NULL argument too
+					String check = byValue && parameter.isJson()
+							? "JSON_EQUAL(" + parameter.name() + ", " + written(parameter, ((Matcher.Equal) matcher).value())
+									+ ")"
+							: byValue && lob(parameter)
+									? "DBMS_LOB.COMPARE(" + parameter.name() + ", "
+											+ PlsqlLiterals.of(((Matcher.Equal) matcher).value()) + ") = 0"
+									: matcher.condition(parameter.name());
 					if (check != null) {
 						condition.add(check);
 					}
 				}
 			}
 			code.append("    IF ").append(condition.length() == 0 ? "TRUE" : condition).append(" THEN\n      ")
-					.append(outs).append(action(stub.action())).append("\n    END IF;\n");
+					.append(outs).append(action(stub.action(), routine)).append("\n    END IF;\n");
 		}
 		// the start of the arguments, and their length when there is more: a message holds 2,048 bytes
 		code.append("    RAISE_APPLICATION_ERROR(-20999, '").append(qualified)
@@ -157,14 +164,35 @@ final class BodyRewriter {
 		return code.toString();
 	}
 
-	private static String action(Stub.Action action) {
+	private static String action(Stub.Action action, RoutineMetadata routine) {
 		if (action instanceof Stub.Return returned) {
-			return returned.function() ? "RETURN " + PlsqlLiterals.of(returned.value()) + ";" : "RETURN;";
+			return returned.function() ? "RETURN " + written(routine.returnValue().orElseThrow(), returned.value()) + ";"
+					: "RETURN;";
 		}
 		if (action instanceof Stub.ApplicationError error) {
 			return "RAISE_APPLICATION_ERROR(" + error.code() + ", " + PlsqlLiterals.of(error.message()) + ");";
 		}
 		return "RAISE " + ((Stub.Raise) action).name() + ";";
+	}
+
+	/**
+	 * A value as PL/SQL writes it for {@code argument}: for Oracle's JSON type, its text, already checked by the core, as
+	 * {@code JSON('...')}, which a long text's {@code TO_CLOB} pieces fit too; {@code NULL} as SQL {@code NULL}. Without
+	 * {@code JSON(...)}, a text literal is of the wrong type for a JSON parameter, and the body does not compile.
+	 */
+	static String written(RoutineMetadata.Argument argument, Object value) {
+		String literal = PlsqlLiterals.of(value);
+		return argument.isJson() && value != null ? "JSON(" + literal + ")" : literal;
+	}
+
+	/**
+	 * A JSON argument as a call records it: {@code {"v": document}}, and {@code {}} for SQL {@code NULL}, since
+	 * {@code ABSENT ON NULL} leaves the member out. In {@code JSON_ARRAY}, a SQL {@code NULL} and the JSON {@code null}
+	 * would both be {@code null}; recorded so, {@code verify} tells them apart with {@code JSON_EXISTS}, and compares
+	 * objects with objects, which 21c needs for a scalar at the top. Measured on 23ai and 21c (#133).
+	 */
+	static String recordedJson(String name) {
+		return "JSON_OBJECT('v' VALUE " + name + " ABSENT ON NULL)";
 	}
 
 	/** A {@code CLOB}, an {@code NCLOB} or a {@code BLOB}, which PL/SQL does not compare with {@code =}. */

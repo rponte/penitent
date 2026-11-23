@@ -132,6 +132,16 @@ final class RoutineCall {
 		Object unwrapped = value instanceof java.util.Optional<?> optional ? optional.orElse(null) : value;
 		Object converted = converted(RoutineMetadata.converterOfReturn(method, types.converters()), unwrapped,
 				"the return value", routine);
+		if (target.isJson()) {
+			// a JSON value as its text, checked and written as a parameter's is (see toDatabase): a stub refuses what a
+			// call refuses, and a Map, a List or a scalar becomes its text
+			try {
+				converted = JsonCodec.text(converted);
+			} catch (ScalarCodec.ConversionException e) {
+				throw new PlsqlMappingException("the return value of " + routine.qualifiedName() + ": " + e.getMessage(),
+						e);
+			}
+		}
 		return encoder.encodeForWriting(converted, target, method.getAnnotation(PlsqlBoolean.class), routine.schema(),
 				connection);
 	}

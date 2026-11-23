@@ -35,6 +35,13 @@ All notable changes to this project are listed here. The format follows
   and the database's, which set them by version: a driver's refusal while binding, even a bare
   `ArrayIndexOutOfBoundsException` of driver 21, becomes a `PlsqlMappingException` with the driver's message. The
   Types page's "Moving between drivers and databases" shows what is the same everywhere and what is not.
+- `penitent-test`: stubs and `verify` with Oracle's `JSON` type
+  ([#133](https://github.com/rponte/penitent/issues/133)). A stub returns, or sets as an `OUT`, a `String`, a `Map`,
+  a `List` or a scalar, as a call takes them, checked as a call's value is. Matching by value, in a stub and in
+  `verify`, compares documents with Oracle's `JSON_EQUAL`: an object's member order, the spacing and a number's form
+  do not count; an array's order does. A call's `JSON` argument is recorded as `{"v": document}`, so that `verify`
+  tells SQL `NULL` from the JSON `null`, and compares a scalar at the top on 21c too. The mocked body did not compile
+  for a `JSON` parameter or return value.
 
 ### Fixed
 
