@@ -36,6 +36,14 @@ Customers customers = PlsqlPackages.create(Customers.class, dataSource, converte
 customers.findByTaxId(new TaxId("12345678901"));   // 1
 ```
 
+<div class="admonition tip" markdown>
+<p class="admonition-title">ofNullable keeps null out of your code</p>
+
+With `PlsqlConverter.ofNullable`, a `NULL` stays `null` without calling your functions. With `PlsqlConverter.of` and
+in a class of your own, your code receives it: see [Rules worth knowing](#rules-worth-knowing).
+
+</div>
+
 A `PlsqlConverter<J, D>` converts between the type your Java code declares (`J`, here `TaxId`) and a scalar type that
 would work without a converter (`D`, here `String`). It applies wherever a scalar value goes: parameters, return
 values, `OUT` parameters, attributes of a composite, cursor columns and blocks. In a `List<J>` or a `J[]`, it applies

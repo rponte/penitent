@@ -1,8 +1,14 @@
 # Anonymous blocks
 
-Not everything you need from the database is a `package.routine` call. An OBJECT type's member method, a call that
-needs a local variable first, or a cursor opened over a query all need a few lines of PL/SQL around them. For those,
-`@PlsqlBlock` runs an anonymous block, and Penitent still takes care of the binding and the types.
+Not everything you need from the database is a `package.routine` call. For the rest, `@PlsqlBlock` runs a few lines
+of PL/SQL of your own, and Penitent still takes care of the binding and the types. Reach for it when you need:
+
+- **an OBJECT type's member method,** which cannot be called as `package.routine`;
+- **a local variable first,** to build a value or to convert one, before the call;
+- **a cursor over a query of your own,** opened with `OPEN :result FOR`;
+- **a few statements in one round trip,** around or instead of a call.
+
+For a plain routine call, [Calling routines](routines.md) is simpler: no PL/SQL to write.
 
 ## A first block
 
@@ -37,11 +43,18 @@ AddressBlocks blocks = PlsqlPackages.create(AddressBlocks.class, dataSource);
 blocks.format(new Address("Rua das Flores 10", "Fortaleza", "60000000"));   // "Rua das Flores 10, Fortaleza 60000000"
 ```
 
-- **Parameters go in by name,** as `:name`, matching the Java parameter's name. That requires compiling with
-  `-parameters`, which the Spring Boot parent already turns on.
+- **Parameters go in by name,** as `:name`, matching the Java parameter's name.
 - **The return value comes out through `:result`.**
 - **No annotation on the interface:** an interface made only of `@PlsqlBlock` methods needs neither `@PlsqlPackage`
   nor `@PlsqlSchema`.
+
+<div class="admonition tip" markdown>
+<p class="admonition-title">Compile with -parameters</p>
+
+A `:name` matches the Java parameter's name, which is in the class file only when compiling with `-parameters`. The
+Spring Boot parent already turns it on.
+
+</div>
 
 ## Declare what the dictionary would say
 
