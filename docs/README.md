@@ -62,39 +62,46 @@ without Penitent? [See how much boilerplate plain JDBC needs](coming-from-jdbc.m
 
 The same interface style covers the rest of what a PL/SQL API returns. A few of the things it does for you:
 
-### An OBJECT type is a Java record
+### Rows, objects and lists come back as plain Java
+
+A PL/SQL API rarely returns only numbers and texts. A function may give back a whole row of a table, an object with
+attributes, a list of values or the rows of a query. Penitent maps each of them to a Java `record` or a `List`,
+matched by name, so your code never touches a `ResultSet`, a `Struct` or an `Array`:
+
+| In Oracle | What it is | In Java |
+|---|---|---|
+| `customers%ROWTYPE` | a row of a table | a `record` |
+| OBJECT type | a type of the schema, with attributes | a `record` |
+| RECORD | a type of a package, with fields | a `record` |
+| nested table, `VARRAY` | many values of one type | a `List` |
+| `SYS_REFCURSOR` | the rows of a query | a `List` of `record`s |
+
+The simplest is a row of a table. `customers%ROWTYPE` has one field per column, and a `record` with the same names,
+in camelCase, receives it:
 
 <!-- snippet: fixture -->
 ```sql
-CREATE TYPE postal_address_t AS OBJECT (
-    street   VARCHAR2(100),
-    city     VARCHAR2(60),
-    zip_code VARCHAR2(9),
-
-    MEMBER FUNCTION formatted RETURN VARCHAR2   -- see Anonymous blocks
-);
-
-FUNCTION normalize_address(p_address postal_address_t) RETURN postal_address_t;
+FUNCTION find_customer(p_id NUMBER) RETURN customers%ROWTYPE;
 ```
 
-<!-- snippet: types/object -->
+<!-- snippet: types/rowtype -->
 ```java
-public record Address(String street, String city, String zipCode) {
+public record Customer(Long id, String name, String taxId, String tier,
+                       @PlsqlBoolean(trueValue = "S", falseValue = "N") boolean vip,
+                       LocalDate bornOn, LocalDateTime createdAt) {
 }
 
-Address normalizeAddress(Address address);
+Customer findCustomer(long id);
 ```
 
-<!-- snippet: types/object-call -->
+<!-- snippet: types/rowtype-call -->
 ```java
-customers.normalizeAddress(new Address("rua das flores 10", "Fortaleza", "60000-000"));
-// Address[street=Rua Das Flores 10, city=FORTALEZA, zipCode=60000000]
+customers.findCustomer(1);
+// Customer[id=1, name=Ana Lima, taxId=12345678901, tier=G, vip=true, bornOn=1990-04-12, createdAt=2025-01-15T09:30]
 ```
 
-Attributes are matched by name. A RECORD, a `%ROWTYPE` and nested types work the same way: see
-[Types](types.md#composite-types).
-
-### A cursor is a list of records
+And the rows of a query, which a function opens as a cursor, are a list of `record`s, read whole and closed during
+the call:
 
 <!-- snippet: fixture -->
 ```sql
@@ -118,8 +125,8 @@ customers.ordersOf(201);
 // [OrderRow[id=1, total=100, status=OPEN], OrderRow[id=2, total=40, status=CANCELLED]]
 ```
 
-The cursor is read whole and closed during the call, so there is no `ResultSet` to loop over and none to forget to
-close. Collections are `List<T>` too: see [Types](types.md#collections).
+An OBJECT type, a RECORD and a collection work the same way, one step at a time in
+[Getting started](getting-started.md#7-records-and-lists-not-resultsets).
 
 ### A routine's error is an exception you can catch
 
@@ -202,8 +209,8 @@ See [Testing](testing.md).
 - **Checked against the database.** Penitent matches each method to its routine, parameter by parameter and type by
   type, and [Validation](validation.md) checks every interface at startup, so a package that changed is noticed
   before the first request.
-- **Rich types, no ceremony.** An OBJECT, a RECORD or a `%ROWTYPE` is a Java `record`, a collection is a `List<T>`,
-  and a cursor is a `List<T>` of records, all matched by name. Dates cross without the JVM's time zone getting in the
+- **Rich types, no ceremony.** A row of a table, an object or a package's record is a Java `record`; a list of values
+  and the rows of a query are a `List`; all matched by name. Dates cross without the JVM's time zone getting in the
   way. See [Types](types.md).
 - **Plain Java or Spring.** The core needs no framework. With Spring, calls join your transactions; with Spring Boot,
   every interface is a bean, ready to inject. See [Spring and Spring Boot](spring.md).
@@ -251,9 +258,9 @@ Every page uses the same orders package, so the examples build on each other.
 | read an `OUT` or `IN OUT` parameter | [Calling routines](routines.md#out-and-in-out-parameters) |
 | bind parameters by name | [Calling routines](routines.md#binding-by-name) |
 | call a routine outside a package | [Calling routines](routines.md#routines-outside-a-package) |
-| map an OBJECT, a RECORD or a `%ROWTYPE` | [Types](types.md#composite-types) |
-| send or receive a collection | [Types](types.md#collections) |
-| read a cursor into a list | [Types](types.md#cursors) |
+| get a row of a table, an object or a record as a Java `record` (`%ROWTYPE`, OBJECT, RECORD) | [Types](types.md#composite-types) |
+| send or receive a list of values (a nested table or a `VARRAY`) | [Types](types.md#collections) |
+| read the rows of a query (a `SYS_REFCURSOR`) into a list | [Types](types.md#cursors) |
 | send or receive a JSON document, as text or as a `Map` | [Types](types.md#json) |
 | use booleans stored as `S`/`N` | [Types](types.md#booleans) |
 | handle dates and time zones | [Types](types.md#time-zones) |
