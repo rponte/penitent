@@ -18,6 +18,7 @@ import io.github.rponte.penitent.PlsqlType;
 import io.github.rponte.penitent.convert.PlsqlConvert;
 import io.github.rponte.penitent.exception.PlsqlFailure;
 import io.github.rponte.penitent.exception.PlsqlMappingException;
+import io.github.rponte.penitent.internal.driver.DriverFailure;
 import io.github.rponte.penitent.internal.binding.JavaProperties;
 import io.github.rponte.penitent.internal.binding.OracleArrays;
 import io.github.rponte.penitent.internal.binding.TypeNameIntegration;
@@ -95,11 +96,15 @@ final class BlockCall {
 			List<String> placeholders = metadata.placeholders();
 			for (int i = 0; i < placeholders.size(); i++) {
 				int position = i + 1;
-				if (position == metadata.resultPosition()) {
-					registerResult(statement, position, method, metadata, sessionTypes);
-				} else {
-					bindParameter(statement, position, placeholders.get(i), byName.get(placeholders.get(i)),
-							parametersByName.get(placeholders.get(i)), method, sessionTypes, connection, log);
+				try {
+					if (position == metadata.resultPosition()) {
+						registerResult(statement, position, method, metadata, sessionTypes);
+					} else {
+						bindParameter(statement, position, placeholders.get(i), byName.get(placeholders.get(i)),
+								parametersByName.get(placeholders.get(i)), method, sessionTypes, connection, log);
+					}
+				} catch (DriverFailure e) {
+					throw RoutineCall.bindingFailure(e, ":" + placeholders.get(i), metadata.sql());
 				}
 			}
 
@@ -116,9 +121,15 @@ final class BlockCall {
 				throw new PlsqlMappingException(e.getMessage(), e);
 			} catch (SQLException e) {
 				throw new SqlFailure(metadata.sql(), e, PlsqlFailure.Phase.RESULT);
+			} catch (DriverFailure e) {
+				throw e.ofCall(metadata.sql(), PlsqlFailure.Phase.RESULT);
 			}
 		} catch (SQLException e) {
 			throw new SqlFailure(metadata.sql(), e, PlsqlFailure.Phase.PREPARATION);
+		} catch (DriverFailure e) {
+			// preparing or closing the statement
+			throw e.ofCall(metadata.sql(), e.operation().endsWith(".close") ? PlsqlFailure.Phase.RESULT
+					: PlsqlFailure.Phase.PREPARATION);
 		}
 	}
 

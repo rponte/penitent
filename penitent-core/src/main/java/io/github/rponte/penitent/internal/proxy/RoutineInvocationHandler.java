@@ -15,6 +15,8 @@ import io.github.rponte.penitent.exception.PlsqlExceptionTranslator;
 import io.github.rponte.penitent.exception.PlsqlFailure;
 import io.github.rponte.penitent.exception.PlsqlMappingException;
 import io.github.rponte.penitent.internal.binding.TemporaryLobs;
+import io.github.rponte.penitent.internal.driver.DriverBoundary;
+import io.github.rponte.penitent.internal.driver.DriverFailure;
 import io.github.rponte.penitent.internal.metadata.Dictionary.SqlFailure;
 import io.github.rponte.penitent.internal.metadata.ReturnType;
 import io.github.rponte.penitent.internal.metadata.RoutineMetadata;
@@ -100,7 +102,8 @@ public final class RoutineInvocationHandler implements InvocationHandler {
 		refuseOutsideTheTransaction();
 		boolean lobs = TemporaryLobs.open();
 		try (Connections.Lease lease = connections.acquire()) {
-			Connection connection = lease.connection();
+			// behind the boundary, where a runtime exception of the driver is told from the library's (#147)
+			Connection connection = DriverBoundary.wrap(lease.connection());
 			PlsqlBlock block = method.getAnnotation(PlsqlBlock.class);
 			Object result = block != null
 					? blocks.call(method, block, arguments, connection)
@@ -108,6 +111,8 @@ public final class RoutineInvocationHandler implements InvocationHandler {
 			return ReturnType.wrap(method, result);
 		} catch (PlsqlMappingException e) {
 			throw MappingMessages.of(method, e);
+		} catch (DriverFailure e) {
+			throw driverFailure(method, e);
 		} catch (SqlFailure e) {
 			throw translator.translate(e.failure());
 		} catch (SQLException e) {
@@ -124,9 +129,11 @@ public final class RoutineInvocationHandler implements InvocationHandler {
 	 */
 	public RoutineMetadata describe(Method method) {
 		try (Connections.Lease lease = connections.acquire()) {
-			return routines.describeOnce(method, lease.connection());
+			return routines.describeOnce(method, DriverBoundary.wrap(lease.connection()));
 		} catch (PlsqlMappingException e) {
 			throw MappingMessages.of(method, e);
+		} catch (DriverFailure e) {
+			throw driverFailure(method, e);
 		} catch (SqlFailure e) {
 			throw translator.translate(e.failure());
 		} catch (SQLException e) {
@@ -152,6 +159,19 @@ public final class RoutineInvocationHandler implements InvocationHandler {
 	 */
 	public Object encodeParameter(Method method, int index, Object value, Connection connection) {
 		return encoded(() -> routines.encodeParameter(method, index, value, connection), method);
+	}
+
+	/**
+	 * A failure of the driver that no phase of the call turned into the library's exception, such as one while the
+	 * routine is described outside the dictionary's queries: a mapping failure while binding, and otherwise the
+	 * driver's own, with the connection discarded.
+	 */
+	private RuntimeException driverFailure(Method method, DriverFailure e) {
+		if (e.inBinding()) {
+			PlsqlMappingException mapping = e.ofBinding("a value");
+			return method == null ? mapping : MappingMessages.of(method, mapping);
+		}
+		return translator.translate(e.ofCall(null, PlsqlFailure.Phase.PREPARATION).failure());
 	}
 
 	@FunctionalInterface
@@ -186,7 +206,7 @@ public final class RoutineInvocationHandler implements InvocationHandler {
 		List<PlsqlMappingException> errors = new java.util.ArrayList<>();
 		refuseOutsideTheTransaction();
 		try (Connections.Lease lease = connections.acquire()) {
-			Connection connection = lease.connection();
+			Connection connection = DriverBoundary.wrap(lease.connection());
 			for (Method method : methods) {
 				try {
 					ReturnType.requireNoOptionalParameter(method);
@@ -200,6 +220,8 @@ public final class RoutineInvocationHandler implements InvocationHandler {
 					errors.add(MappingMessages.of(method, e));
 				}
 			}
+		} catch (DriverFailure e) {
+			throw driverFailure(null, e);
 		} catch (SqlFailure e) {
 			throw translator.translate(e.failure());
 		} catch (SQLException e) {

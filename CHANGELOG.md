@@ -45,6 +45,15 @@ All notable changes to this project are listed here. The format follows
 
 ### Fixed
 
+- A runtime exception or an `AssertionError` the Oracle driver throws of its own escaped bare outside the call's
+  `execute()` ([#147](https://github.com/rponte/penitent/issues/147)): while binding, reading the results, a cursor,
+  an object type, a collection or a LOB, preparing or closing the statement, or reading the dictionary. It passed
+  through any `catch (PlsqlException e)`, and a connection the driver may have left in the middle of the protocol went
+  back to the pool. Penitent now catches it wherever the driver throws it, at a boundary around the driver's objects,
+  so that a failure of the application's own code is never taken for the driver's: while binding a value, it is a
+  `PlsqlMappingException` naming the parameter, and the connection is kept; anywhere else, a
+  `PlsqlExecutionException`, and the connection is discarded. The original is the cause. Building an object type or a
+  collection kept its message, now for any runtime exception of the driver, not only an `IllegalArgumentException`.
 - `penitent-test`: an `IN OUT` parameter is matched by the value that came in, in a stub and in `verify`
   ([#150](https://github.com/rponte/penitent/issues/150)). A `PlsqlOut` given for it counted as `any()`, so
   `verify(mock).stamp(PlsqlOut.of("raw"))` passed whatever came in, and a stub with it matched any call. It now matches
