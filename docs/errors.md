@@ -102,7 +102,15 @@ the driver throws it, keeps it as the cause, and decides by where the driver fai
 | The driver failed | What arrives | The connection |
 |---|---|---|
 | binding a value: a setter of the statement, registering an `OUT`, building an object type or a collection to send | `PlsqlMappingException`, naming the parameter: the driver converts the value in the client, before anything is sent | kept |
-| anywhere else: running the call, reading the return value, an `OUT`, a cursor's rows, an object type's attributes or a collection's elements, writing a LOB, preparing or closing the statement, reading the dictionary | `PlsqlExecutionException`, "the Oracle driver failed itself in ...": the driver's failure, never the routine's | discarded, so that the pool replaces it: the driver may have failed in the middle of the protocol |
+| anywhere else: running the call, reading the return value, an `OUT`, a cursor's rows, an object type's attributes or a collection's elements, writing a LOB, preparing or closing the statement, reading the dictionary | `PlsqlExecutionException`, naming the call, as in "PLSQL_TEST.ORDERS.ITEMS: the Oracle driver failed itself in ResultSet.next (ArrayIndexOutOfBoundsException: ...)": the driver's failure, never the routine's | discarded, so that the pool replaces it: the driver may have failed in the middle of the protocol |
+
+**Is it safe to call again?** It depends on whether the routine ran:
+
+- **binding a value, or preparing the call:** the routine did not run, and calling again is safe, once the value is
+  fixed;
+- **running the call, or reading its results:** the routine may have run. Inside a transaction, the discarded
+  connection rolls back what it did, so calling again in a new transaction is safe. With auto-commit, what it did is
+  already committed, and calling again may do it twice.
 
 A failure of your own code, such as a converter's, is not the driver's: it arrives as a `PlsqlMappingException`
 naming the parameter, and the connection is kept. A failure while the [call log](logging.md) reads a value is

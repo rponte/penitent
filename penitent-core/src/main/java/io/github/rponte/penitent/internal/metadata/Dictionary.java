@@ -66,7 +66,7 @@ public final class Dictionary {
 		} catch (SQLException e) {
 			throw new SqlFailure(sql, e, PlsqlFailure.Phase.DICTIONARY);
 		} catch (io.github.rponte.penitent.internal.driver.DriverFailure e) {
-			throw e.ofCall(sql, PlsqlFailure.Phase.DICTIONARY);
+			throw e.ofCall("reading the dictionary", sql, PlsqlFailure.Phase.DICTIONARY);
 		}
 	}
 

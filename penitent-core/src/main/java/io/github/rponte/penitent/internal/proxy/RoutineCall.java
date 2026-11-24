@@ -350,7 +350,7 @@ final class RoutineCall {
 			}
 
 			log.executing();
-			Jdbc.execute(statement, sql);
+			Jdbc.execute(statement, sql, routine.qualifiedName());
 			try {
 				readOutParameters(statement, routine, method, args, offset, connection, log);
 				log.outsRead();
@@ -367,13 +367,13 @@ final class RoutineCall {
 			} catch (SQLException e) {
 				throw new SqlFailure(sql, e, PlsqlFailure.Phase.RESULT);
 			} catch (DriverFailure e) {
-				throw e.ofCall(sql, PlsqlFailure.Phase.RESULT);
+				throw e.ofCall(routine.qualifiedName(), sql, PlsqlFailure.Phase.RESULT);
 			}
 		} catch (SQLException e) {
 			throw new SqlFailure(sql, e, PlsqlFailure.Phase.PREPARATION);
 		} catch (DriverFailure e) {
 			// preparing or closing the statement
-			throw e.ofCall(sql, e.operation().endsWith(".close") ? PlsqlFailure.Phase.RESULT
+			throw e.ofCall(routine.qualifiedName(), sql, e.operation().endsWith(".close") ? PlsqlFailure.Phase.RESULT
 					: PlsqlFailure.Phase.PREPARATION);
 		}
 	}
@@ -384,7 +384,7 @@ final class RoutineCall {
 	 * {@link DriverFailure}).
 	 */
 	static RuntimeException bindingFailure(DriverFailure e, String what, String sql) {
-		return e.inBinding() ? e.ofBinding(what) : e.ofCall(sql, PlsqlFailure.Phase.PREPARATION);
+		return e.inBinding() ? e.ofBinding(what) : e.ofCall(what, sql, PlsqlFailure.Phase.PREPARATION);
 	}
 
 	/**

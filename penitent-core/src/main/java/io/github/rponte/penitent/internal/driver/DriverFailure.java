@@ -67,10 +67,13 @@ public final class DriverFailure extends RuntimeException {
 				+ ", at a limit of its own: " + described(), getCause());
 	}
 
-	/** The driver's own failure in the call, in {@code phase}: the connection is discarded first. */
-	public SqlFailure ofCall(String sql, PlsqlFailure.Phase phase) {
+	/**
+	 * The driver's own failure in the call, in {@code phase}, {@code where} saying which call it was, as in
+	 * {@code SCHEMA.PKG.ROUTINE}: the connection is discarded first.
+	 */
+	public SqlFailure ofCall(String where, String sql, PlsqlFailure.Phase phase) {
 		discardConnection();
-		return new SqlFailure(sql, new SQLException("the Oracle driver failed itself in " + operation + " ("
+		return new SqlFailure(sql, new SQLException(where + ": the Oracle driver failed itself in " + operation + " ("
 				+ described() + "). The connection was discarded", getCause()), phase);
 	}
 
