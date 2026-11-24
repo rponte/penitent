@@ -354,22 +354,32 @@ doNothing().when(mock).stamp(out("default"));
 doNothing().when(mock).stamp(inOut("raw", "stamped"));
 ```
 
-A `PlsqlOut` given as it is matches by the value it holds, and sets nothing, so the parameter goes back as it came in,
-as in PL/SQL; an empty one, `new PlsqlOut<>()`, matches SQL `NULL`, and `any()` matches anything. `verify` checks what
-the code under test sent, as Mockito's does, never what went out, which the stub set: it matches an `IN OUT` by the
-value that came in, recorded at the call, so what the `PlsqlOut` holds afterwards does not count:
+A `PlsqlOut` given as it is, `PlsqlOut.of("raw")`, matches by the value it holds and sets nothing, so the parameter
+goes back as it came in, as in PL/SQL: that is the stub of an `IN OUT` that comes out as it went in. `verify` checks
+what the code under test sent, as Mockito's does, never what went out, which the stub set: it matches an `IN OUT` by
+the value that came in, recorded at the call, so what the `PlsqlOut` holds afterwards does not count:
 
 <!-- snippet: testing/in-out-verify -->
 ```java
 // what came in, recorded at the call: "stamped", which went out, does not count
 verify(mock).stamp(PlsqlOut.of("raw"));
-// SQL NULL came in
-verify(mock, never()).stamp(new PlsqlOut<>());
+// SQL NULL came in: as for an IN parameter, so null and new PlsqlOut<>() do too
+verify(mock, never()).stamp(isNull());
 ```
 
-`inOut` is refused in `verify`, and on an `IN` parameter. A pure `OUT` has nothing coming in: there, `out(value)` sets
-it, `new PlsqlOut<>()` or `any()` match it, and a `PlsqlOut` with a value or `inOut` is refused, since no value could
-match. An `IN OUT` of an object type, a collection or a record is set with `out(value)` and matched with `any()` only,
+For an `IN OUT`, in a stub and in `verify`:
+
+| Given | Matches what came in | Sets what goes out, in a stub |
+|---|---|---|
+| `PlsqlOut.of("raw")`, or `eq(PlsqlOut.of("raw"))` beside other matchers | `"raw"` | nothing: it goes back as it came in |
+| `isNull()`, a plain `null`, or `new PlsqlOut<>()` | SQL `NULL` | nothing |
+| `any()` | anything | nothing |
+| `out("stamped")`, in a stub only | anything | `"stamped"` |
+| `inOut("raw", "stamped")`, in a stub only | `"raw"`, or SQL `NULL` for `inOut(null, ...)` | `"stamped"`, or SQL `NULL` for `inOut(..., null)` |
+
+`out` and `inOut` are refused in `verify`, which matches what came in only, and `inOut` on an `IN` parameter, where
+`out` does not compile. A pure `OUT` has nothing coming in: there, `out(value)` sets it, `new PlsqlOut<>()` or `any()`
+match it, and a `PlsqlOut` with a value or `inOut` is refused, since no value could match. An `IN OUT` of an object type, a collection or a record is set with `out(value)` and matched with `any()` only,
 as an `IN` one is.
 
 **Stub a standalone routine.** A function or procedure outside any package is stubbed the same way, from the
