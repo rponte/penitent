@@ -890,8 +890,10 @@ public final class MockSession implements RowTypes {
 	 * it holds, {@code null} matching SQL {@code NULL}, and {@code inOut(cameIn, goesOut)} by {@code cameIn}, in a stub.
 	 * The calls are recorded as they come in, before a stub sets anything, so {@code verify} compares the value that
 	 * came in, whatever the {@code PlsqlOut} holds afterwards. A pure {@code OUT} has nothing coming in: a
-	 * {@code PlsqlOut} with a value, or {@code inOut}, is refused there, as {@code inOut} is in {@code verify}, which
-	 * matches what came in only, and on an {@code IN} parameter, which nothing goes out through.
+	 * {@code PlsqlOut} with a value, or {@code inOut}, is refused there, as {@code inOut} and {@code out} are in
+	 * {@code verify}, which matches what came in only, and {@code inOut} on an {@code IN} parameter, which nothing goes
+	 * out through. {@code isNull()} and a plain {@code null} are not a {@code PlsqlOut}, and match SQL {@code NULL}
+	 * coming in as they do for an {@code IN} parameter.
 	 */
 	static Invocation resolved(RoutineMetadata routine, Invocation invocation, boolean verifying) {
 		Method method = invocation.method();
@@ -899,16 +901,31 @@ public final class MockSession implements RowTypes {
 		List<Matcher> matchers = new ArrayList<>(invocation.matchers());
 		for (int i = 0; i < javaParameters.length; i++) {
 			Matcher matcher = matchers.get(i);
-			if (!(matcher instanceof Matcher.CameIn || matcher instanceof Matcher.InOut)) {
+			if (!(matcher instanceof Matcher.CameIn || matcher instanceof Matcher.InOut
+					|| matcher instanceof Matcher.Out)) {
 				continue;
 			}
 			RoutineMetadata.Argument parameter = argumentOf(routine, method, javaParameters, i);
 			String where = routine.qualifiedName() + ": " + parameter.name();
+			if (matcher instanceof Matcher.Out) {
+				// out(value) sets a stub's value, which verify would not check: it counted as any(). On an IN
+				// parameter it does not compile, a PlsqlOut where the parameter is not
+				if (verifying) {
+					throw new IllegalStateException(parameter.isIn()
+							? routine.qualifiedName() + ": verify matches the value that came in through "
+									+ parameter.name() + ", not the one that went out, which the stub set: give it"
+									+ " PlsqlOut.of(value), isNull() or any(), not out(value)"
+							: routine.qualifiedName() + ": verify matches the values that came in, and "
+									+ parameter.name() + " is an OUT parameter, which nothing comes in through: give it"
+									+ " new PlsqlOut<>() or any(), not out(value)");
+				}
+				continue;
+			}
 			if (matcher instanceof Matcher.InOut) {
 				if (verifying) {
 					throw new IllegalStateException(routine.qualifiedName() + ": verify matches the value that came in"
 							+ " through " + parameter.name() + ", not the one that went out, which the stub set: give it"
-							+ " PlsqlOut.of(value), not inOut(cameIn, goesOut)");
+							+ " PlsqlOut.of(value), isNull() or any(), not inOut(cameIn, goesOut)");
 				}
 				if (!parameter.isIn()) {
 					throw new IllegalStateException(where + " is an OUT parameter, which nothing comes in through, so"

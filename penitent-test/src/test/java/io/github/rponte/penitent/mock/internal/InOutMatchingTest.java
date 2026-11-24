@@ -71,8 +71,8 @@ class InOutMatchingTest {
 						+ " through, so inOut(cameIn, goesOut) does not fit it: match it by its value");
 		assertThatThrownBy(() -> resolved(true, new Matcher.Any(), new Matcher.InOut("a", "b"), new Matcher.Any()))
 				.hasMessage("PLSQL_TEST.FREIGHT_STAMPS.STAMP_BOTH: verify matches the value that came in through P_TEXT,"
-						+ " not the one that went out, which the stub set: give it PlsqlOut.of(value), not"
-						+ " inOut(cameIn, goesOut)");
+						+ " not the one that went out, which the stub set: give it PlsqlOut.of(value), isNull()"
+						+ " or any(), not inOut(cameIn, goesOut)");
 	}
 
 	@Test
@@ -83,5 +83,24 @@ class InOutMatchingTest {
 		assertThat(new Matcher.InOut("raw", "stamped")).hasToString("inOut('raw', 'stamped')");
 		assertThat(new Matcher.CameIn("raw")).hasToString("'raw'");
 		assertThat(new Matcher.CameIn(null).condition("P_TEXT")).isEqualTo("P_TEXT IS NULL");
+	}
+
+	@Test
+	@DisplayName("out is left to a stub, and refused in verify, on an IN OUT and on a pure OUT")
+	void out() {
+		assertThatThrownBy(() -> resolved(true, new Matcher.Any(), new Matcher.Out("x"), new Matcher.Any()))
+				.hasMessageContaining("verify matches the value that came in through P_TEXT");
+		assertThatThrownBy(() -> resolved(true, new Matcher.Any(), new Matcher.Any(), new Matcher.Out("x")))
+				.hasMessageContaining("P_LABEL is an OUT parameter, which nothing comes in through: give it new"
+						+ " PlsqlOut<>() or any(), not out(value)");
+	}
+
+	@Test
+	@DisplayName("isNull() and a plain null are not a PlsqlOut: left as they are, matching SQL NULL")
+	void null_forms() throws Exception {
+		assertThat(resolved(true, new Matcher.Any(), new Matcher.IsNull(), new Matcher.Any()))
+				.containsExactly(new Matcher.Any(), new Matcher.IsNull(), new Matcher.Any());
+		assertThat(resolved(true, new Matcher.Any(), new Matcher.Equal(null), new Matcher.Any()))
+				.containsExactly(new Matcher.Any(), new Matcher.Equal(null), new Matcher.Any());
 	}
 }

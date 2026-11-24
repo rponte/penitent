@@ -50,7 +50,9 @@ All notable changes to this project are listed here. The format follows
   `verify(mock).stamp(PlsqlOut.of("raw"))` passed whatever came in, and a stub with it matched any call. It now matches
   by the value it holds, `new PlsqlOut<>()` matching SQL `NULL`; `verify` compares the value recorded at the call,
   not what the `PlsqlOut` holds afterwards. `inOut(cameIn, goesOut)` stubs both ends; `out(value)` still sets it
-  whatever came in. On a pure `OUT`, which nothing comes in through, a `PlsqlOut` with a value or `inOut` is refused.
+  whatever came in; `isNull()` and a plain `null` match SQL `NULL` coming in, as `new PlsqlOut<>()` does. On a pure
+  `OUT`, which nothing comes in through, a `PlsqlOut` with a value or `inOut` is refused, and `out(value)` is refused
+  in `verify`, where it counted as `any()`.
   **Upgrading:** such a stub or `verify` now checks the value: give `any()` where any value was meant.
 - A date beyond Oracle's range, from January 1, 4712 BC to December 31, 9999, is refused before the call, with a
   `PlsqlMappingException` that names the value and where it is: a parameter, an attribute, an element or a block's

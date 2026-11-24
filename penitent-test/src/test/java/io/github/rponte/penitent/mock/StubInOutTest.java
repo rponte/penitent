@@ -4,6 +4,7 @@ import static io.github.rponte.penitent.mock.PlsqlMocks.any;
 import static io.github.rponte.penitent.mock.PlsqlMocks.doNothing;
 import static io.github.rponte.penitent.mock.PlsqlMocks.eq;
 import static io.github.rponte.penitent.mock.PlsqlMocks.inOut;
+import static io.github.rponte.penitent.mock.PlsqlMocks.isNull;
 import static io.github.rponte.penitent.mock.PlsqlMocks.never;
 import static io.github.rponte.penitent.mock.PlsqlMocks.out;
 import static io.github.rponte.penitent.mock.PlsqlMocks.times;
@@ -201,8 +202,8 @@ class StubInOutTest {
 		assertThatThrownBy(() -> verify(mock).stamp(inOut("raw", "stamped")))
 				.isInstanceOf(IllegalStateException.class)
 				.hasMessage("PLSQL_TEST.FREIGHT_STAMPS.STAMP: verify matches the value that came in through P_TEXT,"
-						+ " not the one that went out, which the stub set: give it PlsqlOut.of(value), not"
-						+ " inOut(cameIn, goesOut)");
+						+ " not the one that went out, which the stub set: give it PlsqlOut.of(value), isNull()"
+						+ " or any(), not inOut(cameIn, goesOut)");
 	}
 
 	@Test
@@ -235,8 +236,64 @@ class StubInOutTest {
 		// snippet: testing/in-out-verify
 		// what came in, recorded at the call: "stamped", which went out, does not count
 		verify(mock).stamp(PlsqlOut.of("raw"));
-		// SQL NULL came in
-		verify(mock, never()).stamp(new PlsqlOut<>());
+		// SQL NULL came in: as for an IN parameter, so null and new PlsqlOut<>() do too
+		verify(mock, never()).stamp(isNull());
 		// end-snippet
+	}
+
+	@Test
+	@DisplayName("SQL NULL coming in, in a stub and in verify: isNull(), a plain null, or an empty PlsqlOut")
+	void null_coming_in() {
+		Stamps mock = mocks.mock(Stamps.class);
+		doNothing().when(mock).stamp(out("other"));
+		doNothing().when(mock).stamp(isNull());
+		assertThat(stamped(null)).isNull();
+		assertThat(stamped("raw")).isEqualTo("other");
+		doNothing().when(mock).stamp(null);
+		assertThat(stamped(null)).isNull();
+
+		verify(mock, times(2)).stamp(isNull());
+		verify(mock, times(2)).stamp(null);
+		verify(mock, times(2)).stamp(new PlsqlOut<>());
+		verify(mock).stamp(PlsqlOut.of("raw"));
+	}
+
+	@Test
+	@DisplayName("inOut(cameIn, null) sets SQL NULL going out; eq(PlsqlOut.of(x)) beside other matchers matches x, in a"
+			+ " stub as in verify; any() matches anything and sets nothing")
+	void the_other_forms_in_a_stub() {
+		Stamps mock = mocks.mock(Stamps.class);
+		doNothing().when(mock).stamp(inOut("raw", null));
+		assertThat(stamped("raw")).isNull();
+
+		doNothing().when(mock).stampBoth(eq("CE"), eq(PlsqlOut.of("raw")), out("label"));
+		PlsqlOut<String> text = PlsqlOut.of("raw");
+		PlsqlOut<String> label = new PlsqlOut<>();
+		stamps.stampBoth("CE", text, label);
+		assertThat(text.get()).isEqualTo("raw");
+		assertThat(label.get()).isEqualTo("label");
+		assertThatThrownBy(() -> stamps.stampBoth("CE", PlsqlOut.of("other"), new PlsqlOut<>()))
+				.isInstanceOf(PlsqlRoutineRaisedException.class);
+
+		doNothing().when(mock).stamp(any());
+		assertThat(stamped("other")).isEqualTo("other");
+	}
+
+	@Test
+	@DisplayName("out(value) sets a stub's value: it is refused in verify, which matches what came in")
+	void out_refused() {
+		Stamps mock = mocks.mock(Stamps.class);
+		doNothing().when(mock).stamp(out("stamped"));
+		assertThatThrownBy(() -> verify(mock).stamp(out("stamped")))
+				.isInstanceOf(IllegalStateException.class)
+				.hasMessage("PLSQL_TEST.FREIGHT_STAMPS.STAMP: verify matches the value that came in through P_TEXT,"
+						+ " not the one that went out, which the stub set: give it PlsqlOut.of(value), isNull() or any(),"
+						+ " not out(value)");
+		assertThatThrownBy(() -> verify(mock).stampBoth(eq("CE"), any(), out("label")))
+				.isInstanceOf(IllegalStateException.class)
+				.hasMessage("PLSQL_TEST.FREIGHT_STAMPS.STAMP_BOTH: verify matches the values that came in, and P_LABEL"
+						+ " is an OUT parameter, which nothing comes in through: give it new PlsqlOut<>() or any(), not"
+						+ " out(value)");
+		// on an IN parameter, out(value) does not compile: it is a PlsqlOut, and the parameter is not
 	}
 }
