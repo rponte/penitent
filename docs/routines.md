@@ -8,6 +8,20 @@ Here, "routine" always means the PL/SQL side, and "method" the Java side: see
 [How Penitent works](concepts.md#routine). New to Penitent? Start with [Getting started](getting-started.md), which
 builds the package used here.
 
+## At a glance
+
+| In PL/SQL | In Java | See |
+|---|---|---|
+| `FUNCTION calculate_freight(...) RETURN NUMBER` | `BigDecimal calculateFreight(...)` | [Functions and procedures](#functions-and-procedures) |
+| `PROCEDURE cancel_order(...)` | `void cancelOrder(...)` | [Functions and procedures](#functions-and-procedures) |
+| a routine of another name than the method | `@PlsqlRoutine("ORDER_STATUS")` on the method | [Functions and procedures](#functions-and-procedures) |
+| `p_order_id OUT NUMBER` | `PlsqlOut<Long> orderId`, passed as `new PlsqlOut<>()` and read after the call | [`OUT` and `IN OUT`](#out-and-in-out-parameters) |
+| `p_total IN OUT NUMBER` | `PlsqlOut<BigDecimal> total`, passed as `PlsqlOut.of(value)` | [`OUT` and `IN OUT`](#out-and-in-out-parameters) |
+| `p_percent NUMBER DEFAULT 10` | one more method, without that parameter | [`DEFAULT` values](#default-values) |
+| two versions of `describe` | one method per version, told apart by the Java types | [Overloaded routines](#overloaded-routines) |
+| `p_min_total => 100` | `bind = PlsqlBind.BY_NAME` on the interface | [Binding by name](#binding-by-name) |
+| `CREATE FUNCTION round_to_cents(...)`, outside a package | an interface with `@PlsqlSchema` | [Routines outside a package](#routines-outside-a-package) |
+
 ## The package on this page
 
 The orders package from Getting started, with a few more routines:
@@ -86,9 +100,13 @@ orders.countOrders(102, "OPEN");   // 1
 To leave out a parameter in the middle of the list, such as `p_status` while passing `p_min_total`, bind
 [by name](#binding-by-name).
 
-> **`null` is not "use the default".** A `null` argument is sent as `NULL`, even to a parameter that has a `DEFAULT`:
-> Oracle only applies the default when the parameter is left out. This is how PL/SQL works, and Penitent does not
-> change it.
+<div class="admonition warning" markdown>
+<p class="admonition-title">null is not "use the default"</p>
+
+A `null` argument is sent as `NULL`, even to a parameter that has a `DEFAULT`: Oracle only applies the default when the
+parameter is left out. This is how PL/SQL works, and Penitent does not change it.
+
+</div>
 
 ### Overloaded routines
 
@@ -231,9 +249,16 @@ public interface OrderSearch {
 search.countOrders(104, new BigDecimal("100"));   // p_status is left out and takes its DEFAULT
 ```
 
+<div class="admonition tip" markdown>
+<p class="admonition-title">Without @PlsqlParam, compile with -parameters</p>
+
+Relying on the Java parameter's name needs it in the class file: compile with `-parameters`, which the Spring Boot
+parent already turns on. `@PlsqlParam` works without it.
+
+</div>
+
 - **The name** is the one in `@PlsqlParam` or, without it, the Java parameter's name in SNAKE_CASE: `customerId`
   looks for `CUSTOMER_ID`. There is no prefix convention, such as adding `P_`, because each project has its own.
-  Relying on the Java name requires compiling with `-parameters`, which the Spring Boot parent already turns on.
 - **Java order does not matter**, and a `DEFAULT` parameter can be left out from anywhere in the list.
 - **Overloads** are picked among the versions whose parameter names match, so two versions that differ only in a
   name can be told apart.
