@@ -6,6 +6,25 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.32.0]
+
+Oracle's `JSON` type, as its text or as a `Map` or a `List`, checked the same way on every driver and database, in a
+call and in the mocks. The driver's own failures are caught wherever it throws them, the routine's errors are told
+from the driver's, and a number or a date Oracle would store wrong is refused before the call. The mocks match an
+`IN OUT` by the value that came in, and a failed `verify` lists the calls the routine actually got.
+
+### Upgrading from 0.31.0
+
+1. A `catch (PlsqlRoutineRaisedException e)` no longer catches an error the driver raises itself, in the client, nor a
+   failure of the driver itself: catch `PlsqlExecutionException`, its parent.
+2. A number beyond `NUMBER`'s range fails with a `PlsqlMappingException`, no longer a `PlsqlExecutionException`; a
+   date beyond Oracle's range, which went in and was stored wrong, now fails before the call.
+3. A runtime exception of the driver, which escaped bare, is a `PlsqlMappingException` while binding a value, and a
+   `PlsqlExecutionException` anywhere else, after which the connection is discarded.
+4. `penitent-test`: a stub or a `verify` that gives a value for an `IN OUT` now checks it: give `any()` where any
+   value was meant. `out(value)` in `verify`, and a `PlsqlOut` with a value or `inOut` on a pure `OUT`, are refused.
+5. `penitent-test`: the mocks' schema stays at version 2, so there is nothing to apply again.
+
 ### Added
 
 - `penitent-test`: a failed `verify` lists the calls the routine actually got in the test
@@ -445,7 +464,8 @@ driven by the database dictionary: see the [README](https://github.com/rponte/pe
 
 - Spring Boot 4.1.2 for the versions the library is built and tested with.
 
-[Unreleased]: https://github.com/rponte/penitent/compare/v0.31.0...HEAD
+[Unreleased]: https://github.com/rponte/penitent/compare/v0.32.0...HEAD
+[0.32.0]: https://github.com/rponte/penitent/compare/v0.31.0...v0.32.0
 [0.31.0]: https://github.com/rponte/penitent/compare/v0.30.0...v0.31.0
 [0.30.0]: https://github.com/rponte/penitent/compare/v0.29.0...v0.30.0
 [0.29.0]: https://github.com/rponte/penitent/compare/v0.28.0...v0.29.0
