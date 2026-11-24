@@ -199,8 +199,51 @@ any user hits it. See [Validation](validation.md).
 
 ## 7. Records and lists, not ResultSets
 
-Scalars are only the start. An OBJECT type comes back as a Java record, matched by attribute name, and a cursor as a
-list of records, read and closed during the call. Take a customers package with an address type and a cursor:
+A routine often gives back more than a number or a text: a whole customer, its address, its tags, the rows of a
+query. Penitent maps each of them to plain Java. You declare a `record` or a `List`, and never touch a `ResultSet`, a
+`Struct` or an `Array`:
+
+| In Oracle | What it is | In Java |
+|---|---|---|
+| `customers%ROWTYPE` | a row of a table | a `record` |
+| OBJECT type | a type of the schema, with attributes | a `record` |
+| RECORD | a type of a package, with fields | a `record` |
+| nested table, `VARRAY` | many values of one type | a `List` |
+| `SYS_REFCURSOR` | the rows of a query | a `List` of `record`s |
+
+The attributes are matched by name, so the `record` only needs the same names, in camelCase: `zipCode` is `ZIP_CODE`.
+Here is each one, from the simplest.
+
+### A row of a table: `%ROWTYPE`
+
+`customers%ROWTYPE` is a record with one field per column of the `customers` table. A function that returns it gives
+you the whole row:
+
+<!-- snippet: fixture -->
+```sql
+FUNCTION find_customer(p_id NUMBER) RETURN customers%ROWTYPE;
+```
+
+<!-- snippet: types/rowtype -->
+```java
+public record Customer(Long id, String name, String taxId, String tier,
+                       @PlsqlBoolean(trueValue = "S", falseValue = "N") boolean vip,
+                       LocalDate bornOn, LocalDateTime createdAt) {
+}
+
+Customer findCustomer(long id);
+```
+
+<!-- snippet: types/rowtype-call -->
+```java
+customers.findCustomer(1);
+// Customer[id=1, name=Ana Lima, taxId=12345678901, tier=G, vip=true, bornOn=1990-04-12, createdAt=2025-01-15T09:30]
+```
+
+### A type of the schema: OBJECT
+
+An OBJECT type is Oracle's closest thing to a class: a type created in the schema, with attributes. It goes both
+ways, as a parameter and as a return value:
 
 <!-- snippet: fixture -->
 ```sql
@@ -229,6 +272,71 @@ customers.normalizeAddress(new Address("rua das flores 10", "Fortaleza", "60000-
 // Address[street=Rua Das Flores 10, city=FORTALEZA, zipCode=60000000]
 ```
 
+### A type of the package: RECORD
+
+A RECORD is declared in the package spec, and exists only in PL/SQL. Its fields can be objects and collections too,
+and the Java `record` simply nests them:
+
+<!-- snippet: fixture -->
+```sql
+TYPE summary_rec IS RECORD (
+    customer_id NUMBER,
+    name        VARCHAR2(100),
+    address     postal_address_t,
+    tags        tag_list_t
+);
+
+FUNCTION summary(p_id NUMBER) RETURN summary_rec;
+```
+
+<!-- snippet: types/record -->
+```java
+public record CustomerSummary(Long customerId, String name, Address address, List<String> tags) {
+}
+
+CustomerSummary summary(long id);
+```
+
+### Many values: collections
+
+A collection is Oracle's list: a nested table or a `VARRAY` of a scalar or of an object. It is a `List` in Java, and
+a parameter can also be a `Set` or an array:
+
+<!-- snippet: fixture -->
+```sql
+CREATE TYPE tag_list_t AS TABLE OF VARCHAR2(30);
+CREATE TYPE postal_address_list_t AS TABLE OF postal_address_t;
+
+FUNCTION tags_of(p_id NUMBER) RETURN tag_list_t;
+FUNCTION count_tags(p_tags tag_list_t) RETURN NUMBER;
+FUNCTION cities(p_addresses postal_address_list_t) RETURN tag_list_t;
+```
+
+<!-- snippet: types/collection-methods -->
+```java
+List<String> tagsOf(long id);
+
+int countTags(List<String> tags);
+int countTags(Set<String> tags);
+int countTags(String[] tags);
+
+List<String> cities(List<Address> addresses);
+```
+
+<!-- snippet: types/collection-calls -->
+```java
+customers.tagsOf(1);                                    // [vip, newsletter]
+customers.countTags(new String[] { "a", "b", "c" });   // 3
+customers.cities(List.of(
+        new Address("Rua A 1", "Fortaleza", "60000000"),
+        new Address("Rua B 2", "Recife", "50000000"))); // [Fortaleza, Recife]
+```
+
+### The rows of a query: cursors
+
+A function that opens a cursor returns its rows. Penitent reads them all, each into a `record`, and closes the cursor
+during the call:
+
 <!-- snippet: fixture -->
 ```sql
 FUNCTION orders_of(p_customer_id NUMBER) RETURN SYS_REFCURSOR;
@@ -251,8 +359,9 @@ customers.ordersOf(201);
 // [OrderRow[id=1, total=100, status=OPEN], OrderRow[id=2, total=40, status=CANCELLED]]
 ```
 
-Nothing names `POSTAL_ADDRESS_T` or a column type: the dictionary says them. RECORD, `%ROWTYPE`, collections, JSON
-and dates work the same way: see [Types](types.md).
+Nothing in the Java code names `POSTAL_ADDRESS_T`, `TAG_LIST_T` or a column's type: Penitent reads them from the
+dictionary. [Types](types.md) has the details: `null`s, other names with `@PlsqlAttr`, `INDEX BY` tables, JSON and
+dates.
 
 ## 8. With Spring Boot
 
