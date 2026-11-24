@@ -9,7 +9,85 @@ so two modules add that:
 | `penitent-spring` | Calls in the current transaction, Spring exceptions, and `@EnablePlsqlPackages` to register interfaces as beans |
 | `penitent-spring-boot-starter` | All of the above with no configuration: every interface in the application becomes a bean |
 
-With Spring Boot, use the starter and skip to [Spring Boot starter](#spring-boot-starter).
+With Spring Boot, the starter is all you need, and it comes first below. With Spring but without Boot, see
+[Interfaces as beans](#interfaces-as-beans).
+
+## Spring Boot starter
+
+With Spring Boot, the dependency is all you need. Every interface in your application's packages becomes a bean,
+ready to inject, and its calls take part in your `@Transactional` methods:
+
+<!-- snippet: untested -->
+```xml
+<dependency>
+    <groupId>io.github.rponte</groupId>
+    <artifactId>penitent-spring-boot-starter</artifactId>
+    <version>0.31.0</version>
+</dependency>
+```
+
+<!-- snippet: untested -->
+```java
+@Service
+class CheckoutService {
+
+    private final Orders orders;
+
+    CheckoutService(Orders orders) {
+        this.orders = orders;
+    }
+
+    @Transactional
+    long checkout(long customerId, BigDecimal total) {
+        PlsqlOut<Long> orderId = new PlsqlOut<>();
+        orders.placeOrder(customerId, total, orderId);
+        return orderId.get();
+    }
+}
+```
+
+There is no `create` to call, and no annotation to add. Two properties cover the usual settings:
+
+<!-- snippet: untested -->
+```yaml
+penitent:
+  bind: BY_NAME            # BY_POSITION (default) or BY_NAME, for the interfaces that do not declare one
+  validation:
+    enabled: true          # checks every interface against the database at startup; off by default
+```
+
+How the starter finds the interfaces and the `DataSource`:
+
+- **Which packages:** the application's, the same ones Spring Data uses. That is the package of the
+  `@SpringBootApplication` class and its subpackages, plus any added with
+  `@AutoConfigurationPackage(basePackages = ...)`. `scanBasePackages` does not count, because it only feeds component
+  scanning.
+- **`@EnablePlsqlPackages` still works, and wins:** if the application declares it, the starter does not scan, and the
+  annotation's packages are the only ones registered. Use it for interfaces outside the application's packages, or to
+  choose a `DataSource` by name.
+- **`DataSource`:** a single one, or a primary one. With several and no primary, the starter backs off.
+- **`penitent.validation.enabled`** validates every interface registered in the context, including those of an
+  `@EnablePlsqlPackages`.
+
+### Converters and translator in code
+
+Declare a `PlsqlSettingsCustomizer`, the Spring Boot way. The starter builds the `PlsqlSettings` from the properties
+and applies every customizer, in `@Order`:
+
+<!-- snippet: untested -->
+```java
+@Bean
+PlsqlSettingsCustomizer converters() {
+    return settings -> settings.withConverters(PlsqlConverters.of(new TaxIdConverter()));
+}
+```
+
+`PlsqlSettings` is immutable, so a customizer returns the settings to use instead of changing the ones it receives.
+
+**A `PlsqlSettings` bean of the application wins,** as with any Spring Boot autoconfiguration: the starter does not
+build its own, and neither `penitent.bind` nor the customizers apply. That makes it easy to replace the settings in a
+test while the production properties stay in place. Spring Boot would say nothing about the ignored property; here,
+if `penitent.bind` is set, a warning at startup says it is not applied.
 
 ## Transactions and exceptions
 
@@ -91,7 +169,6 @@ above. It is a singleton, with a single dictionary cache.
       return PlsqlSettings.defaults().withConverters(PlsqlConverters.of(new TaxIdConverter()));
   }
   ```
-
 - **Converters for a single interface** cannot be given to a registered bean. Use `@PlsqlConvert` on the parameter,
   or create that interface by hand outside the scanned packages: if it is also scanned, there are two beans of the
   same type, and injecting it is ambiguous.
@@ -158,7 +235,6 @@ public interface Payments {
   ```properties
   resilience4j.retry.instances.payments.retry-exceptions=org.springframework.dao.TransientDataAccessException
   ```
-
 - **Inside a transaction, retry the transaction, not the call.** After a deadlock, Oracle rolls back the statement,
   but the transaction around it still holds its earlier work and locks. Put `@Retry` on the method that starts the
   transaction instead, so that each attempt is a new one.
@@ -198,7 +274,6 @@ proxy of its own. That proxy is still the library's interface, all the way throu
 - **A view, from `tx.using` or `PlsqlPackages.using`,** keeps every layer Spring put around the bean, in the same
   order, so validation, retries and the application's advice apply to the view as well. Spring's transaction is one
   of those layers, and a view behaves as the bean does:
-
   - **inside a `PlsqlTransactions` block,** a `@Transactional` method of the view is refused, as any Spring
     transaction there is. Call it outside the block, or leave `@Transactional` off the methods the block uses;
   - **with `PlsqlPackages.using`,** outside a block, Spring begins its transaction on a connection of its own, while
@@ -233,56 +308,3 @@ public void pay(long id) {
 ```
 
 The same holds for `PlsqlPackages.using`, on a connection whose transaction is yours.
-
-## Spring Boot starter
-
-With Spring Boot, the dependency is all you need. It registers the interfaces of the application's packages, as
-`@EnablePlsqlPackages` would, with no annotation:
-
-<!-- snippet: untested -->
-```xml
-<dependency>
-    <groupId>io.github.rponte</groupId>
-    <artifactId>penitent-spring-boot-starter</artifactId>
-    <version>0.32.0</version>
-</dependency>
-```
-
-<!-- snippet: untested -->
-```yaml
-penitent:
-  bind: BY_NAME            # BY_POSITION (default) or BY_NAME, for the interfaces that do not declare one
-  validation:
-    enabled: true          # checks every interface against the database at startup; off by default
-```
-
-- **Which packages:** the application's, the same ones Spring Data uses. That is the package of the
-  `@SpringBootApplication` class and its subpackages, plus any added with
-  `@AutoConfigurationPackage(basePackages = ...)`. `scanBasePackages` does not count, because it only feeds component
-  scanning.
-- **`@EnablePlsqlPackages` still works, and wins:** if the application declares it, the starter does not scan, and the
-  annotation's packages are the only ones registered. Use it for interfaces outside the application's packages, or to
-  choose a `DataSource` by name.
-- **`DataSource`:** a single one, or a primary one. With several and no primary, the starter backs off.
-- **`penitent.validation.enabled`** validates every interface registered in the context, including those of an
-  `@EnablePlsqlPackages`.
-
-### Converters and translator in code
-
-Declare a `PlsqlSettingsCustomizer`, the Spring Boot way. The starter builds the `PlsqlSettings` from the properties
-and applies every customizer, in `@Order`:
-
-<!-- snippet: untested -->
-```java
-@Bean
-PlsqlSettingsCustomizer converters() {
-    return settings -> settings.withConverters(PlsqlConverters.of(new TaxIdConverter()));
-}
-```
-
-`PlsqlSettings` is immutable, so a customizer returns the settings to use instead of changing the ones it receives.
-
-**A `PlsqlSettings` bean of the application wins,** as with any Spring Boot autoconfiguration: the starter does not
-build its own, and neither `penitent.bind` nor the customizers apply. That makes it easy to replace the settings in a
-test while the production properties stay in place. Spring Boot would say nothing about the ignored property; here,
-if `penitent.bind` is set, a warning at startup says it is not applied.
