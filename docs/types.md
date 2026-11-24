@@ -387,9 +387,22 @@ dates, timestamps, `RAW` values and escapes, measured on 23ai and 21c with drive
 
 ## Composite types
 
-An OBJECT type, a RECORD declared in a package and a table's `%ROWTYPE` all map to a Java `record` or a JavaBean.
+Oracle has three ways to group values under one name, and Penitent maps all of them to a Java `record` or a JavaBean,
+attribute by attribute:
+
+| Oracle | What it is | Declared with |
+|---|---|---|
+| [OBJECT type](#object) | a type of the schema, with named attributes and, optionally, methods; SQL and PL/SQL both know it, and a table column can be of it | `CREATE TYPE ... AS OBJECT` |
+| [`%ROWTYPE`](#rowtype) | a record with one field per column of a table, a view or a cursor, with the same names and types | `customers%ROWTYPE`, where a type is expected |
+| [RECORD](#record-with-nested-types) | a type of PL/SQL only, declared in a package spec, with named fields of any type | `TYPE ... IS RECORD (...)` |
+
+A [collection](#collections), many values of one type, maps to a `List`.
 
 ### OBJECT
+
+An OBJECT type is Oracle's closest thing to a class: a type created in the schema, with attributes and, optionally,
+member functions. Because it lives in the schema, SQL knows it as well as PL/SQL, so it can also be a column's type.
+In Java, it is a `record` with the same attributes:
 
 <!-- snippet: fixture -->
 ```sql
@@ -423,6 +436,10 @@ the parameter has.
 
 ### `%ROWTYPE`
 
+`customers%ROWTYPE` is a record with one field per column of the `customers` table, with the same names and types.
+It follows the table: a column added to it is a field of the record too. Routines use it to take or return a whole
+row, and in Java it is a `record` with the columns you need:
+
 <!-- snippet: fixture -->
 ```sql
 FUNCTION find_customer(p_id NUMBER) RETURN customers%ROWTYPE;
@@ -446,8 +463,9 @@ customers.findCustomer(1);
 
 ### RECORD, with nested types
 
-A RECORD declared in a package works the same way, and so do attributes that are themselves composites or
-collections, at any depth:
+A RECORD is PL/SQL's own composite: a type declared in a package spec, with named fields of any type, objects and
+collections included. Unlike an OBJECT type, it exists only in PL/SQL, so SQL and a table cannot use it. Penitent
+maps it the same way, and attributes that are themselves composites or collections work too, at any depth:
 
 <!-- snippet: fixture -->
 ```sql
@@ -495,7 +513,15 @@ CustomerSummary summary(long id);
 
 ## Collections
 
-A nested table or `VARRAY`, declared in the schema or in a package spec, maps to a `List<T>`. The element can be a
+A collection holds many values of one type, as a Java list does. Oracle has three kinds:
+
+| Oracle | What it is | Declared with |
+|---|---|---|
+| nested table | a list with no fixed size, and the most common kind | `TYPE ... AS TABLE OF ...` |
+| `VARRAY` | a list with a maximum size, given when the type is declared | `TYPE ... AS VARRAY(10) OF ...` |
+| `INDEX BY` table | an associative array, keyed by a number or a text, of PL/SQL only | `TYPE ... IS TABLE OF ... INDEX BY PLS_INTEGER` |
+
+A nested table or a `VARRAY`, declared in the schema or in a package spec, maps to a `List<T>`. The element can be a
 scalar, a composite or another collection:
 
 <!-- snippet: fixture -->
