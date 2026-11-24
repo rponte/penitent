@@ -303,6 +303,26 @@ Object items = back.get("items");   // List ["pen", "ink"]
 - **On the way in,** a `Map` with `String` keys, a `List`, a `CharSequence`, a `Boolean`, a finite number and
   `null` go as they are, at any depth. Anything else, such as a `LocalDate`, is refused before the call, naming where
   it is, as in `$.items[0].when`: convert it to a `String` yourself, or use a [converter](converters.md).
+- **A date as a `String`:** JSON has no date type, so the format is yours, and Oracle reads ISO 8601. Write the
+  seconds: `toString()` leaves them out at a whole minute, as in `2026-11-24T10:15`, which 23ai reads and 21c refuses
+  with `ORA-40688`:
+  <!-- snippet: types/json-date -->
+  ```java
+  // with the seconds, which toString() leaves out at a whole minute, and Oracle 21c then refuses
+  order.put("when", when.format(DateTimeFormatter.ofPattern("uuuu-MM-dd'T'HH:mm:ss")));
+  ```
+  In PL/SQL, read it with `JSON_VALUE(doc, '$.when' RETURNING DATE PRESERVE TIME ERROR ON ERROR)`:
+  - **`RETURNING DATE` alone drops the time,** and `PRESERVE TIME` keeps it.
+  - **Without `ERROR ON ERROR`,** a text Oracle cannot read becomes `NULL`, with no error, as it does with
+    `JSON_OBJECT_T`'s `get_date`.
+  - **An offset, as in `-03:00`,** is kept by `RETURNING TIMESTAMP WITH TIME ZONE`, and converted to UTC by
+    `TIMESTAMP` and `DATE`.
+  - **A year before 1 is read a year later,** with no error, since Java's ISO numbering has a year 0 and Oracle's
+    has none: keep such a date out of a document, or write its year yourself.
+
+  A date stored in the document by the database, as `JSON_OBJECT('when' VALUE SYSDATE RETURNING JSON)` does, comes
+  back in a `Map` as a `String`, such as `"2026-11-24T00:00:00"`. Support for `java.time` values is
+  [#153](https://github.com/rponte/penitent/issues/153).
 - **A document that does not fit the declared type is refused,** naming what it is: an array read as a `Map`, a
   number read as a `List`, or a JSON string read as anything but `String`, whose text keeps its quotes.
 - **Only `Map<String, Object>` and `List<Object>`,** or their wildcards, describe a document, whose values are of
