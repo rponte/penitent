@@ -141,8 +141,9 @@ class StubInOutTest {
 		verify(mock, times(3)).stamp(any());
 		assertThatThrownBy(() -> verify(mock).stamp(PlsqlOut.of("other")))
 				.isInstanceOf(AssertionError.class)
-				.hasMessage("PLSQL_TEST.FREIGHT_STAMPS.STAMP('other') was expected 1 time in this test, and was called"
-						+ " 0 times");
+				.hasMessageStartingWith("PLSQL_TEST.FREIGHT_STAMPS.STAMP('other') was expected 1 time in this test, and was"
+						+ " called 0 times. The calls of PLSQL_TEST.FREIGHT_STAMPS.STAMP in this test, in order:\n"
+						+ "  1. ('raw')");
 	}
 
 	@Test

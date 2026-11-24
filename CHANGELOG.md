@@ -8,6 +8,10 @@ All notable changes to this project are listed here. The format follows
 
 ### Added
 
+- `penitent-test`: a failed `verify` lists the calls the routine actually got in the test
+  ([#148](https://github.com/rponte/penitent/issues/148)), in their order, each value as the expected side shows it,
+  so that `'CE'` stands beside `'ce'`: the first 10 and how many more, a value beyond 100 characters cut with its
+  length. A routine not called at all says so. The mocks' schema does not change.
 - Oracle's `JSON` type, from 21c on, as a `String` holding the JSON text: an `IN`, `OUT` or `IN OUT` parameter, a
   return value and a cursor column, with driver 21 or later. It failed with `PLS-00306` or `PLS-00382`, and a cursor
   column with `ORA-18722`. The text that comes back is the database's, which keeps a number's value but not its

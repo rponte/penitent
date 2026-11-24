@@ -441,6 +441,20 @@ verify(freights, times(2)).calculate(eq("SP"), any());
 verify(freights, never()).calculate("RJ", "BA");
 ```
 
+When a count does not match, the message lists the calls the routine actually got in the test, in their order, each
+value as the expected side shows it, so that a near miss stands out:
+
+<!-- snippet: testing/verify-failure -->
+```text
+PLSQL_TEST.FREIGHTS.CALCULATE('SP', 'CE') was expected 1 time in this test, and was called 0 times. The calls of PLSQL_TEST.FREIGHTS.CALCULATE in this test, in order:
+  1. ('SP', 'ce')
+  2. ('RJ', null)
+```
+
+It shows the first 10 calls and how many more, and cuts a value beyond 100 characters, with its length. A `JSON`
+argument shows its document as text, a date the ISO text the database recorded, a pure `OUT` `(OUT)`, and an object
+type, a collection or a record `(not recorded)`, since the mocks do not record them.
+
 ### Replacing a view or a package
 
 A stub replaces one routine. When a test needs to replace a whole object, most often a **view** whose rows come from
