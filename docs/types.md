@@ -501,6 +501,7 @@ CustomerSummary summary(long id);
   ```text
   normalizeAddress(Address): Address does not cover attribute(s) of POSTAL_ADDRESS_T: [ZIP_CODE VARCHAR2]. Available properties: [STREET, CITY]. Use @PlsqlAttr to declare the name.
   ```
+
 - **JavaBeans** need a no-argument constructor and setters to be read. Inherited properties count. A `boolean` or
   `Boolean` property can be read through `isX()` as well as `getX()`, but not through both: they may answer
   differently, as a `boolean` and a `Boolean` that is `null`, so the library refuses the class rather than pick one.
