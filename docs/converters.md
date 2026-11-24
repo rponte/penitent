@@ -144,6 +144,7 @@ To register converters for every interface at once, put them in [Settings](setti
   ```
 
   A whole collection that is `null` does not go through the converter.
+
 - **Penitent checks `D` against the dictionary.** A converter with `D = LocalDateTime` can drop the time zone on
   purpose for a `TIMESTAMP`, but one with `D = OffsetDateTime` is still rejected. `D` is also what picks the version of
   an overloaded routine.

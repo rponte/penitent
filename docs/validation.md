@@ -33,6 +33,7 @@ you do not fix one only to find the next:
       PlsqlPackages.validate(PlsqlPackages.create(Customers.class, dataSource));
   }
   ```
+
 - **At startup,** so that an application deployed against the wrong schema does not start. With Spring Boot, that is
   `penitent.validation.enabled: true`; with `@EnablePlsqlPackages`, `validateOnStartup = true`. See
   [Spring and Spring Boot](spring.md).

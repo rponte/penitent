@@ -91,6 +91,7 @@ above. It is a singleton, with a single dictionary cache.
       return PlsqlSettings.defaults().withConverters(PlsqlConverters.of(new TaxIdConverter()));
   }
   ```
+
 - **Converters for a single interface** cannot be given to a registered bean. Use `@PlsqlConvert` on the parameter,
   or create that interface by hand outside the scanned packages: if it is also scanned, there are two beans of the
   same type, and injecting it is ambiguous.
@@ -157,6 +158,7 @@ public interface Payments {
   ```properties
   resilience4j.retry.instances.payments.retry-exceptions=org.springframework.dao.TransientDataAccessException
   ```
+
 - **Inside a transaction, retry the transaction, not the call.** After a deadlock, Oracle rolls back the statement,
   but the transaction around it still holds its earlier work and locks. Put `@Retry` on the method that starts the
   transaction instead, so that each attempt is a new one.
@@ -196,6 +198,7 @@ proxy of its own. That proxy is still the library's interface, all the way throu
 - **A view, from `tx.using` or `PlsqlPackages.using`,** keeps every layer Spring put around the bean, in the same
   order, so validation, retries and the application's advice apply to the view as well. Spring's transaction is one
   of those layers, and a view behaves as the bean does:
+
   - **inside a `PlsqlTransactions` block,** a `@Transactional` method of the view is refused, as any Spring
     transaction there is. Call it outside the block, or leave `@Transactional` off the methods the block uses;
   - **with `PlsqlPackages.using`,** outside a block, Spring begins its transaction on a connection of its own, while
