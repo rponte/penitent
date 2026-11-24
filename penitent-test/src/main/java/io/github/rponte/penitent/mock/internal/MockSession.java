@@ -19,6 +19,7 @@ import java.util.UUID;
 import javax.sql.DataSource;
 
 import io.github.rponte.penitent.PlsqlPackages;
+import io.github.rponte.penitent.internal.convert.JsonCodec;
 import io.github.rponte.penitent.internal.metadata.CompositeType;
 import io.github.rponte.penitent.internal.metadata.RoutineMetadata;
 import io.github.rponte.penitent.internal.proxy.RoutineInvocationHandler;
@@ -661,6 +662,7 @@ public final class MockSession implements RowTypes {
 				"SELECT COUNT(*) FROM PENITENT_MOCK_CALLS WHERE EDITION_NAME = ? AND ROUTINE = ?");
 		List<Expected> binds = new ArrayList<>();
 		int calls;
+		String actual;
 		try (Connection connection = connection()) {
 			int index = 0;
 			for (RoutineMetadata.Argument parameter : routine.parameters()) {
@@ -710,6 +712,7 @@ public final class MockSession implements RowTypes {
 					calls = rows.getInt(1);
 				}
 			}
+			actual = calls == times ? null : callsOf(connection, routine, invocation);
 		} catch (SQLException e) {
 			throw new IllegalStateException("failed to read the calls of " + routine.qualifiedName() + ": "
 					+ e.getMessage(), e);
@@ -720,7 +723,109 @@ public final class MockSession implements RowTypes {
 		}
 		throw new AssertionError(routine.qualifiedName() + invocation.matchers().toString().replace('[', '(')
 				.replace(']', ')') + " was expected " + timesOf(times) + " in this test, and was called "
-				+ timesOf(calls));
+				+ timesOf(calls) + ". " + actual);
+	}
+
+	/** The calls a failed verification lists at most: a loop's calls would flood the message. */
+	private static final int CALLS_SHOWN = 10;
+
+	/** A value is cut beyond this many characters, with its length. */
+	private static final int VALUE_SHOWN = 100;
+
+	/**
+	 * The calls the routine got in this test, for a failed verification (#148): the first {@link #CALLS_SHOWN}, in
+	 * their order, each in the form the expected side shows it, so that {@code 'CE'} stands beside {@code 'ce'}. In the
+	 * order of the Java method, as the expected side, with a pure {@code OUT}, which has nothing coming in, as
+	 * {@code (OUT)}. In the order the calls were recorded: by {@code CALLED_AT}, a {@code TIMESTAMP(6)} that no two
+	 * calls shared when measured, even from a PL/SQL loop, since each record commits; then by {@code ROWID}.
+	 */
+	private String callsOf(Connection connection, RoutineMetadata routine, Invocation invocation)
+			throws SQLException {
+		String where = " FROM PENITENT_MOCK_CALLS WHERE EDITION_NAME = ? AND ROUTINE = ?";
+		int total;
+		try (PreparedStatement count = connection.prepareStatement("SELECT COUNT(*)" + where)) {
+			count.setString(1, edition);
+			count.setString(2, BodyRewriter.callKey(routine));
+			try (ResultSet rows = count.executeQuery()) {
+				rows.next();
+				total = rows.getInt(1);
+			}
+		}
+		if (total == 0) {
+			return routine.qualifiedName() + " was not called at all in this test";
+		}
+		StringBuilder shown = new StringBuilder("The calls of " + routine.qualifiedName() + " in this test, in order:");
+		try (PreparedStatement first = connection.prepareStatement("SELECT ARGS" + where
+				+ " ORDER BY CALLED_AT, ROWID FETCH FIRST " + CALLS_SHOWN + " ROWS ONLY")) {
+			first.setString(1, edition);
+			first.setString(2, BodyRewriter.callKey(routine));
+			try (ResultSet rows = first.executeQuery()) {
+				int number = 0;
+				while (rows.next()) {
+					shown.append("\n  ").append(++number).append(". ")
+							.append(arguments(routine, invocation, rows.getString(1)));
+				}
+			}
+		}
+		if (total > CALLS_SHOWN) {
+			shown.append("\n  ... and ").append(total - CALLS_SHOWN).append(" more");
+		}
+		return shown.toString();
+	}
+
+	/** One recorded call's arguments, {@code ARGS} being the JSON array the mocked body recorded. */
+	private static String arguments(RoutineMetadata routine, Invocation invocation, String args) {
+		List<?> values = (List<?>) JsonCodec.read(args, List.class);
+		List<RoutineMetadata.Argument> recorded = routine.parameters().stream()
+				.filter(RoutineMetadata.Argument::isIn).toList();
+		Method method = invocation.method();
+		Parameter[] javaParameters = method.getParameters();
+		StringJoiner joined = new StringJoiner(", ", "(", ")");
+		for (int i = 0; i < javaParameters.length; i++) {
+			RoutineMetadata.Argument parameter = argumentOf(routine, method, javaParameters, i);
+			int index = recorded.indexOf(parameter);
+			joined.add(index < 0 ? "(OUT)" : recordedValue(parameter, values.get(index)));
+		}
+		return joined.toString();
+	}
+
+	/**
+	 * A recorded value as the expected side shows one: text in quotes, a number, {@code null}, {@code TRUE} and
+	 * {@code FALSE}. A date, a timestamp and an interval are the ISO text {@code JSON_ARRAY} recorded, in quotes; a
+	 * {@code JSON} argument, recorded as {@code {"v": document}}, is its document as text, or {@code null} for SQL
+	 * {@code NULL}; an object type, a collection or a record is not recorded (see {@link BodyRewriter#NOT_RECORDED}).
+	 */
+	private static String recordedValue(RoutineMetadata.Argument parameter, Object value) {
+		if (BodyRewriter.composite(parameter)) {
+			return BodyRewriter.NOT_RECORDED;
+		}
+		if (parameter.isJson()) {
+			// a JSON document of the JSON array, written alone: [document] without its brackets
+			return value instanceof Map<?, ?> member && member.containsKey("v")
+					? text(jsonOf(member.get("v"))) : "null";
+		}
+		if (value == null) {
+			return "null";
+		}
+		if (parameter.isBoolean() || value instanceof Boolean) {
+			// recorded as 'true' or 'false' before 23ai's SQL BOOLEAN (see BodyRewriter)
+			return Boolean.parseBoolean(value.toString()) ? "TRUE" : "FALSE";
+		}
+		if (value instanceof java.math.BigDecimal number) {
+			return number.toPlainString();
+		}
+		return value instanceof String text ? text(text) : text(jsonOf(value));
+	}
+
+	/** Text in quotes, as the mocks write it, cut beyond {@link #VALUE_SHOWN} characters with its length. */
+	private static String text(String text) {
+		return text.length() <= VALUE_SHOWN ? PlsqlLiterals.of(text)
+				: PlsqlLiterals.of(text.substring(0, VALUE_SHOWN)) + "... (" + text.length() + " characters)";
+	}
+
+	private static String jsonOf(Object value) {
+		String array = JsonCodec.text(java.util.Arrays.asList(value));
+		return array.substring(1, array.length() - 1);
 	}
 
 	/**
