@@ -6,6 +6,7 @@ import java.sql.Types;
 
 import io.github.rponte.penitent.exception.PlsqlFailure;
 import io.github.rponte.penitent.internal.binding.OracleArrays;
+import io.github.rponte.penitent.internal.driver.DriverFailure;
 import io.github.rponte.penitent.internal.driver.DriverProfile;
 import io.github.rponte.penitent.internal.metadata.Dictionary.SqlFailure;
 import io.github.rponte.penitent.internal.metadata.RoutineMetadata.Argument;
@@ -80,10 +81,12 @@ final class Jdbc {
 		} catch (SQLException e) {
 			throw new SqlFailure(sql, e, PlsqlFailure.Phase.EXECUTION);
 		} catch (AssertionError | RuntimeException e) {
-			// the driver's own failure, as the Javadoc explains; the versions are read first, then the connection aborted
-			String failure = driverFailure(e, statement);
-			abortConnectionOf(statement, e);
-			throw new SqlFailure(sql, new SQLException(failure, e), PlsqlFailure.Phase.EXECUTION);
+			// the driver's own failure, as the Javadoc explains; the versions are read first, then the connection
+			// aborted. Behind the boundary, it comes marked, with the driver's exception as its cause
+			Throwable driver = e instanceof DriverFailure marked ? marked.getCause() : e;
+			String failure = driverFailure(driver, statement);
+			abortConnectionOf(statement, driver);
+			throw new SqlFailure(sql, new SQLException(failure, driver), PlsqlFailure.Phase.EXECUTION);
 		}
 	}
 

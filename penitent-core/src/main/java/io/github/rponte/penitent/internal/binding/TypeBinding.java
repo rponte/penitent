@@ -14,6 +14,8 @@ import io.github.rponte.penitent.PlsqlType;
 import io.github.rponte.penitent.convert.PlsqlConvert;
 import io.github.rponte.penitent.convert.PlsqlConverters;
 import io.github.rponte.penitent.exception.PlsqlMappingException;
+import io.github.rponte.penitent.internal.driver.DriverBoundary;
+import io.github.rponte.penitent.internal.driver.DriverFailure;
 import io.github.rponte.penitent.internal.Caches;
 import io.github.rponte.penitent.internal.binding.JavaProperties.JavaProperty;
 import io.github.rponte.penitent.internal.convert.OracleNumberLimits;
@@ -398,10 +400,12 @@ public final class TypeBinding {
 		try {
 			return connection.createStruct(TypeNameIntegration.compositeNameOf(connection, type),
 					ScalarCodec.forComposite(values));
-		} catch (IllegalArgumentException | ClassCastException e) {
-			// the driver converts the value right here, and does not say which attribute it was
-			throw new PlsqlMappingException("a value does not fit in " + oracleTypeName + ": " + e.getMessage()
-					+ ". Attributes: " + describe(values), e);
+		} catch (IllegalArgumentException | ClassCastException | DriverFailure e) {
+			// the driver converts the value right here, and does not say which attribute it was; behind the boundary,
+			// any runtime exception of the driver comes marked (#147)
+			Throwable driver = e instanceof DriverFailure marked ? marked.getCause() : e;
+			throw new PlsqlMappingException("a value does not fit in " + oracleTypeName + ": " + driver.getMessage()
+					+ ". Attributes: " + describe(values), driver);
 		}
 	}
 
@@ -506,7 +510,7 @@ public final class TypeBinding {
 
 	/** {@link Struct} → Java. */
 	public Object fromStruct(Struct struct, Connection connection) throws SQLException {
-		return instantiate(attributesOf(struct), connection);
+		return instantiate(attributesOf(struct, connection), connection);
 	}
 
 	/**
@@ -514,10 +518,12 @@ public final class TypeBinding {
 	 * {@code TIMESTAMP WITH TIME ZONE} into an {@code OffsetDateTime}, without the region. The driver's
 	 * own types still carry both, so those attributes are taken from them.
 	 */
-	private static Object[] attributesOf(Struct struct) throws SQLException {
+	private static Object[] attributesOf(Struct struct, Connection connection) throws SQLException {
 		Object[] values = struct.getAttributes();
-		if (struct instanceof oracle.sql.STRUCT oracle) {
-			oracle.sql.Datum[] datums = oracle.getOracleAttributes();
+		// the driver's own class, behind the boundary's proxy, whose call the boundary guards (#147)
+		if (DriverBoundary.real(struct) instanceof oracle.sql.STRUCT oracle) {
+			oracle.sql.Datum[] datums = DriverBoundary.guarded("STRUCT.getOracleAttributes", connection,
+					oracle::getOracleAttributes);
 			for (int i = 0; i < values.length; i++) {
 				if (datums[i] instanceof oracle.sql.DATE || datums[i] instanceof oracle.sql.TIMESTAMP
 						|| datums[i] instanceof oracle.sql.TIMESTAMPTZ) {

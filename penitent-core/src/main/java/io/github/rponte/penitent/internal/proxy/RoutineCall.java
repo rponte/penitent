@@ -25,6 +25,7 @@ import io.github.rponte.penitent.internal.convert.JsonCodec;
 import io.github.rponte.penitent.internal.convert.ScalarCodec;
 import io.github.rponte.penitent.internal.driver.Carrier;
 import io.github.rponte.penitent.internal.driver.Carriers;
+import io.github.rponte.penitent.internal.driver.DriverFailure;
 import io.github.rponte.penitent.internal.driver.DriverProfile;
 import io.github.rponte.penitent.internal.log.CallLog;
 import io.github.rponte.penitent.internal.metadata.Dictionary.SqlFailure;
@@ -315,27 +316,36 @@ final class RoutineCall {
 
 			int offset = expectsResult ? 1 : 0;
 			if (expectsResult) {
-				registerOut(statement, 1, routine.returnValue().orElseThrow(), routine.schema(), connection, carriers);
+				try {
+					registerOut(statement, 1, routine.returnValue().orElseThrow(), routine.schema(), connection,
+							carriers);
+				} catch (DriverFailure e) {
+					throw bindingFailure(e, "the return value of " + routine.qualifiedName(), sql);
+				}
 			}
 			java.lang.reflect.Parameter[] javaParameters = method.getParameters();
 			for (int i = 0; i < args.length; i++) {
 				Argument parameter = parameters.get(i);
 				int position = i + 1 + offset;
 				PlsqlBoolean literals = javaParameters[i].getAnnotation(PlsqlBoolean.class);
-				if (parameter.isOut()) {
-					if (args[i] == null) {
-						throw new PlsqlMappingException(parameter.name() + " of " + routine.qualifiedName()
-								+ " is " + parameter.inOut() + "; pass a PlsqlOut, not null");
+				try {
+					if (parameter.isOut()) {
+						if (args[i] == null) {
+							throw new PlsqlMappingException(parameter.name() + " of " + routine.qualifiedName()
+									+ " is " + parameter.inOut() + "; pass a PlsqlOut, not null");
+						}
+						if (parameter.isIn()) {
+							bindValue(statement, position, toDatabase(((PlsqlOut<?>) args[i]).get(), method,
+									javaParameters[i], parameter, routine), parameter, literals, routine.schema(),
+									connection, log, carriers);
+						}
+						registerOut(statement, position, parameter, routine.schema(), connection, carriers);
+					} else {
+						bindValue(statement, position, toDatabase(args[i], method, javaParameters[i], parameter,
+								routine), parameter, literals, routine.schema(), connection, log, carriers);
 					}
-					if (parameter.isIn()) {
-						bindValue(statement, position,
-								toDatabase(((PlsqlOut<?>) args[i]).get(), method, javaParameters[i], parameter, routine),
-								parameter, literals, routine.schema(), connection, log, carriers);
-					}
-					registerOut(statement, position, parameter, routine.schema(), connection, carriers);
-				} else {
-					bindValue(statement, position, toDatabase(args[i], method, javaParameters[i], parameter, routine),
-							parameter, literals, routine.schema(), connection, log, carriers);
+				} catch (DriverFailure e) {
+					throw bindingFailure(e, parameter.name() + " of " + routine.qualifiedName(), sql);
 				}
 			}
 
@@ -356,10 +366,25 @@ final class RoutineCall {
 				}
 			} catch (SQLException e) {
 				throw new SqlFailure(sql, e, PlsqlFailure.Phase.RESULT);
+			} catch (DriverFailure e) {
+				throw e.ofCall(sql, PlsqlFailure.Phase.RESULT);
 			}
 		} catch (SQLException e) {
 			throw new SqlFailure(sql, e, PlsqlFailure.Phase.PREPARATION);
+		} catch (DriverFailure e) {
+			// preparing or closing the statement
+			throw e.ofCall(sql, e.operation().endsWith(".close") ? PlsqlFailure.Phase.RESULT
+					: PlsqlFailure.Phase.PREPARATION);
 		}
+	}
+
+	/**
+	 * A failure of the driver while binding {@code what}: a value it refused, with the connection kept, or, for a
+	 * round trip such as writing a temporary LOB, its own failure, with the connection discarded (see
+	 * {@link DriverFailure}).
+	 */
+	static RuntimeException bindingFailure(DriverFailure e, String what, String sql) {
+		return e.inBinding() ? e.ofBinding(what) : e.ofCall(sql, PlsqlFailure.Phase.PREPARATION);
 	}
 
 	/**
@@ -471,6 +496,9 @@ final class RoutineCall {
 			throws SQLException {
 		try {
 			statement.setObject(position, text, Jdbc.ORACLE_JSON);
+		} catch (DriverFailure e) {
+			// behind the boundary, the driver's runtime exception comes marked
+			throw refusedJson(parameter, (Exception) e.getCause());
 		} catch (RuntimeException e) {
 			throw refusedJson(parameter, e);
 		} catch (SQLException e) {

@@ -8,6 +8,8 @@ import java.time.ZonedDateTime;
 
 import io.github.rponte.penitent.exception.PlsqlMappingException;
 import io.github.rponte.penitent.internal.convert.ScalarCodec;
+import io.github.rponte.penitent.internal.driver.DriverBoundary;
+import io.github.rponte.penitent.internal.driver.DriverFailure;
 import oracle.jdbc.OracleConnection;
 import oracle.sql.ARRAY;
 
@@ -28,9 +30,12 @@ public final class OracleArrays {
 		try {
 			return connection.unwrap(OracleConnection.class).createOracleArray(typeName,
 					values instanceof Object[] elements ? ScalarCodec.forComposite(elements) : values);
-		} catch (IllegalArgumentException | ClassCastException e) {
-			// the driver converts the elements right here: this is bad data, not a database failure
-			throw new PlsqlMappingException("an element does not fit in " + typeName + ": " + e.getMessage(), e);
+		} catch (IllegalArgumentException | ClassCastException | DriverFailure e) {
+			// the driver converts the elements right here: this is bad data, not a database failure. Behind the
+			// boundary, any runtime exception of the driver comes marked (#147)
+			Throwable driver = e instanceof DriverFailure marked ? marked.getCause() : e;
+			throw new PlsqlMappingException("an element does not fit in " + typeName + ": " + driver.getMessage(),
+					driver);
 		}
 	}
 
@@ -42,9 +47,15 @@ public final class OracleArrays {
 	 * {@code INDEX BY}.
 	 */
 	public static Object[] elements(Array array, Class<?> javaElement) throws SQLException {
+		// the driver's own class, behind the boundary's proxy (#147)
 		return (javaElement == ZonedDateTime.class || ScalarCodec.isLocalTemporal(javaElement))
-				&& array instanceof ARRAY oracle
-						? oracle.getOracleArray()
+				&& DriverBoundary.real(array) instanceof ARRAY oracle
+						? oracleArray(oracle)
 						: (Object[]) array.getArray();
+	}
+
+	/** A call on the driver's own class, which the boundary's proxy cannot stand for: guarded as at the boundary. */
+	private static Object[] oracleArray(ARRAY array) throws SQLException {
+		return DriverBoundary.guarded("ARRAY.getOracleArray", null, array::getOracleArray);
 	}
 }

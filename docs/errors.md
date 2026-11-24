@@ -93,6 +93,21 @@ What happens before the routine runs, and the errors that say nothing about its 
 The full list of codes is in `PlsqlFailure`. A code outside the list, even one Penitent does not know, is treated as
 the routine's error, as long as the database sent it.
 
+### When the driver fails itself
+
+JDBC lets a driver report a failure only as a `SQLException`, but the Oracle driver sometimes throws a runtime
+exception or an `AssertionError` of its own, such as an `ArrayIndexOutOfBoundsException`. Penitent catches it wherever
+the driver throws it, keeps it as the cause, and decides by where the driver failed:
+
+| The driver failed | What arrives | The connection |
+|---|---|---|
+| binding a value: a setter of the statement, registering an `OUT`, building an object type or a collection to send | `PlsqlMappingException`, naming the parameter: the driver converts the value in the client, before anything is sent | kept |
+| anywhere else: running the call, reading the return value, an `OUT`, a cursor's rows, an object type's attributes or a collection's elements, writing a LOB, preparing or closing the statement, reading the dictionary | `PlsqlExecutionException`, "the Oracle driver failed itself in ...": the driver's failure, never the routine's | discarded, so that the pool replaces it: the driver may have failed in the middle of the protocol |
+
+A failure of your own code, such as a converter's, is not the driver's: it arrives as a `PlsqlMappingException`
+naming the parameter, and the connection is kept. A failure while the [call log](logging.md) reads a value is
+ignored, as the log never fails a call.
+
 ## Your own exceptions
 
 To turn an error into an exception of your domain, give Penitent a `PlsqlExceptionTranslator`. It receives a

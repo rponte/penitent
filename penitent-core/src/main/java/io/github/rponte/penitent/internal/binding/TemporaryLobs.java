@@ -7,6 +7,8 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
+import io.github.rponte.penitent.internal.driver.DriverBoundary;
+
 /**
  * The LOBs a call creates to send a {@code CLOB} or {@code BLOB}, freed when the call ends.
  *
@@ -47,8 +49,8 @@ public final class TemporaryLobs {
 				} else if (lob instanceof Blob blob) {
 					blob.free();
 				}
-			} catch (SQLException e) {
-				// the session frees it when it ends
+			} catch (SQLException | RuntimeException e) {
+				// the session frees it when it ends; a runtime exception of the driver too, which the boundary marks
 			}
 		}
 	}
@@ -92,7 +94,8 @@ public final class TemporaryLobs {
 	}
 
 	private static boolean isFromDriver(Object lob) {
-		return lob.getClass().getName().startsWith("oracle.");
+		// the driver's own class, behind the boundary's proxy (#147)
+		return DriverBoundary.real(lob).getClass().getName().startsWith("oracle.");
 	}
 
 	private static void register(Object lob) {
