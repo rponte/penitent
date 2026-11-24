@@ -1,11 +1,50 @@
 # Transactions and connections
 
-Penitent does one thing with connections: for each call, it takes a connection from the `DataSource`, runs the call
-on it and closes it, or, for a view made with `PlsqlPackages.using`, runs it on the connection you gave it. It never
-commits, never rolls back and never changes auto-commit. So whether two calls are one transaction, or two, depends
-only on the connection they run on, and the transaction belongs to whoever owns it.
+Penitent never commits, never rolls back and never changes auto-commit: a call runs on the connection it gets, and
+the transaction belongs to whoever owns that connection. So there is nothing to learn for the common cases.
 
-This page shows the four setups you are likely to have, when each one fits, and what happens in it.
+**Each call on its own.** With a pool in auto-commit, the usual setup, each call is committed as it ends:
+
+<!-- snippet: transactions/auto-commit -->
+```java
+PlsqlOut<Long> orderId = new PlsqlOut<>();
+orders.placeOrder(601, new BigDecimal("100.00"), orderId);   // committed when the call ends
+orders.cancelOrder(-1);                                      // fails, and the order above stays
+```
+
+**With Spring,** a call inside a `@Transactional` method takes part in its transaction, with your `JdbcTemplate`
+work:
+
+<!-- snippet: untested -->
+```java
+@Transactional
+public long checkout(long customerId, BigDecimal total) {
+    PlsqlOut<Long> orderId = new PlsqlOut<>();
+    orders.placeOrder(customerId, total, orderId);                                 // a routine
+    jdbc.update("update orders set total = total * 0.9 where id = ?", orderId.get());   // plain SQL
+    return orderId.get();
+}
+```
+
+**Without Spring,** `PlsqlTransactions` runs a block in one transaction, committed when it returns and rolled back
+when it throws:
+
+<!-- snippet: transactions/run -->
+```java
+transactions.run(tx -> {
+    Orders inTransaction = tx.using(orders);
+
+    PlsqlOut<Long> orderId = new PlsqlOut<>();
+    inTransaction.placeOrder(605, new BigDecimal("100.00"), orderId);
+    try (PreparedStatement discount = tx.connection().prepareStatement(
+            "update orders set total = total * 0.9 where id = ?")) {
+        discount.setLong(1, orderId.get());
+        discount.executeUpdate();
+    }
+});   // committed: the block returned
+```
+
+The rest of this page says when each setup fits, and what happens in it.
 
 ## Choosing a setup
 
@@ -35,12 +74,6 @@ Answer these in order, and stop at the first yes:
 **Use it when** the application uses Spring, even if only part of it calls PL/SQL. Spring then decides the
 boundaries of every transaction, for routines and `JdbcTemplate` alike, and Penitent only takes part.
 
-**One application, one transaction model.** In a Spring application, Spring owns the transactions. A
-`PlsqlTransactions` block mixed with them would take a connection of its own and commit on its own, so the work would
-quietly split in two. With `penitent-spring` on the classpath, that can't happen: each overlap
-[fails with a clear message](#plsqltransactions-in-a-spring-application) before anything runs. To move from blocks to
-Spring's transactions, [the steps are mechanical](#moving-from-plsqltransactions-to-spring).
-
 With [`penitent-spring`](spring.md), a call inside a `@Transactional` method uses the transaction's connection:
 
 <!-- snippet: untested -->
@@ -58,76 +91,19 @@ public long checkout(long customerId, BigDecimal total) {
 - **An exception that leaves the method rolls both back,** a `PlsqlRoutineRaisedException` included.
 - **A call outside a transaction commits on its own,** as with a `JdbcTemplate`.
 
-The `penitent-spring` tests cover each of these, and the next sections explain what happens underneath.
+The `penitent-spring` tests cover each of these.
 
-### `PlsqlTransactions` in a Spring application
+<div class="admonition warning" markdown>
+<p class="admonition-title">One application, one transaction model</p>
 
-Spring's transactions are the way to go, and nothing forces a rewrite: a block that runs on its own, outside any
-Spring transaction, keeps working, side by side with them. What `penitent-spring` refuses is the overlap, because
-there the work would split into two transactions that commit apart, without a word:
+In a Spring application, Spring owns the transactions. A `PlsqlTransactions` block mixed with them would take a
+connection of its own and commit on its own, so the work would quietly split in two. With `penitent-spring`, each
+overlap [fails with a clear message](#plsqltransactions-in-a-spring-application) before anything runs, and
+[moving from blocks to Spring](#moving-from-plsqltransactions-to-spring) is mechanical.
 
-| What | When it is refused |
-|---|---|
-| A `PlsqlTransactions` block inside a Spring transaction, such as in a `@Transactional` method | as the block starts, before it takes a connection |
-| A Spring transaction that begins inside a block, such as a call to a `@Transactional` bean | as Spring begins it, before it takes a connection |
-| An interface of `penitent-spring` called inside a block without `tx.using`, when it uses the block's `DataSource` | as it is called, as in the core |
-
-<!-- snippet: untested -->
-```text
-a Spring transaction is active on this thread, and a PlsqlTransaction would commit apart from it: in a Spring application, Spring owns the transactions, so use @Transactional or TransactionTemplate, whose interfaces already take part, or open the block outside any Spring transaction
-```
-
-The first refusal works wherever `penitent-spring` is on the classpath. The second needs Spring to know about it:
-`@EnablePlsqlPackages` and the starter add it, once, to every transaction manager in the context, the ones Spring
-Boot creates included. Out of their reach are:
-
-- **an application that uses Spring with the core alone,** without `penitent-spring`: the core does not know Spring;
-- **a transaction manager created with `new`** outside the context, such as `new TransactionTemplate(new
-  DataSourceTransactionManager(dataSource))` inside a method;
-- **a Spring Boot application with several `DataSource`s and none `@Primary`,** where the starter steps aside, as
-  [Spring and Spring Boot](spring.md) explains: declare `@EnablePlsqlPackages`, which adds the refusal too;
-- **work with no Spring transaction behind it,** such as a `JdbcTemplate` call, or a method with `SUPPORTS`,
-  `NOT_SUPPORTED` or `NEVER` propagation, inside a block: like any JDBC outside `tx.connection()`, it runs on a
-  connection of its own.
-
-### Moving from `PlsqlTransactions` to Spring
-
-Each piece of a block has a direct counterpart, and interfaces of `penitent-spring` take part in the transaction by
-themselves, so `tx.using` simply goes away:
-
-| With `PlsqlTransactions` | With Spring |
-|---|---|
-| `transactions.run(tx -> …)` | a `@Transactional` method, or `transactionTemplate.executeWithoutResult(status -> …)` |
-| `transactions.runWithResult(tx -> …)` | a `@Transactional` method that returns, or `transactionTemplate.execute(status -> …)` |
-| `tx.using(orders).placeOrder(…)` | `orders.placeOrder(…)`, with `orders` created by `penitent-spring` |
-| `tx.connection()` | a `JdbcTemplate`, or `DataSourceUtils.getConnection(dataSource)` |
-| `tx.setRollbackOnly()` | `status.setRollbackOnly()`, or `TransactionAspectSupport.currentTransactionStatus().setRollbackOnly()` |
-| rollback on every exception, checked or not | `@Transactional(rollbackFor = Exception.class)`: by default, Spring commits on a checked exception |
-
-The last row is the one to watch: a block rolls back on a checked exception, such as a `SQLException` or an
-`IOException`, and a plain `@Transactional` does not. `TransactionTemplate` rolls back on any exception its callback
-throws, which can only be unchecked.
-
-<!-- snippet: untested -->
-```java
-@Transactional(rollbackFor = Exception.class)   // as the block did
-public void discount(long orderId) {
-    PlsqlOut<Long> id = new PlsqlOut<>();
-    orders.placeOrder(605, new BigDecimal("100.00"), id);                            // was tx.using(orders)
-    jdbc.update("update orders set total = total * 0.9 where id = ?", id.get());   // was tx.connection()
-}
-```
+</div>
 
 ## Without Spring: `PlsqlTransactions`
-
-**Use it when** the application uses the core alone, and several calls, or calls and your own JDBC, have to succeed
-or fail together: placing an order and updating its stock, or calling a routine and writing an audit row in the same
-step.
-
-**Don't use it when** the application uses Spring or a Jakarta EE container, which already manage transactions (with
-Spring, [`penitent-spring` refuses the overlaps](#plsqltransactions-in-a-spring-application)); when
-each call is a unit of work by itself, where it only adds a commit the call would have made anyway; or when you need
-more than one connection, one thread and no nesting, such as propagation or timeouts.
 
 For an application that uses the core alone, `PlsqlTransactions` runs a block in one transaction: it commits when
 the block returns, and rolls back when it throws. It holds nothing but the `DataSource` and the exception
@@ -166,6 +142,15 @@ long orderId = transactions.runWithResult(tx -> {
     return id.get();
 });
 ```
+
+**Use it when** the application uses the core alone, and several calls, or calls and your own JDBC, have to succeed
+or fail together: placing an order and updating its stock, or calling a routine and writing an audit row in the same
+step.
+
+**Don't use it when** the application uses Spring or a Jakarta EE container, which already manage transactions (with
+Spring, [`penitent-spring` refuses the overlaps](#plsqltransactions-in-a-spring-application)); when
+each call is a unit of work by itself, where it only adds a commit the call would have made anyway; or when you need
+more than one connection, one thread and no nesting, such as propagation or timeouts.
 
 **How a block ends:**
 
@@ -258,13 +243,18 @@ com.example.shop.Orders uses the DataSource of the PlsqlTransaction open on this
 
 An interface of **another** `DataSource` is another resource, and runs on its own, outside the block's transaction.
 
-> **"The same `DataSource`" means the same object.** The check compares the `DataSource` of the block and the one an
-> interface was created with by identity, not by the database they reach. If one of them is wrapped, for metrics,
-> logging or tracing, or each has a pool of its own for the same URL, the interface counts as another resource: called
-> without `tx.using`, it runs outside the transaction, and nothing refuses it. Create `PlsqlTransactions` and the
-> interfaces from the same `DataSource` object, as a dependency injection container does by itself. `tx.using` works
-> either way. The one wrapper that counts as the same `DataSource` is the one `penitent-spring` puts around it to join
-> Spring's transactions, so its interfaces are refused just the same.
+<div class="admonition warning" markdown>
+<p class="admonition-title">"The same DataSource" means the same object</p>
+
+The check compares the `DataSource` of the block and the one an interface was created with by identity, not by the
+database they reach. If one of them is wrapped, for metrics, logging or tracing, or each has a pool of its own for the
+same URL, the interface counts as another resource: called without `tx.using`, it runs outside the transaction, and
+nothing refuses it. Create `PlsqlTransactions` and the interfaces from the same `DataSource` object, as a dependency
+injection container does by itself. `tx.using` works either way. The one wrapper that counts as the same `DataSource`
+is the one `penitent-spring` puts around it to join Spring's transactions, so its interfaces are refused just the
+same.
+
+</div>
 
 `PlsqlTransactions` is deliberately small: one connection, one thread, no nesting, no propagation, no timeout. For
 more, use Spring or a Jakarta EE container. A routine's own `COMMIT` or `ROLLBACK` still
@@ -293,9 +283,14 @@ Every call gives its connection back to the pool, whether it succeeds, raises an
 before reaching the database. Two calls in a row may also run in different sessions, so session state, such as a
 package variable or `DBMS_APPLICATION_INFO`, does not carry from one call to the next.
 
-> **A pool that is not in auto-commit loses your work.** If the pool hands out connections with auto-commit off, and
-> nothing commits, a call succeeds without any error, and then the pool rolls the work back when it takes the
-> connection back. Use auto-commit, a transaction manager such as Spring's, or the setup below.
+<div class="admonition warning" markdown>
+<p class="admonition-title">A pool that is not in auto-commit loses your work</p>
+
+If the pool hands out connections with auto-commit off, and nothing commits, a call succeeds without any error, and
+then the pool rolls the work back when it takes the connection back. Use auto-commit, a transaction manager such as
+Spring's, or the setup below.
+
+</div>
 
 ## A transaction you manage
 
@@ -394,6 +389,14 @@ connection.commit();   // keeps the order
 
 ## When the routine commits or rolls back by itself
 
+<div class="admonition warning" markdown>
+<p class="admonition-title">A routine's own COMMIT commits your whole transaction</p>
+
+In Oracle, a `COMMIT` or a `ROLLBACK` inside a routine ends the session's transaction, with everything before the call.
+Keep such a routine out of a larger transaction, or call it last.
+
+</div>
+
 Much PL/SQL ends its own transaction with a `COMMIT` or a `ROLLBACK`. In Oracle, that ends the session's
 transaction, not a part of it: everything the transaction did before the call is committed or undone along with the
 routine's own work. Penitent does nothing about it, since it never touches the transaction, but your transaction
@@ -413,6 +416,66 @@ A cursor the routine opens before its `COMMIT` is still read whole.
 
 If a routine you call ends the transaction, keep it out of a larger transaction, call it last, or ask whether it can
 become autonomous.
+
+## Spring and `PlsqlTransactions` together
+
+### `PlsqlTransactions` in a Spring application
+
+Spring's transactions are the way to go, and nothing forces a rewrite: a block that runs on its own, outside any
+Spring transaction, keeps working, side by side with them. What `penitent-spring` refuses is the overlap, because
+there the work would split into two transactions that commit apart, without a word:
+
+| What | When it is refused |
+|---|---|
+| A `PlsqlTransactions` block inside a Spring transaction, such as in a `@Transactional` method | as the block starts, before it takes a connection |
+| A Spring transaction that begins inside a block, such as a call to a `@Transactional` bean | as Spring begins it, before it takes a connection |
+| An interface of `penitent-spring` called inside a block without `tx.using`, when it uses the block's `DataSource` | as it is called, as in the core |
+
+<!-- snippet: untested -->
+```text
+a Spring transaction is active on this thread, and a PlsqlTransaction would commit apart from it: in a Spring application, Spring owns the transactions, so use @Transactional or TransactionTemplate, whose interfaces already take part, or open the block outside any Spring transaction
+```
+
+The first refusal works wherever `penitent-spring` is on the classpath. The second needs Spring to know about it:
+`@EnablePlsqlPackages` and the starter add it, once, to every transaction manager in the context, the ones Spring
+Boot creates included. Out of their reach are:
+
+- **an application that uses Spring with the core alone,** without `penitent-spring`: the core does not know Spring;
+- **a transaction manager created with `new`** outside the context, such as `new TransactionTemplate(new
+  DataSourceTransactionManager(dataSource))` inside a method;
+- **a Spring Boot application with several `DataSource`s and none `@Primary`,** where the starter steps aside, as
+  [Spring and Spring Boot](spring.md) explains: declare `@EnablePlsqlPackages`, which adds the refusal too;
+- **work with no Spring transaction behind it,** such as a `JdbcTemplate` call, or a method with `SUPPORTS`,
+  `NOT_SUPPORTED` or `NEVER` propagation, inside a block: like any JDBC outside `tx.connection()`, it runs on a
+  connection of its own.
+
+### Moving from `PlsqlTransactions` to Spring
+
+Each piece of a block has a direct counterpart, and interfaces of `penitent-spring` take part in the transaction by
+themselves, so `tx.using` simply goes away:
+
+| With `PlsqlTransactions` | With Spring |
+|---|---|
+| `transactions.run(tx -> …)` | a `@Transactional` method, or `transactionTemplate.executeWithoutResult(status -> …)` |
+| `transactions.runWithResult(tx -> …)` | a `@Transactional` method that returns, or `transactionTemplate.execute(status -> …)` |
+| `tx.using(orders).placeOrder(…)` | `orders.placeOrder(…)`, with `orders` created by `penitent-spring` |
+| `tx.connection()` | a `JdbcTemplate`, or `DataSourceUtils.getConnection(dataSource)` |
+| `tx.setRollbackOnly()` | `status.setRollbackOnly()`, or `TransactionAspectSupport.currentTransactionStatus().setRollbackOnly()` |
+| rollback on every exception, checked or not | `@Transactional(rollbackFor = Exception.class)`: by default, Spring commits on a checked exception |
+
+The last row is the one to watch: a block rolls back on a checked exception, such as a `SQLException` or an
+`IOException`, and a plain `@Transactional` does not. `TransactionTemplate` rolls back on any exception its callback
+throws, which can only be unchecked.
+
+<!-- snippet: untested -->
+```java
+@Transactional(rollbackFor = Exception.class)   // as the block did
+public void discount(long orderId) {
+    PlsqlOut<Long> id = new PlsqlOut<>();
+    orders.placeOrder(605, new BigDecimal("100.00"), id);                            // was tx.using(orders)
+    jdbc.update("update orders set total = total * 0.9 where id = ?", id.get());   // was tx.connection()
+}
+```
 
 ## See also
 
