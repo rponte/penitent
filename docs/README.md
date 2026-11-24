@@ -54,8 +54,146 @@ orders.placeOrder(42, new BigDecimal("100.00"), orderId);
 orders.orderStatus(orderId.get());   // "OPEN"
 ```
 
-No `CallableStatement`, no `registerOutParameter`, no positions to keep in order. Curious what that same call takes
+No `CallableStatement`, no `registerOutParameter`, no positions to keep in order. Penitent read the routines'
+signatures from the database, and checked that your methods agree with them. Curious what that same call takes
 without Penitent? [See how much boilerplate plain JDBC needs](coming-from-jdbc.md).
+
+## What else you get
+
+The same interface style covers the rest of what a PL/SQL API returns. A few of the things it does for you:
+
+### An OBJECT type is a Java record
+
+<!-- snippet: fixture -->
+```sql
+CREATE TYPE postal_address_t AS OBJECT (
+    street   VARCHAR2(100),
+    city     VARCHAR2(60),
+    zip_code VARCHAR2(9),
+
+    MEMBER FUNCTION formatted RETURN VARCHAR2   -- see Anonymous blocks
+);
+
+FUNCTION normalize_address(p_address postal_address_t) RETURN postal_address_t;
+```
+
+<!-- snippet: types/object -->
+```java
+public record Address(String street, String city, String zipCode) {
+}
+
+Address normalizeAddress(Address address);
+```
+
+<!-- snippet: types/object-call -->
+```java
+customers.normalizeAddress(new Address("rua das flores 10", "Fortaleza", "60000-000"));
+// Address[street=Rua Das Flores 10, city=FORTALEZA, zipCode=60000000]
+```
+
+Attributes are matched by name. A RECORD, a `%ROWTYPE` and nested types work the same way: see
+[Types](types.md#composite-types).
+
+### A cursor is a list of records
+
+<!-- snippet: fixture -->
+```sql
+FUNCTION orders_of(p_customer_id NUMBER) RETURN SYS_REFCURSOR;
+-- OPEN l_cursor FOR SELECT id, total, status FROM orders WHERE customer_id = p_customer_id ORDER BY id;
+```
+
+<!-- snippet: types/cursor -->
+```java
+public enum OrderStatus { OPEN, CANCELLED }
+
+public record OrderRow(Long id, BigDecimal total, OrderStatus status) {
+}
+
+List<OrderRow> ordersOf(long customerId);
+```
+
+<!-- snippet: types/cursor-call -->
+```java
+customers.ordersOf(201);
+// [OrderRow[id=1, total=100, status=OPEN], OrderRow[id=2, total=40, status=CANCELLED]]
+```
+
+The cursor is read whole and closed during the call, so there is no `ResultSet` to loop over and none to forget to
+close. Collections are `List<T>` too: see [Types](types.md#collections).
+
+### A routine's error is an exception you can catch
+
+<!-- snippet: getting-started/routine-error -->
+```java
+orders.cancelOrder(orderId.get());
+
+try {
+    orders.cancelOrder(orderId.get());
+} catch (PlsqlRoutineRaisedException e) {
+    e.getCode();     // 20001, without the sign
+    e.getReason();   // "order 1 is not open"
+}
+```
+
+A `RAISE_APPLICATION_ERROR` keeps its code and its text, apart from infrastructure failures: see [Errors](errors.md).
+
+### With Spring Boot, just inject it
+
+Add `penitent-spring-boot-starter`, and every interface becomes a bean that takes part in your `@Transactional`
+methods:
+
+<!-- snippet: untested -->
+```java
+@Service
+class CheckoutService {
+
+    private final Orders orders;
+
+    CheckoutService(Orders orders) {
+        this.orders = orders;
+    }
+
+    @Transactional
+    long checkout(long customerId, BigDecimal total) {
+        PlsqlOut<Long> orderId = new PlsqlOut<>();
+        orders.placeOrder(customerId, total, orderId);
+        return orderId.get();
+    }
+}
+```
+
+See [Spring and Spring Boot](spring.md).
+
+### Stub a routine in a test, as with Mockito
+
+With `penitent-test`, a test makes a routine answer what it expects, from the same interface the code calls. The stub
+is real PL/SQL, compiled only for the test, so it also answers other PL/SQL that calls the routine:
+
+<!-- snippet: testing/spring -->
+```java
+@SpringBootTest
+@EnablePlsqlMocks
+class CheckoutServiceTest {
+
+    @Autowired PlsqlMocks mocks;
+    @Autowired CheckoutService checkout;
+
+    @Test
+    void adds_the_freight_to_the_subtotal() {
+        // arrange
+        Freights freights = mocks.mock(Freights.class);
+        when(freights.calculate("SP", "CE")).thenReturn(new BigDecimal("24.90"));
+
+        // act
+        BigDecimal total = checkout.total(new BigDecimal("100.00"), "SP", "CE");
+
+        // assert
+        assertThat(total).isEqualByComparingTo("124.90");
+    }
+}
+```
+
+See [Testing](testing.md).
 
 ## Why Penitent
 
@@ -93,23 +231,6 @@ Spring Boot, and add the Oracle driver your application uses:
     <version>23.26.3.0.0</version>
 </dependency>
 ```
-
-## Runs on
-
-Java 17 and 21, and these combinations of Oracle JDBC driver and database, tested on every change:
-
-| Oracle JDBC driver | Oracle Database 23ai | 21c | 19c |
-|---|:---:|:---:|:---:|
-| **23.x**: `ojdbc17`, `ojdbc11`, `ojdbc8` | ✅ | ✅ ² | ✅ ² |
-| **21.x**: `ojdbc11`, `ojdbc8` | ✅ ¹ | ✅ | ✅ |
-| **19.x**: `ojdbc10`, `ojdbc8` | ✅ ¹ | ✅ | ✅ |
-| **18.x** and older | ❔ | ❔ | ❔ |
-
-✅ every build runs the whole suite with it · ❔ not measured yet, on the [roadmap](roadmap.md)<br>
-¹ except a `BOOLEAN` column in a cursor, which drivers before 23 cannot read: see
-[Driver versions](compatibility.md#driver-versions).<br>
-² except a `null` `BOOLEAN` that comes back, which driver 23 reads as `true` or `false` before 23ai: Penitent warns, and
-[Database versions](compatibility.md#database-versions) shows the ways around it.
 
 ## Start here
 
@@ -150,6 +271,28 @@ Every page uses the same orders package, so the examples build on each other.
 | replace a view or a package in a test, with a script | [Testing](testing.md#replacing-a-view-or-a-package) |
 | see the SQL and the values of each call | [Logging](logging.md) |
 | understand an error message | [Troubleshooting](troubleshooting.md) |
+
+## Runs on
+
+Java 17 and 21, and these combinations of Oracle JDBC driver and database, tested on every change:
+
+| Oracle JDBC driver | Oracle Database 23ai | 21c | 19c |
+|---|:---:|:---:|:---:|
+| **23.x**: `ojdbc17`, `ojdbc11`, `ojdbc8` | ✅ | ✅ ² | ✅ ² |
+| **21.x**: `ojdbc11`, `ojdbc8` | ✅ ¹ | ✅ | ✅ |
+| **19.x**: `ojdbc10`, `ojdbc8` | ✅ ¹ | ✅ | ✅ |
+| **18.x** and older | ❔ | ❔ | ❔ |
+
+✅ every build runs the whole suite with it · ❔ not measured yet, on the [roadmap](roadmap.md)
+
+<div class="admonition note" markdown>
+<p class="admonition-title">Two differences, both about BOOLEAN</p>
+
+¹ Drivers before 23 cannot read a `BOOLEAN` column in a cursor: see [Driver versions](compatibility.md#driver-versions).
+² Driver 23 reads a `null` `BOOLEAN` that comes back as `true` or `false` before 23ai: Penitent warns, and
+[Database versions](compatibility.md#database-versions) shows the ways around it.
+
+</div>
 
 ## Reference
 
