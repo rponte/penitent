@@ -125,6 +125,40 @@ Curious what that same call takes without Penitent?
 [See how much boilerplate plain JDBC needs](docs/coming-from-jdbc.md): every type registered by hand, every
 parameter in the right position, and every mistake found only when the call runs.
 
+### Objects, and errors
+
+An OBJECT type is a Java record, matched by attribute name, with no type name to write:
+
+<!-- snippet: types/object -->
+```java
+public record Address(String street, String city, String zipCode) {
+}
+
+Address normalizeAddress(Address address);
+```
+
+<!-- snippet: types/object-call -->
+```java
+customers.normalizeAddress(new Address("rua das flores 10", "Fortaleza", "60000-000"));
+// Address[street=Rua Das Flores 10, city=FORTALEZA, zipCode=60000000]
+```
+
+And a routine's `RAISE_APPLICATION_ERROR` is an exception with its code and its text:
+
+<!-- snippet: getting-started/routine-error -->
+```java
+orders.cancelOrder(orderId.get());
+
+try {
+    orders.cancelOrder(orderId.get());
+} catch (PlsqlRoutineRaisedException e) {
+    e.getCode();     // 20001, without the sign
+    e.getReason();   // "order 1 is not open"
+}
+```
+
+RECORD, `%ROWTYPE`, collections, JSON and dates work the same way: see [Types](docs/types.md).
+
 ### With Spring Boot
 
 Building a Spring Boot application? Penitent gets even simpler. Add the starter and there is no `create` to call:
@@ -203,8 +237,7 @@ Which Oracle JDBC driver works with which Oracle Database, as the build tests th
 | **18.x** and older | ❔ | ❔ | ❔ |
 
 ✅ every build runs the whole suite with it · ❔ not measured yet, on the [roadmap](docs/roadmap.md)<br>
-¹ except a `BOOLEAN` column in a cursor, which drivers before 23 cannot read: [Driver versions](docs/compatibility.md#driver-versions)
-lists each difference from driver 23, how the library works around it, and the way around that one.<br>
+¹ except a `BOOLEAN` column in a cursor, which drivers before 23 cannot read: see [Driver versions](docs/compatibility.md#driver-versions).<br>
 ² except a `null` `BOOLEAN` that comes back, which driver 23 reads as `true` or `false` before 23ai: Penitent warns, and
 [Database versions](docs/compatibility.md#database-versions) shows the ways around it. Before 23ai, `BOOLEAN` exists
 only in PL/SQL.

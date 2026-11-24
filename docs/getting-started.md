@@ -77,7 +77,12 @@ END orders_pkg;
 </dependency>
 ```
 
-Using Spring Boot? Skip to [step 7](#7-with-spring-boot): the starter replaces this step and the next one.
+<div class="admonition tip" markdown>
+<p class="admonition-title">Using Spring Boot?</p>
+
+Skip to [step 8](#8-with-spring-boot): the starter replaces this step and the next one.
+
+</div>
 
 ## 3. The interface
 
@@ -102,6 +107,14 @@ public interface Orders {
 
 Notice what is missing: Oracle types, parameter names and positions to register. Penitent reads them from the
 database dictionary on the first call, and checks that your method agrees with them.
+
+<div class="admonition tip" markdown>
+<p class="admonition-title">Another name for a method</p>
+
+`@PlsqlRoutine("ORDER_STATUS")` on a method calls that routine, whatever the method is named: see
+[Calling routines](routines.md#functions-and-procedures).
+
+</div>
 
 Create the interface from your `DataSource`, and call it:
 
@@ -184,7 +197,64 @@ io.github.rponte.penitent.exception.PlsqlMappingException:
 Call it in a test, or at application startup, and a package changed by someone else's migration shows up before
 any user hits it. See [Validation](validation.md).
 
-## 7. With Spring Boot
+## 7. Records and lists, not ResultSets
+
+Scalars are only the start. An OBJECT type comes back as a Java record, matched by attribute name, and a cursor as a
+list of records, read and closed during the call. Take a customers package with an address type and a cursor:
+
+<!-- snippet: fixture -->
+```sql
+CREATE TYPE postal_address_t AS OBJECT (
+    street   VARCHAR2(100),
+    city     VARCHAR2(60),
+    zip_code VARCHAR2(9),
+
+    MEMBER FUNCTION formatted RETURN VARCHAR2   -- see Anonymous blocks
+);
+
+FUNCTION normalize_address(p_address postal_address_t) RETURN postal_address_t;
+```
+
+<!-- snippet: types/object -->
+```java
+public record Address(String street, String city, String zipCode) {
+}
+
+Address normalizeAddress(Address address);
+```
+
+<!-- snippet: types/object-call -->
+```java
+customers.normalizeAddress(new Address("rua das flores 10", "Fortaleza", "60000-000"));
+// Address[street=Rua Das Flores 10, city=FORTALEZA, zipCode=60000000]
+```
+
+<!-- snippet: fixture -->
+```sql
+FUNCTION orders_of(p_customer_id NUMBER) RETURN SYS_REFCURSOR;
+-- OPEN l_cursor FOR SELECT id, total, status FROM orders WHERE customer_id = p_customer_id ORDER BY id;
+```
+
+<!-- snippet: types/cursor -->
+```java
+public enum OrderStatus { OPEN, CANCELLED }
+
+public record OrderRow(Long id, BigDecimal total, OrderStatus status) {
+}
+
+List<OrderRow> ordersOf(long customerId);
+```
+
+<!-- snippet: types/cursor-call -->
+```java
+customers.ordersOf(201);
+// [OrderRow[id=1, total=100, status=OPEN], OrderRow[id=2, total=40, status=CANCELLED]]
+```
+
+Nothing names `POSTAL_ADDRESS_T` or a column type: the dictionary says them. RECORD, `%ROWTYPE`, collections, JSON
+and dates work the same way: see [Types](types.md).
+
+## 8. With Spring Boot
 
 Use the starter instead of `penitent-core`:
 
@@ -240,5 +310,7 @@ penitent:
 
 - [Calling routines](routines.md): `DEFAULT` parameters, overloads, `IN OUT`, binding by name and routines outside a
   package.
-- [Types](types.md): OBJECT, RECORD, `%ROWTYPE`, collections and cursors, mapped to Java records.
+- [Types](types.md): OBJECT, RECORD, `%ROWTYPE`, collections, cursors and JSON, mapped to Java records, lists and maps.
 - [Errors](errors.md): which exception arrives, and how to translate it.
+- [Transactions](transactions.md): several calls, and your own SQL, in one transaction.
+- [Testing](testing.md): stub a routine in a test, as with Mockito.
