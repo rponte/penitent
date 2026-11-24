@@ -250,6 +250,7 @@ json.echo("{ \"b\" : 2 }");   // {"b":2}
   It works with every driver. A document of any size goes in, but a block's `:result` is a `VARCHAR2`, so a
   document above 32,767 bytes that comes back fails with `ORA-06502`: only the JSON type of drivers 21 and later
   brings back a larger one.
+
 - **Not supported, refused before the call:** a collection of `JSON` and a RECORD with a `JSON` field, which no
   driver can describe, and a `%ROWTYPE` of a table with a `JSON` column: read such rows through a cursor, where a
   `JSON` column is supported. An OBJECT cannot have a `JSON` attribute: Oracle itself refuses it. Two versions of
@@ -312,6 +313,7 @@ Object items = back.get("items");   // List ["pen", "ink"]
   order.put("when", when.format(DateTimeFormatter.ofPattern("uuuu-MM-dd'T'HH:mm:ss")));
   ```
   In PL/SQL, read it with `JSON_VALUE(doc, '$.when' RETURNING DATE PRESERVE TIME ERROR ON ERROR)`:
+
   - **`RETURNING DATE` alone drops the time,** and `PRESERVE TIME` keeps it.
   - **Without `ERROR ON ERROR`,** a text Oracle cannot read becomes `NULL`, with no error, as it does with
     `JSON_OBJECT_T`'s `get_date`.
@@ -323,6 +325,7 @@ Object items = back.get("items");   // List ["pen", "ink"]
   A date stored in the document by the database, as `JSON_OBJECT('when' VALUE SYSDATE RETURNING JSON)` does, comes
   back in a `Map` as a `String`, such as `"2026-11-24T00:00:00"`. Support for `java.time` values is
   [#153](https://github.com/rponte/penitent/issues/153).
+
 - **A document that does not fit the declared type is refused,** naming what it is: an array read as a `Map`, a
   number read as a `List`, or a JSON string read as anything but `String`, whose text keeps its quotes.
 - **Only `Map<String, Object>` and `List<Object>`,** or their wildcards, describe a document, whose values are of
@@ -472,6 +475,7 @@ CustomerSummary summary(long id);
   ```text
   normalizeAddress(Address): Address does not cover attribute(s) of POSTAL_ADDRESS_T: [ZIP_CODE VARCHAR2]. Available properties: [STREET, CITY]. Use @PlsqlAttr to declare the name.
   ```
+
 - **JavaBeans** need a no-argument constructor and setters to be read. Inherited properties count. A `boolean` or
   `Boolean` property can be read through `isX()` as well as `getX()`, but not through both: they may answer
   differently, as a `boolean` and a `Boolean` that is `null`, so the library refuses the class rather than pick one.

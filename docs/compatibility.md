@@ -111,6 +111,7 @@ Any of these keeps the `null`:
 
    Keep both `WHEN`s: with `ELSE 'N'`, a `null` would become `false`. Declare `Boolean`, not `boolean`, where the
    value can be `null`.
+
 3. **Move to Oracle 23ai**, where driver 23 reads the native `BOOLEAN` right.
 
 Where the PL/SQL guarantees the value is never `null`, driver 23 works as it is.

@@ -54,6 +54,7 @@ verify(pkg).calculaFrete("SP", "CE");
    closed.
 6. **Prerequisites are explicit DDL,** shipped in the jar and in the documentation, for the user to apply as a
    migration, a Flyway callback or a container init script:
+
    - `penitent-mock-admin.sql`, for a DBA: `ENABLE EDITIONS FOR PACKAGE`, and for views, limited so that the schema's
      tables and object types are left as they are, and `CREATE ANY EDITION` and `DROP ANY EDITION`;
    - `penitent-mock-schema.sql`, for the schema owner: the table `PENITENT_MOCK_CALLS` and the package `PENITENT_MOCK`,
@@ -64,6 +65,7 @@ verify(pkg).calculaFrete("SP", "CE");
    `USER_EDITIONED_TYPES` for the editions, `SESSION_PRIVS` for the privileges. `PlsqlMocks.prepare(admin, owner,
    schema)` runs the same scripts, the first through a DBA's `DataSource` and the second as the schema, as a
    convenience for a disposable database such as Testcontainers; running it again is harmless.
+
 7. **Support for JUnit 5 and Spring Test,** with the Spring support ordered before Spring's transaction listener.
    For JUnit 5, `PlsqlMockExtension`, registered with `@RegisterExtension` and a supplier of the wrapped
    `DataSource`, begins the test's edition before its `@BeforeEach` methods, so a stub can be made there, and ends it
@@ -572,6 +574,7 @@ Later, the whole module, on the other versions Oracle supports, with drivers 23,
 - **Preparing the schema from the annotation, `@EnablePlsqlMocks(prepare = true)`.** Today the library never applies
   the prerequisites by itself: `begin()` only checks them, and a test calls `PlsqlMocks.prepare` once, explicitly,
   right after a disposable database starts. An attribute could do it for Spring tests, when the context starts.
+
   - **In favor:** nothing to write besides the annotation, and no place to look for where the database is ready,
     which is the part of the setup most often done wrong; it suits a disposable database, such as one of
     Testcontainers, where it would run once per context and harmlessly again.
@@ -592,6 +595,7 @@ Later, the whole module, on the other versions Oracle supports, with drivers 23,
 
 - **A stub after the package was used,** which now fails the next call once with `ORA-04068`, as recorded above. Two
   options, either of which may be adopted, documented with it:
+
   - **B. Retry the call once, in tests only.** The wrapped `DataSource` wraps the statements of its connections too,
     and runs a call again once when it fails with `ORA-04068`: Oracle has already reset the package's state, so the
     second run works. It covers Penitent, a `JdbcTemplate` and any other JDBC, without the test doing anything. The

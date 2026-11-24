@@ -157,4 +157,53 @@ class DocsPagesTest {
 				.filter(b -> b.language().equals(language) && b.name() != null && !b.name().equals(Pages.UNTESTED))
 				.toList();
 	}
+
+	private static final java.util.regex.Pattern ITEM = java.util.regex.Pattern.compile("^(\\s*)(-|\\d+\\.) \\S");
+	private static final java.util.regex.Pattern FENCE = java.util.regex.Pattern.compile("^\\s*```");
+
+	@Test
+	@DisplayName("a list item has a blank line before it after an item of more than one block, or right after its item's"
+			+ " text: the site, unlike GitHub, would read it as text of the paragraph above, a hyphen in a sentence")
+	void list_items_are_not_read_as_text() throws IOException {
+		List<String> problems = new ArrayList<>();
+		List<Path> pages = new ArrayList<>();
+		pages.add(Path.of("..", Pages.README));
+		try (Stream<Path> walk = Files.walk(Pages.DOCS)) {
+			walk.filter(p -> p.toString().endsWith(".md") && !p.toString().contains("/api/")).sorted().forEach(pages::add);
+		}
+		for (Path page : pages) {
+			List<String> lines = Files.readAllLines(page, StandardCharsets.UTF_8);
+			Map<Integer, Boolean> loose = new java.util.HashMap<>();
+			boolean fence = false;
+			boolean afterBlank = false;
+			for (int n = 0; n < lines.size(); n++) {
+				String line = lines.get(n);
+				String above = n == 0 ? "" : lines.get(n - 1);
+				if (FENCE.matcher(line).find()) {
+					fence = !fence;
+				}
+				java.util.regex.Matcher item = fence ? null : ITEM.matcher(line);
+				if (item != null && item.find()) {
+					int indent = item.group(1).length();
+					boolean nested = indent > 0 && !above.isBlank() && !ITEM.matcher(above).find()
+							&& !FENCE.matcher(above).find() && above.length() - above.stripLeading().length() == indent;
+					if (((loose.getOrDefault(indent, false) || afterBlank) && !above.isBlank()) || nested) {
+						problems.add(page + ":" + (n + 1) + ": no blank line before " + line.strip());
+					}
+					loose.keySet().removeIf(i -> i > indent);
+					loose.put(indent, false);
+					afterBlank = false;
+				} else if (!fence && line.isBlank()) {
+					loose.replaceAll((i, v) -> true);
+				} else if (!fence && n > 0 && above.isBlank()) {
+					afterBlank = true;
+					if (!line.startsWith(" ")) {
+						// text at the margin, after a blank line, ends the lists
+						loose.clear();
+					}
+				}
+			}
+		}
+		assertThat(problems).isEmpty();
+	}
 }

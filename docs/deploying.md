@@ -161,6 +161,7 @@ Two ways to handle it, both outside Penitent:
   next call works with the new state. It needs Oracle 19c RU 19.23 or later, and the right to change the parameter:
   on an Autonomous Database 19c, the statement failed with `ORA-01031: insufficient privileges`, and with it every new
   connection of the pool. Ask the DBA, and try it before turning it on.
+
 - **Retry the whole unit of work,** in the application, at the boundary of its transaction, with Spring Retry or
   Resilience4j: retry when the cause is a `PlsqlExecutionException` whose `getCode()` is `4068`, or the connection
   error above. A retry there runs the transaction again from its start, with a new state, rather than one call in
