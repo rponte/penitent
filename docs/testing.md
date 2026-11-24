@@ -224,25 +224,20 @@ The examples below stub routines of `freights`, a mock of the interface, as in t
 Freights freights = mocks.mock(Freights.class);
 ```
 
-**Return a value.** `when(...).thenReturn(...)`, as in the first mock. Numbers, text, `LocalDate` and `null` are
-measured; booleans and `LocalDateTime` are written as PL/SQL too, but not measured yet.
+**Return a value.** `when(...).thenReturn(...)`, as in the first mock, with the Java types the application calls
+the routine with: numbers, text, dates, enums, `null`, mapped by the same converters.
 
-**Raise an error.** `thenThrow` raises an application error, as `RAISE_APPLICATION_ERROR` does, and `thenRaise` one of
-Oracle's predefined exceptions, from the enum `PredefinedError`. Both reach the code under test as a real error would, a
-`PlsqlRoutineRaisedException`:
+**Match arguments.** A plain value matches itself; `eq`, `any` and `isNull` work as in Mockito. A parameter of a
+primitive type, such as `int`, takes `anyInt()`, and likewise `anyLong()`, `anyShort()`, `anyByte()`, `anyDouble()`,
+`anyFloat()` and `anyBoolean()`: `any()` returns `null`, which Java unboxes before the call reaches the mock, failing
+with a `NullPointerException`. When several stubs match a call, the last one wins, so write the general ones first:
 
-<!-- snippet: testing/errors -->
+<!-- snippet: testing/matchers -->
 ```java
-when(freights.calculate("SP", "XX")).thenThrow(-20200, "Cannot calculate freight to XX");
-when(freights.calculate("SP", "AM")).thenRaise(NO_DATA_FOUND);
+when(freights.calculate(eq("SP"), any())).thenReturn(new BigDecimal("10.00"));
+// the last stub that matches wins: this one, for a null destination
+when(freights.calculate(eq("SP"), isNull())).thenReturn(new BigDecimal("15.00"));
 ```
-
-`thenRaise` also raises an exception a package declares in its spec, such as `no_quote EXCEPTION;`, which the PL/SQL
-that calls the routine catches by name, as in `WHEN freight_errors.no_quote THEN`:
-`thenRaise(PlsqlError.declared("FREIGHT_ERRORS", "NO_QUOTE"))`. Whether it exists is known only when the stub compiles,
-and a wrong name is reported as the likely mistake. Five predefined exceptions stand for a failure of the session or
-the server, and reach Java as a `PlsqlExecutionException`, as from the real routine: `LOGIN_DENIED`, `NOT_LOGGED_ON`,
-`PROGRAM_ERROR`, `STORAGE_ERROR` and `TIMEOUT_ON_RESOURCE`.
 
 **Stub a procedure.** A procedure returns nothing, so its stub takes the `doXxx()` family, as in Mockito: the answer
 first, then the call on the mock. `doNothing()` makes it return, setting the `OUT` values given with `out(value)`, in
@@ -257,6 +252,45 @@ doThrow(-20200, "No quote for XX").when(freights).quote(eq("XX"), any());
 `doReturn(value)` stubs a function the same way, for a test that prefers one style throughout:
 `doReturn(new BigDecimal("24.90")).when(freights).calculate("SP", "CE")` is `when(...).thenReturn(...)` turned
 around. A `doXxx().when(mock)` with no call after it stubs nothing, and is refused at the next call on the library.
+
+**Raise an error.** `thenThrow` raises an application error, as `RAISE_APPLICATION_ERROR` does, and `thenRaise` one of
+Oracle's predefined exceptions, from the enum `PredefinedError`. Both reach the code under test as a real error would, a
+`PlsqlRoutineRaisedException`:
+
+<!-- snippet: testing/errors -->
+```java
+when(freights.calculate("SP", "XX")).thenThrow(-20200, "Cannot calculate freight to XX");
+when(freights.calculate("SP", "AM")).thenRaise(NO_DATA_FOUND);
+```
+
+<div class="admonition note" markdown>
+<p class="admonition-title">An exception the package declares</p>
+
+`thenRaise(PlsqlError.declared("FREIGHT_ERRORS", "NO_QUOTE"))` raises `no_quote`, declared in a package's spec, which
+the PL/SQL that calls the routine catches by name. A wrong name is reported when the stub compiles. Five predefined
+exceptions, such as `STORAGE_ERROR`, reach Java as a `PlsqlExecutionException`, as from the real routine.
+
+</div>
+
+**Stub a routine more than once.** Each `when(...)` adds a stub, and a test can make as many as it needs:
+
+| Stubs of the same routine | What a call gets |
+|---|---|
+| for different arguments, such as `("SP", "CE")` and `("RJ", "BA")` | each one answers its own arguments |
+| for the same arguments, made twice | the last one: a later stub replaces an earlier one, as in Mockito |
+| a general one, such as `(eq("SP"), any())`, and a specific one, such as `(eq("SP"), isNull())` | the last one that matches: make the general ones first |
+
+Unlike Mockito, `thenReturn` does not chain, so one stub cannot answer differently on the first call and on the
+second, yet.
+
+<div class="admonition tip" markdown>
+<p class="admonition-title">Make the stubs first</p>
+
+Each stub recompiles the package, in some tens of milliseconds for a small one. Make them all before the code under
+test runs: a stub made after the test used the package fails the next call once, as
+[Things to keep in mind](#things-to-keep-in-mind) explains.
+
+</div>
 
 **Return an object type or a collection.** `thenReturn` takes the same Java types the application calls the routine
 with, mapped the same way, `@PlsqlType`, `@PlsqlAttr` and the converters of the attributes included. For a function
@@ -303,26 +337,36 @@ public interface FreightRows {
 when(freightRows.find(BigDecimal.ONE)).thenReturn(new FreightItem(1L, "SP"));
 ```
 
-PL/SQL has no constructor for these, so the stub writes a qualified expression: a `RECORD` as
-`"PLSQL_TEST"."FREIGHTS"."QUOTE_T"('CE', 24.9)`, in the order of its fields, whatever the order of the Java ones; an
-`INDEX BY` with named indexes from 1, `"PLSQL_TEST"."FREIGHTS"."IDS_T"(1 => 10, 2 => 20)`, which Java reads back as
-the same `List`; and a `%ROWTYPE` as a `RECORD` of the table's columns, which the mocks declare in the test's edition
-and Oracle assigns to the `%ROWTYPE`. An `INDEX BY VARCHAR2` is refused, as a call would refuse it. The
-[compatibility page](compatibility.md#not-measured) lists what the tests of this do not cover yet.
+**Stub a standalone routine.** A function or procedure outside any package is stubbed the same way, from the
+interface with `@PlsqlSchema` the application calls it through:
 
-**Every value goes through the application's mapping.** What a stub returns, and what it sets as an `OUT`, is
-encoded as a call would send it: through the converter and `@PlsqlBoolean` of the method, for the value returned,
-or of the parameter, for an `OUT`. So `thenReturn(Uf.CE)` answers `'CE'`, a `UUID` answers its text, `true` answers
-`'Y'` on a method with `@PlsqlBoolean`, and an `Optional` answers its value, or `NULL` when empty. Time zones,
-intervals, a `RAW`, a `BLOB` and a `CLOB` above the 32 KB of a PL/SQL literal are written too; bytes above 16 KB are
-refused, since a `BLOB` cannot be joined in an expression ([#93](https://github.com/rponte/penitent/issues/93)).
+<!-- snippet: testing/standalone-interface -->
+```java
+@PlsqlSchema
+public interface Taxes {
 
-**Oracle's JSON type,** from 21c on, takes what a call takes: a `String`, the JSON text, or a `Map`, a `List` or a
-scalar ([JSON](types.md#json)). A stub's value is checked as a call's is, so a stub refuses what a call would refuse,
-such as `{'a':1}` or a key twice, with the same message ([Moving between drivers and
-databases](types.md#moving-between-drivers-and-databases)). Matching by value, in a stub and in `verify`, compares
-documents, with Oracle's `JSON_EQUAL`: the order of an object's members, the spacing and the form of a number, `1`
-or `1.0`, do not count; the order of an array does:
+    // CREATE FUNCTION tax_rate(p_uf VARCHAR2) RETURN NUMBER, outside any package
+    BigDecimal taxRate(String pUf);
+}
+```
+
+<!-- snippet: testing/standalone-stub -->
+```java
+when(taxes.taxRate("SP")).thenReturn(new BigDecimal("0.18"));
+```
+
+<div class="admonition warning" markdown>
+<p class="admonition-title">The schema has to edition its functions and procedures</p>
+
+A standalone routine is a unit of its own, so its stub is the whole routine, compiled in the test's edition. That
+needs `ALTER USER ... ENABLE EDITIONS FOR FUNCTION` and `FOR PROCEDURE`, which `penitent-mock-admin.sql` runs; without
+it, the stub is refused, saying what a DBA has to run.
+
+</div>
+
+**Oracle's JSON type,** from 21c on, takes what a call takes: a `String`, or a `Map`, a `List` or a scalar
+([JSON](types.md#json)). A document matches by its value, as Oracle's `JSON_EQUAL` compares them: the order of an
+object's members, the spacing and the form of a number do not count; the order of an array does:
 
 <!-- snippet: testing/json -->
 ```java
@@ -338,9 +382,6 @@ verify(mock, times(2)).quoteOf("{\"id\":7}");
 // isNull() is SQL NULL only, not the JSON null, which is "null"
 verify(mock, never()).quoteOf(isNull());
 ```
-
-A document above 32 KB is written in pieces, as a long text is. With driver 19, a stub of a `JSON` `OUT` is refused
-when you make it, with the message a call would give, since driver 19 cannot bring such an `OUT` back.
 
 **An `IN OUT` parameter** has a value coming in and one going out. A stub matches the first and sets the second:
 `out(value)` sets it whatever came in, and `inOut(cameIn, goesOut)` only when `cameIn` came in, compared as an `IN`
@@ -377,58 +418,36 @@ For an `IN OUT`, in a stub and in `verify`:
 | `out("stamped")`, in a stub only | anything | `"stamped"` |
 | `inOut("raw", "stamped")`, in a stub only | `"raw"`, or SQL `NULL` for `inOut(null, ...)` | `"stamped"`, or SQL `NULL` for `inOut(..., null)` |
 
-`out` and `inOut` are refused in `verify`, which matches what came in only, and `inOut` on an `IN` parameter, where
-`out` does not compile. A pure `OUT` has nothing coming in: there, `out(value)` sets it, `new PlsqlOut<>()` or `any()`
-match it, and a `PlsqlOut` with a value or `inOut` is refused, since no value could match. An `IN OUT` of an object type, a collection or a record is set with `out(value)` and matched with `any()` only,
-as an `IN` one is.
+### Good to know about stubs
 
-**Stub a standalone routine.** A function or procedure outside any package is stubbed the same way, from the
-interface with `@PlsqlSchema` the application calls it through:
-
-<!-- snippet: testing/standalone-interface -->
-```java
-@PlsqlSchema
-public interface Taxes {
-
-    // CREATE FUNCTION tax_rate(p_uf VARCHAR2) RETURN NUMBER, outside any package
-    BigDecimal taxRate(String pUf);
-}
-```
-
-<!-- snippet: testing/standalone-stub -->
-```java
-when(taxes.taxRate("SP")).thenReturn(new BigDecimal("0.18"));
-```
-
-A standalone routine is a unit of its own, so its stub is the whole routine. It needs its schema to edition
-functions and procedures, as `penitent-mock-admin.sql` does; without that, the stub is refused, saying what a DBA has
-to run, since compiling it would replace the real routine for every session.
-
-**Match arguments.** A plain value matches itself; `eq`, `any` and `isNull` work as in Mockito. A parameter of a
-primitive type, such as `int`, takes `anyInt()`, and likewise `anyLong()`, `anyShort()`, `anyByte()`, `anyDouble()`,
-`anyFloat()` and `anyBoolean()`: `any()` returns `null`, which Java unboxes before the call reaches the mock, failing
-with a `NullPointerException`. When several stubs match a call, the last one wins, so write the general ones first:
-
-<!-- snippet: testing/matchers -->
-```java
-when(freights.calculate(eq("SP"), any())).thenReturn(new BigDecimal("10.00"));
-// the last stub that matches wins: this one, for a null destination
-when(freights.calculate(eq("SP"), isNull())).thenReturn(new BigDecimal("15.00"));
-```
-
-**Stub a routine more than once.** Each `when(...)` adds a stub, and a test can make as many as it needs:
-
-| Stubs of the same routine | What a call gets |
-|---|---|
-| for different arguments, such as `("SP", "CE")` and `("RJ", "BA")` | each one answers its own arguments |
-| for the same arguments, made twice | the last one: a later stub replaces an earlier one, as in Mockito |
-| a general one, such as `(eq("SP"), any())`, and a specific one, such as `(eq("SP"), isNull())` | the last one that matches: make the general ones first |
-
-Each stub recompiles the package: a small one in ten to twenty milliseconds, while a body of about a thousand lines
-took 270 to 425 ms per stub in a real project, and the first stub of a JVM adds about a second, while the parser warms
-up. Make them all before the code under test runs, as [Things to keep in mind](#things-to-keep-in-mind) explains.
-Unlike Mockito, `thenReturn` does not chain, so one stub cannot answer differently on the first call and on the
-second, yet.
+- **A stub is checked as a call is.** Its values are encoded as the application's call would send them, and a value a
+  call would refuse, such as a date beyond Oracle's range or a JSON text that is not JSON, is refused when the stub is
+  made, with the same message.
+- **Every value goes through the application's mapping.** What a stub returns, and what it sets as an `OUT`, is
+  encoded as a call would send it: through the converter and `@PlsqlBoolean` of the method, for the value returned, or
+  of the parameter, for an `OUT`. So `thenReturn(Uf.CE)` answers `'CE'`, a `UUID` answers its text, `true` answers
+  `'Y'` on a method with `@PlsqlBoolean`, and an `Optional` answers its value, or `NULL` when empty. Time zones,
+  intervals, a `RAW`, a `BLOB` and a `CLOB` above the 32 KB of a PL/SQL literal are written too; bytes above 16 KB are
+  refused, since a `BLOB` cannot be joined in an expression ([#93](https://github.com/rponte/penitent/issues/93)).
+- **A `RECORD`, a `%ROWTYPE` and an `INDEX BY`:** PL/SQL has no constructor for these, so the stub writes a qualified
+  expression: a `RECORD` as `"PLSQL_TEST"."FREIGHTS"."QUOTE_T"('CE', 24.9)`, in the order of its fields, whatever the
+  order of the Java ones; an `INDEX BY` with named indexes from 1, `"PLSQL_TEST"."FREIGHTS"."IDS_T"(1 => 10, 2 =>
+  20)`, which Java reads back as the same `List`; and a `%ROWTYPE` as a `RECORD` of the table's columns, which the
+  mocks declare in the test's edition and Oracle assigns to the `%ROWTYPE`. An `INDEX BY VARCHAR2` is refused, as a
+  call would refuse it. The [compatibility page](compatibility.md#not-measured) lists what the tests of this do not
+  cover yet.
+- **What a stub costs:** each stub recompiles the package: a small one in ten to twenty milliseconds, while a body of
+  about a thousand lines took 270 to 425 ms per stub in a real project, and the first stub of a JVM adds about a
+  second, while the parser warms up.
+- **JSON:** a document above 32 KB is written in pieces, as a long text is. With driver 19, a stub of a `JSON` `OUT`
+  is refused when you make it, with the message a call would give, since driver 19 cannot bring such an `OUT` back. A
+  stub's JSON text is checked as a call's is, so `{'a':1}` or a key twice is refused with the same message ([Moving
+  between drivers and databases](types.md#moving-between-drivers-and-databases)).
+- **`IN OUT`:** `out` and `inOut` are refused in `verify`, which matches what came in only, and `inOut` on an `IN`
+  parameter, where `out` does not compile. A pure `OUT` has nothing coming in: there, `out(value)` sets it, `new
+  PlsqlOut<>()` or `any()` match it, and a `PlsqlOut` with a value or `inOut` is refused, since no value could match.
+  An `IN OUT` of an object type, a collection or a record is set with `out(value)` and matched with `any()` only, as
+  an `IN` one is.
 
 ### Verifying calls
 

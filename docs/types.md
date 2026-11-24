@@ -23,37 +23,7 @@ section. The [compatibility table](compatibility.md) lists every pair of types t
 | `BOOLEAN` | `boolean`, `Boolean` |
 | `JSON`, from Oracle 21c on | `String`, the JSON text, or `Map<String, Object>`, `List<Object>`, a number or `Boolean`: see [JSON](#json) |
 
-How values cross:
-
-- **`NULL` is `null`.** A primitive cannot hold `null`, so a `NULL` read into an `int` or a `boolean` is a
-  `PlsqlMappingException`, never a made-up `0` or `false`. Declare the wrapper type, or `Optional<T>`.
-- **`Optional<T>` as a return value** is empty on `NULL`. As a parameter it is rejected: a parameter that may be
-  absent is just `null`.
-- **A value that does not fit fails,** such as `300` read into a `byte` or a fraction into a `BigInteger`. It is
-  never rounded.
-- **A number beyond `NUMBER`'s range fails before the call,** with a `PlsqlMappingException` that names the value and
-  where it is: a `BigDecimal`, a `BigInteger`, a `Double` or a `Float` whose magnitude is above just under `1E+126`, or
-  below `1E-130` without being 0. Penitent asks the driver's own conversion, so it refuses exactly what the driver
-  would, with one message on every driver instead of each driver's own. A `BINARY_DOUBLE` or a `BINARY_FLOAT`
-  parameter, attribute or element holds such a value, and takes it. **Digits beyond 40 are dropped, with no error,**
-  as Oracle does: `12345678901234567890123456789012345678909` arrives as `…678900`.
-- **Large values:** a `CLOB` above 32 KB is sent in a temporary LOB, freed when the call ends. A `Clob` or `Blob`
-  read from the database is a copy in memory, so you can use it after the connection is gone.
-- **A date beyond Oracle's range fails before the call,** with a `PlsqlMappingException` that names the value and
-  where it is: a parameter, an attribute, an element or a block's bind. Oracle's dates go from January 1, 4712 BC to
-  December 31, 9999, for `DATE`, `TIMESTAMP` and the types with a time zone; `java.time` counts a year 0, which is
-  1 BC, so the first day is `LocalDate.of(-4711, 1, 1)`. A type with a time zone must be within the range both in its
-  own time and in UTC, which Oracle stores. Oracle stores whatever bytes it is sent, and does not refuse such a value
-  itself: a year after 9999 would be stored as a date Oracle cannot format, or, from the year 15600 on, as another,
-  valid date.
-- **Before 1582, the fields cross as they are.** Oracle counts the days before October 15, 1582 in the Julian
-  calendar, and `java.time` in the Gregorian one, so `LocalDate.of(1500, 3, 1)` arrives as `1500-03-01`, and comes
-  back the same, though the two calendars put that day ten days apart. A `java.util.Date`, which is Julian before
-  1582 too, made from the same `LocalDate`, arrives as `1500-02-20`. Keep to one of the two types for such dates.
-
-For a type of your own, such as a `TaxId` value object, write a [converter](converters.md).
-
-### `Optional` and dates
+A `NULL` is `null`, and a date stays the date you sent, whatever the JVM's time zone:
 
 <!-- snippet: fixture -->
 ```sql
@@ -73,6 +43,24 @@ customers.bornOn(1);      // Optional[1990-04-12]
 customers.bornOn(2);      // Optional.empty
 customers.createdAt(1);   // 2025-01-15T09:30
 ```
+
+- **`NULL` is `null`.** A primitive cannot hold `null`, so a `NULL` read into an `int` or a `boolean` is a
+  `PlsqlMappingException`, never a made-up `0` or `false`. Declare the wrapper type, or `Optional<T>`, as above.
+- **`Optional<T>` as a return value** is empty on `NULL`. As a parameter it is rejected: a parameter that may be
+  absent is just `null`.
+- **A value that does not fit fails,** such as `300` read into a `byte` or a fraction into a `BigInteger`. It is
+  never rounded.
+
+<div class="admonition note" markdown>
+<p class="admonition-title">Oracle's own limits</p>
+
+A number beyond `NUMBER`'s range and a date beyond Oracle's, from 4712 BC to 9999, are refused before the call, with
+a message that names the value. [Limits of Oracle's types](#limits-of-oracles-types) has the details, and how large
+LOBs cross.
+
+</div>
+
+For a type of your own, such as a `TaxId` value object, write a [converter](converters.md).
 
 ## Booleans
 
@@ -155,14 +143,15 @@ A few more details:
 
 ## JSON
 
-Oracle 21c added a `JSON` type, which stores a document in a binary form of its own, OSON. A parameter, a return
-value or a cursor column of that type maps to a `String`, holding the document's JSON text, or to the document
-itself, as a `Map` or a `List` (see [As a Map or a List](#as-a-map-or-a-list)):
+From Oracle 21c on, a `JSON` parameter, return value or cursor column maps to a `String`, holding the document's
+text, or to the document itself, as a `Map` or a `List`. No JSON library is needed:
 
 <!-- snippet: fixture -->
 ```sql
 FUNCTION echo(p_doc JSON) RETURN JSON;
 ```
+
+### As text
 
 <!-- snippet: untested -->
 ```java
@@ -171,97 +160,13 @@ String echo(String doc);
 json.echo("{ \"b\" : 2 }");   // {"b":2}
 ```
 
-- **The text that comes back is written from the stored form,** not kept as you sent it, and without its spacing: by
-  the driver, with drivers 21 and later, and by the database's `JSON_SERIALIZE`, with driver 19. The two may write a
-  number differently: `1e200`, beyond `NUMBER`'s range, which 23ai keeps, comes back as `1.0E200` from the driver
-  and as `1E+200` from the database. **A number keeps its value, not its written
-  form,** since the type stores numbers as `NUMBER`s: `{"price":24.90,"n":1.5e3}` comes back as
-  `{"price":24.9,"n":1500}`, and a number of more than about 38 significant digits loses the rest, with no error.
-  Keep such a value, such as a large identifier, as a JSON string. A `VARCHAR2` or `CLOB` column checked with
-  `IS JSON` keeps the text as written.
-- **To work with your own classes,** convert the text with the JSON library of your application, in a
-  [converter](converters.md). With Jackson:
-
-  <!-- snippet: types/json-converter -->
-  ```java
-  public static class OrderJson implements PlsqlConverter<Order, String> {
-
-      private static final JsonMapper JSON = JsonMapper.builder().build();
-
-      @Override
-      public String toDatabase(Order order) {
-          return order == null ? null : JSON.writeValueAsString(order);
-      }
-
-      @Override
-      public Order fromDatabase(String json) {
-          return json == null ? null : JSON.readValue(json, Order.class);
-      }
-  }
-  ```
-
-  <!-- snippet: types/json-converter-use -->
-  ```java
-  @PlsqlRoutine("ECHO")
-  @PlsqlConvert(OrderJson.class)
-  Order echo(@PlsqlConvert(OrderJson.class) Order pDoc);
-  ```
-
-- **As a Map or a List,** see [below](#as-a-map-or-a-list): with no JSON library at all.
-- **Drivers 21 and later** know the type, and bind it as such, in every place above. A document of any size goes
-  both ways, a scalar at the top, such as `42`, included.
-- **Driver 19 does not know the type,** so Penitent converts the text in the database, where the driver sees only
-  text: a `JSON` parameter goes as `JSON(?)`, and a `JSON` return value comes back through
-  `JSON_SERIALIZE(... RETURNING CLOB)`, which the call log shows. That works for a document of any size, by position
-  and by name. An `OUT` or an `IN OUT` takes only a bind of the JSON type itself, which driver 19 cannot make, so it
-  is refused before the call. A cursor with a `JSON` column fails inside driver 19 itself, while the call runs,
-  before Penitent sees any column: Penitent discards the connection, which the failure leaves broken, and its message
-  names the likely type, `JSON`, and the way around it. Convert the column in the query, with
-  `JSON_SERIALIZE(doc RETURNING CLOB)`, or use driver 21 or later.
-- **For an `OUT` with driver 19,** call the routine through an [anonymous block](anonymous-blocks.md), whose
-  variable takes the document, and whose `JSON_SERIALIZE` makes it text again; the same goes for any conversion of
-  your own:
-
-  <!-- snippet: types/json-block -->
-  ```java
-  interface JsonThroughBlocks {
-
-      // IN: the text becomes JSON in the database, with JSON(...)
-      @PlsqlBlock("begin :result := fixture_json.length_of(JSON(:doc)); end;")
-      BigDecimal lengthOf(String doc);
-
-      // return value: the JSON becomes text in the database, with JSON_SERIALIZE
-      @PlsqlBlock("begin :result := JSON_SERIALIZE(fixture_json.echo(JSON(:doc)) RETURNING CLOB); end;")
-      String echo(String doc);
-
-      // OUT: into a JSON variable of the block, then as text
-      @PlsqlBlock("""
-              declare
-                  v_doc JSON;
-              begin
-                  fixture_json.out_doc(v_doc);
-                  :result := JSON_SERIALIZE(v_doc RETURNING CLOB);
-              end;
-              """)
-      String outDoc();
-  }
-  ```
-
-  It works with every driver. A document of any size goes in, but a block's `:result` is a `VARCHAR2`, so a
-  document above 32,767 bytes that comes back fails with `ORA-06502`: only the JSON type of drivers 21 and later
-  brings back a larger one.
-
-- **Not supported, refused before the call:** a collection of `JSON` and a RECORD with a `JSON` field, which no
-  driver can describe, and a `%ROWTYPE` of a table with a `JSON` column: read such rows through a cursor, where a
-  `JSON` column is supported. An OBJECT cannot have a `JSON` attribute: Oracle itself refuses it. Two versions of
-  a routine, one taking `JSON` and one `VARCHAR2`, both fit a `String`, so a method that calls them is refused as
-  ambiguous: call the one you want through an [anonymous block](anonymous-blocks.md).
-
+The text is checked before the call, as the JSON specification says, so a typo such as `{'a':1}` fails in Java with
+a message that says where, never in the database. What comes back is written by Oracle from the document it stored:
+without your spacing, and with each number by its value, so `24.90` comes back as `24.9`.
 
 ### As a Map or a List
 
-Without a JSON library, declare the document's own shape: Penitent parses and writes the text with the driver's
-JSON API, `oracle.sql.json`, which every supported driver ships.
+Declare the document's own shape, and work with it as with any Java collection:
 
 | The document's top | Java type |
 |---|---|
@@ -297,45 +202,148 @@ Object total = back.get("total");   // BigDecimal 24.9: the value, not its writt
 Object items = back.get("items");   // List ["pen", "ink"]
 ```
 
-- **Inside a `Map` or a `List`,** an object is a `Map<String, Object>`, an array a `List<Object>`, a string a
-  `String`, `true` and `false` a `Boolean`, `null` a `null`, and **every number a `BigDecimal`:** the JSON type stores
-  numbers as `NUMBER`s, so an integer and a decimal look the same, and `24.90` comes back as `24.9`. Cast with
-  `((BigDecimal) map.get("id")).intValueExact()`, not `(Integer) map.get("id")`.
-- **On the way in,** a `Map` with `String` keys, a `List`, a `CharSequence`, a `Boolean`, a finite number and
-  `null` go as they are, at any depth. Anything else, such as a `LocalDate`, is refused before the call, naming where
-  it is, as in `$.items[0].when`: convert it to a `String` yourself, or use a [converter](converters.md).
-- **A date as a `String`:** JSON has no date type, so the format is yours, and Oracle reads ISO 8601. Write the
-  seconds: `toString()` leaves them out at a whole minute, as in `2026-11-24T10:15`, which 23ai reads and 21c refuses
-  with `ORA-40688`:
-  <!-- snippet: types/json-date -->
-  ```java
-  // with the seconds, which toString() leaves out at a whole minute, and Oracle 21c then refuses
-  order.put("when", when.format(DateTimeFormatter.ofPattern("uuuu-MM-dd'T'HH:mm:ss")));
-  ```
-  In PL/SQL, read it with `JSON_VALUE(doc, '$.when' RETURNING DATE PRESERVE TIME ERROR ON ERROR)`:
+Inside the document, an object is a `Map<String, Object>`, an array a `List<Object>`, a string a `String`, and
+**every number a `BigDecimal`**, since Oracle stores JSON numbers as `NUMBER`s: read one with
+`((BigDecimal) map.get("id")).intValueExact()`.
 
-  - **`RETURNING DATE` alone drops the time,** and `PRESERVE TIME` keeps it.
-  - **Without `ERROR ON ERROR`,** a text Oracle cannot read becomes `NULL`, with no error, as it does with
-    `JSON_OBJECT_T`'s `get_date`.
-  - **An offset, as in `-03:00`,** is kept by `RETURNING TIMESTAMP WITH TIME ZONE`, and converted to UTC by
-    `TIMESTAMP` and `DATE`.
-  - **A year before 1 is read a year later,** with no error, since Java's ISO numbering has a year 0 and Oracle's
-    has none: keep such a date out of a document, or write its year yourself.
+### With your own classes
 
-  A date stored in the document by the database, as `JSON_OBJECT('when' VALUE SYSDATE RETURNING JSON)` does, comes
-  back in a `Map` as a `String`, such as `"2026-11-24T00:00:00"`. Support for `java.time` values is
-  [#153](https://github.com/rponte/penitent/issues/153).
+Convert the text with your application's JSON library, in a [converter](converters.md). With Jackson:
 
+<!-- snippet: types/json-converter -->
+```java
+public static class OrderJson implements PlsqlConverter<Order, String> {
+
+    private static final JsonMapper JSON = JsonMapper.builder().build();
+
+    @Override
+    public String toDatabase(Order order) {
+        return order == null ? null : JSON.writeValueAsString(order);
+    }
+
+    @Override
+    public Order fromDatabase(String json) {
+        return json == null ? null : JSON.readValue(json, Order.class);
+    }
+}
+```
+
+<!-- snippet: types/json-converter-use -->
+```java
+@PlsqlRoutine("ECHO")
+@PlsqlConvert(OrderJson.class)
+Order echo(@PlsqlConvert(OrderJson.class) Order pDoc);
+```
+
+<div class="admonition warning" markdown>
+<p class="admonition-title">With driver 19</p>
+
+A `JSON` parameter and a return value work with every driver. An `OUT`, an `IN OUT` and a cursor's `JSON` column need
+driver 21 or later: see [With driver 19](#with-driver-19).
+
+</div>
+
+<div class="admonition tip" markdown>
+<p class="admonition-title">Dates inside a document</p>
+
+JSON has no date type, so a `Map` takes no `LocalDate`: write the date as text, with its seconds, as
+[Dates inside a document](#dates-inside-a-document) shows.
+
+</div>
+
+### Good to know
+
+- **The text you send is checked the same way with every driver,** before the call: text that is not JSON, an empty
+  text, a key twice in an object, a number beyond `NUMBER`'s range and a lone UTF-16 surrogate are refused, with a
+  `PlsqlMappingException` that says what and where. [Moving between drivers and databases](#moving-between-drivers-and-databases)
+  lists each message.
+- **A number keeps its value, not its written form:** `{"n":1.5e3}` comes back as `{"n":1500}`, and a number of more
+  than about 38 significant digits loses the rest, with no error. Keep such a value, such as a large identifier, as
+  a JSON string. A `VARCHAR2` or `CLOB` column checked with `IS JSON` keeps the text as written.
+- **On the way in,** a `Map` with `String` keys, a `List`, a `CharSequence`, a `Boolean`, a finite number and `null`
+  go as they are, at any depth. Anything else, such as a `LocalDate`, is refused before the call, naming where it is,
+  as in `$.items[0].when`.
 - **A document that does not fit the declared type is refused,** naming what it is: an array read as a `Map`, a
   number read as a `List`, or a JSON string read as anything but `String`, whose text keeps its quotes.
-- **Only `Map<String, Object>` and `List<Object>`,** or their wildcards, describe a document, whose values are of
-  many types. A `Map<String, String>`, a `List<String>`, or a `HashMap` is refused before the call, and in a
-  cursor's record, before the row is read.
-- **A number beyond the range of `NUMBER`,** about `1e-130` to `1e126`, such as `1e200`, is refused before the call,
-  in a text or in a `Map`, with every driver, since the `JSON` type stores numbers as `NUMBER`s. Keep such a number
-  as a JSON string. Stored in the database, as 23ai allows, it is read as a `String`, and refused as a `Map`.
-- **The same mapping works with every driver,** since the document crosses JDBC as text. With driver 19, the limits
-  above apply: no `OUT`, no `IN OUT` and no cursor column.
+- **Only `Map<String, Object>` and `List<Object>`,** or their wildcards, describe a document. A `Map<String, String>`,
+  a `List<String>`, or a `HashMap` is refused before the call, and in a cursor's record, before the row is read.
+- **A number beyond the range of `NUMBER`,** about `1e-130` to `1e126`, is refused before the call, in a text or in a
+  `Map`. Stored in the database, as 23ai allows, it is read as a `String`, and refused as a `Map`.
+- **Not supported, refused before the call:** a collection of `JSON` and a RECORD with a `JSON` field, which no
+  driver can describe, and a `%ROWTYPE` of a table with a `JSON` column: read such rows through a cursor. An OBJECT
+  cannot have a `JSON` attribute: Oracle itself refuses it. Two versions of a routine, one taking `JSON` and one
+  `VARCHAR2`, both fit a `String`, so a method that calls them is refused as ambiguous: call the one you want through
+  an [anonymous block](anonymous-blocks.md).
+
+### Dates inside a document
+
+JSON has no date type, so the format is yours, and Oracle reads ISO 8601. Write the seconds: `toString()` leaves them
+out at a whole minute, as in `2026-11-24T10:15`, which 23ai reads and 21c refuses with `ORA-40688`:
+
+<!-- snippet: types/json-date -->
+```java
+// with the seconds, which toString() leaves out at a whole minute, and Oracle 21c then refuses
+order.put("when", when.format(DateTimeFormatter.ofPattern("uuuu-MM-dd'T'HH:mm:ss")));
+```
+
+In PL/SQL, read it with `JSON_VALUE(doc, '$.when' RETURNING DATE PRESERVE TIME ERROR ON ERROR)`:
+
+- **`RETURNING DATE` alone drops the time,** and `PRESERVE TIME` keeps it.
+- **Without `ERROR ON ERROR`,** a text Oracle cannot read becomes `NULL`, with no error, as it does with
+  `JSON_OBJECT_T`'s `get_date`.
+- **An offset, as in `-03:00`,** is kept by `RETURNING TIMESTAMP WITH TIME ZONE`, and converted to UTC by
+  `TIMESTAMP` and `DATE`.
+- **A year before 1 is read a year later,** with no error, since Java's ISO numbering has a year 0 and Oracle's
+  has none: keep such a date out of a document, or write its year yourself.
+
+A date stored in the document by the database, as `JSON_OBJECT('when' VALUE SYSDATE RETURNING JSON)` does, comes
+back in a `Map` as a `String`, such as `"2026-11-24T00:00:00"`. Support for `java.time` values is
+[#153](https://github.com/rponte/penitent/issues/153).
+
+### With driver 19
+
+Driver 19 does not know the `JSON` type, so Penitent converts the text in the database, where the driver sees only
+text: a `JSON` parameter goes as `JSON(?)`, and a `JSON` return value comes back through
+`JSON_SERIALIZE(... RETURNING CLOB)`, which the call log shows. That works for a document of any size, by position
+and by name, and with a `Map` or a `List` too. Drivers 21 and later bind the type itself, everywhere.
+
+- **An `OUT` or an `IN OUT`** takes only a bind of the JSON type itself, which driver 19 cannot make, so it is refused
+  before the call.
+- **A cursor with a `JSON` column** fails inside driver 19 itself, while the call runs, before Penitent sees any
+  column: Penitent discards the connection, which the failure leaves broken, and its message names the likely type,
+  `JSON`, and the way around it. Convert the column in the query, with `JSON_SERIALIZE(doc RETURNING CLOB)`, or use
+  driver 21 or later.
+- **For an `OUT`,** call the routine through an [anonymous block](anonymous-blocks.md), whose variable takes the
+  document, and whose `JSON_SERIALIZE` makes it text again; the same goes for any conversion of your own:
+
+  <!-- snippet: types/json-block -->
+  ```java
+  interface JsonThroughBlocks {
+
+      // IN: the text becomes JSON in the database, with JSON(...)
+      @PlsqlBlock("begin :result := fixture_json.length_of(JSON(:doc)); end;")
+      BigDecimal lengthOf(String doc);
+
+      // return value: the JSON becomes text in the database, with JSON_SERIALIZE
+      @PlsqlBlock("begin :result := JSON_SERIALIZE(fixture_json.echo(JSON(:doc)) RETURNING CLOB); end;")
+      String echo(String doc);
+
+      // OUT: into a JSON variable of the block, then as text
+      @PlsqlBlock("""
+              declare
+                  v_doc JSON;
+              begin
+                  fixture_json.out_doc(v_doc);
+                  :result := JSON_SERIALIZE(v_doc RETURNING CLOB);
+              end;
+              """)
+      String outDoc();
+  }
+  ```
+
+  It works with every driver. A document of any size goes in, but a block's `:result` is a `VARCHAR2`, so a
+  document above 32,767 bytes that comes back fails with `ORA-06502`: only the JSON type of drivers 21 and later
+  brings back a larger one.
 
 ### Moving between drivers and databases
 
@@ -475,7 +483,6 @@ CustomerSummary summary(long id);
   ```text
   normalizeAddress(Address): Address does not cover attribute(s) of POSTAL_ADDRESS_T: [ZIP_CODE VARCHAR2]. Available properties: [STREET, CITY]. Use @PlsqlAttr to declare the name.
   ```
-
 - **JavaBeans** need a no-argument constructor and setters to be read. Inherited properties count. A `boolean` or
   `Boolean` property can be read through `isX()` as well as `getX()`, but not through both: they may answer
   differently, as a `boolean` and a `Boolean` that is `null`, so the library refuses the class rather than pick one.
@@ -563,6 +570,30 @@ constant's name, see [enums by code](converters.md#enums-by-code).
 - **An OBJECT column** can be read into a composite property.
 - **An `OUT` cursor** is a `PlsqlOut<List<T>>`.
 - **The cursor is read and closed during the call,** so the list does not depend on the connection.
+
+## Limits of Oracle's types
+
+What Oracle cannot store is refused before the call, in Java, with one message on every driver:
+
+- **A number beyond `NUMBER`'s range fails before the call,** with a `PlsqlMappingException` that names the value and
+  where it is: a `BigDecimal`, a `BigInteger`, a `Double` or a `Float` whose magnitude is above just under `1E+126`, or
+  below `1E-130` without being 0. Penitent asks the driver's own conversion, so it refuses exactly what the driver
+  would, with one message on every driver instead of each driver's own. A `BINARY_DOUBLE` or a `BINARY_FLOAT`
+  parameter, attribute or element holds such a value, and takes it. **Digits beyond 40 are dropped, with no error,**
+  as Oracle does: `12345678901234567890123456789012345678909` arrives as `…678900`.
+- **Large values:** a `CLOB` above 32 KB is sent in a temporary LOB, freed when the call ends. A `Clob` or `Blob`
+  read from the database is a copy in memory, so you can use it after the connection is gone.
+- **A date beyond Oracle's range fails before the call,** with a `PlsqlMappingException` that names the value and
+  where it is: a parameter, an attribute, an element or a block's bind. Oracle's dates go from January 1, 4712 BC to
+  December 31, 9999, for `DATE`, `TIMESTAMP` and the types with a time zone; `java.time` counts a year 0, which is
+  1 BC, so the first day is `LocalDate.of(-4711, 1, 1)`. A type with a time zone must be within the range both in its
+  own time and in UTC, which Oracle stores. Oracle stores whatever bytes it is sent, and does not refuse such a value
+  itself: a year after 9999 would be stored as a date Oracle cannot format, or, from the year 15600 on, as another,
+  valid date.
+- **Before 1582, the fields cross as they are.** Oracle counts the days before October 15, 1582 in the Julian
+  calendar, and `java.time` in the Gregorian one, so `LocalDate.of(1500, 3, 1)` arrives as `1500-03-01`, and comes
+  back the same, though the two calendars put that day ten days apart. A `java.util.Date`, which is Julian before
+  1582 too, made from the same `LocalDate`, arrives as `1500-02-20`. Keep to one of the two types for such dates.
 
 ## See also
 
