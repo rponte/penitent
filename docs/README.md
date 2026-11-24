@@ -133,6 +133,7 @@ Every page uses the same orders package, so the examples build on each other.
 | map an OBJECT, a RECORD or a `%ROWTYPE` | [Types](types.md#composite-types) |
 | send or receive a collection | [Types](types.md#collections) |
 | read a cursor into a list | [Types](types.md#cursors) |
+| send or receive a JSON document, as text or as a `Map` | [Types](types.md#json) |
 | use booleans stored as `S`/`N` | [Types](types.md#booleans) |
 | handle dates and time zones | [Types](types.md#time-zones) |
 | call an OBJECT member method, or run a block | [Anonymous blocks](anonymous-blocks.md) |
