@@ -171,7 +171,8 @@ public final class RoutineInvocationHandler implements InvocationHandler {
 			PlsqlMappingException mapping = e.ofBinding("a value");
 			return method == null ? mapping : MappingMessages.of(method, mapping);
 		}
-		return translator.translate(e.ofCall(null, PlsqlFailure.Phase.PREPARATION).failure());
+		return translator.translate(e.ofCall(method == null ? type.getSimpleName() : type.getSimpleName() + "."
+				+ method.getName(), null, PlsqlFailure.Phase.PREPARATION).failure());
 	}
 
 	@FunctionalInterface

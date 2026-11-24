@@ -134,7 +134,8 @@ class DriverFailuresTest extends OracleIntegrationTest {
 
 		assertThatThrownBy(() -> scalars.echoNumber(BigDecimal.ONE))
 				.isExactlyInstanceOf(PlsqlExecutionException.class)
-				.hasMessageContaining("the Oracle driver failed itself in CallableStatement.get")
+				.hasMessageContaining("PLSQL_TEST.FIXTURE_SCALARS.ECHO_NUMBER: the Oracle driver failed itself in"
+						+ " CallableStatement.get")
 				.hasMessageContaining("(ArrayIndexOutOfBoundsException: Index 3 out of bounds for length 3). The"
 						+ " connection was discarded")
 				.hasRootCause(broken);
@@ -164,7 +165,8 @@ class DriverFailuresTest extends OracleIntegrationTest {
 
 		assertThatThrownBy(() -> composites.items(2))
 				.isExactlyInstanceOf(PlsqlExecutionException.class)
-				.hasMessageContaining("the Oracle driver failed itself in ResultSet.next")
+				.hasMessageContaining("PLSQL_TEST.FIXTURE_COMPOSITES.ITEMS: the Oracle driver failed itself in"
+						+ " ResultSet.next")
 				.hasRootCauseInstanceOf(ArrayIndexOutOfBoundsException.class);
 		thenHealthy(1);
 	}
@@ -243,7 +245,8 @@ class DriverFailuresTest extends OracleIntegrationTest {
 
 		assertThatThrownBy(() -> lobs.clobLength(large))
 				.isExactlyInstanceOf(PlsqlExecutionException.class)
-				.hasMessageContaining("the Oracle driver failed itself in Clob.setString");
+				.hasMessageContaining("P_VALUE of PLSQL_TEST.FIXTURE_LOBS.CLOB_LENGTH: the Oracle driver failed itself in"
+						+ " Clob.setString");
 		thenHealthy(1);
 	}
 
@@ -268,7 +271,8 @@ class DriverFailuresTest extends OracleIntegrationTest {
 
 		assertThatThrownBy(() -> scalars.echoNumber(BigDecimal.ONE))
 				.isExactlyInstanceOf(PlsqlExecutionException.class)
-				.hasMessageContaining("the Oracle driver failed itself in Connection.prepareCall");
+				.hasMessageContaining("PLSQL_TEST.FIXTURE_SCALARS.ECHO_NUMBER: the Oracle driver failed itself in"
+						+ " Connection.prepareCall");
 		thenHealthy(1);
 	}
 
@@ -295,7 +299,8 @@ class DriverFailuresTest extends OracleIntegrationTest {
 
 		assertThatThrownBy(() -> scalars.echoNumber(BigDecimal.ONE))
 				.isExactlyInstanceOf(PlsqlExecutionException.class)
-				.hasMessageContaining("the Oracle driver failed an internal check (oacdty: 0)")
+				.hasMessageContaining("PLSQL_TEST.FIXTURE_SCALARS.ECHO_NUMBER: the Oracle driver failed an internal check"
+						+ " (oacdty: 0)")
 				.hasRootCause(failed);
 		thenHealthy(1);
 	}
@@ -309,7 +314,8 @@ class DriverFailuresTest extends OracleIntegrationTest {
 
 		assertThatThrownBy(() -> scalars.echoNumber(BigDecimal.ONE))
 				.isExactlyInstanceOf(PlsqlExecutionException.class)
-				.hasMessageContaining("the Oracle driver failed itself in PreparedStatement.executeQuery");
+				.hasMessageContaining("reading the dictionary: the Oracle driver failed itself in"
+						+ " PreparedStatement.executeQuery");
 		thenHealthy(1);
 	}
 
@@ -321,7 +327,8 @@ class DriverFailuresTest extends OracleIntegrationTest {
 		driver.failReadingAt("CallableStatement", "get", new IllegalStateException("result"));
 		assertThatThrownBy(() -> blocks.plus(BigDecimal.ONE))
 				.isExactlyInstanceOf(PlsqlExecutionException.class)
-				.hasMessageContaining("the Oracle driver failed itself in CallableStatement.get");
+				.hasMessageContaining("the block of Blocks.plus: the Oracle driver failed itself in"
+						+ " CallableStatement.get");
 		thenHealthy(1);
 
 		driver.failAt("CallableStatement", "set", new IllegalArgumentException("Overflow"));

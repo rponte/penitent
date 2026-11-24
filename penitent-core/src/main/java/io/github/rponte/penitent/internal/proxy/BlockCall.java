@@ -104,12 +104,15 @@ final class BlockCall {
 								parametersByName.get(placeholders.get(i)), method, sessionTypes, connection, log);
 					}
 				} catch (DriverFailure e) {
-					throw RoutineCall.bindingFailure(e, ":" + placeholders.get(i), metadata.sql());
+					// binding: the method, which the message starts with, names the block; otherwise the block
+					throw e.inBinding() ? e.ofBinding(":" + placeholders.get(i))
+							: e.ofCall(":" + placeholders.get(i) + " of " + blockOf(method), metadata.sql(),
+									PlsqlFailure.Phase.PREPARATION);
 				}
 			}
 
 			log.executing();
-			Jdbc.execute(statement, metadata.sql());
+			Jdbc.execute(statement, metadata.sql(), blockOf(method));
 			if (!expectsResult) {
 				return null;
 			}
@@ -122,15 +125,20 @@ final class BlockCall {
 			} catch (SQLException e) {
 				throw new SqlFailure(metadata.sql(), e, PlsqlFailure.Phase.RESULT);
 			} catch (DriverFailure e) {
-				throw e.ofCall(metadata.sql(), PlsqlFailure.Phase.RESULT);
+				throw e.ofCall(blockOf(method), metadata.sql(), PlsqlFailure.Phase.RESULT);
 			}
 		} catch (SQLException e) {
 			throw new SqlFailure(metadata.sql(), e, PlsqlFailure.Phase.PREPARATION);
 		} catch (DriverFailure e) {
 			// preparing or closing the statement
-			throw e.ofCall(metadata.sql(), e.operation().endsWith(".close") ? PlsqlFailure.Phase.RESULT
+			throw e.ofCall(blockOf(method), metadata.sql(), e.operation().endsWith(".close") ? PlsqlFailure.Phase.RESULT
 					: PlsqlFailure.Phase.PREPARATION);
 		}
+	}
+
+	/** Which block a failure of the driver was in, for its message: a block has no name of its own. */
+	private static String blockOf(Method method) {
+		return "the block of " + method.getDeclaringClass().getSimpleName() + "." + method.getName();
 	}
 
 	/**

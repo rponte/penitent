@@ -139,9 +139,10 @@ class DriverBoundaryTest {
 		assertThat(connection[0]).as("not aborted").isNotNull();
 
 		DriverFailure reading = catchFailure(() -> wrapped.getObject(1));
-		PlsqlFailure failure = reading.ofCall("{call p}", PlsqlFailure.Phase.RESULT).failure();
+		PlsqlFailure failure = reading.ofCall("S.PKG.R", "{call p}", PlsqlFailure.Phase.RESULT).failure();
 		assertThat(failure.phase()).isEqualTo(PlsqlFailure.Phase.RESULT);
-		assertThat((Throwable) failure.cause()).hasMessage("the Oracle driver failed itself in CallableStatement.getObject"
+		assertThat((Throwable) failure.cause()).hasMessage("S.PKG.R: the Oracle driver failed itself in"
+				+ " CallableStatement.getObject"
 				+ " (IllegalArgumentException: Overflow). The connection was discarded").hasCause(overflow);
 		assertThat(connection[0]).as("aborted").isNull();
 	}

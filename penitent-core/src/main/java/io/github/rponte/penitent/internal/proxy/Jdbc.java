@@ -75,7 +75,7 @@ final class Jdbc {
 	 * says "such as JSON", for a driver before 21 and a database of 21c or later.</li>
 	 * </ul>
 	 */
-	static void execute(CallableStatement statement, String sql) {
+	static void execute(CallableStatement statement, String sql, String where) {
 		try {
 			statement.execute();
 		} catch (SQLException e) {
@@ -86,7 +86,7 @@ final class Jdbc {
 			Throwable driver = e instanceof DriverFailure marked ? marked.getCause() : e;
 			String failure = driverFailure(driver, statement);
 			abortConnectionOf(statement, driver);
-			throw new SqlFailure(sql, new SQLException(failure, driver), PlsqlFailure.Phase.EXECUTION);
+			throw new SqlFailure(sql, new SQLException(where + ": " + failure, driver), PlsqlFailure.Phase.EXECUTION);
 		}
 	}
 

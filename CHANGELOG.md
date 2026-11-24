@@ -52,7 +52,9 @@ All notable changes to this project are listed here. The format follows
   back to the pool. Penitent now catches it wherever the driver throws it, at a boundary around the driver's objects,
   so that a failure of the application's own code is never taken for the driver's: while binding a value, it is a
   `PlsqlMappingException` naming the parameter, and the connection is kept; anywhere else, a
-  `PlsqlExecutionException`, and the connection is discarded. The original is the cause. Building an object type or a
+  `PlsqlExecutionException` naming the call, as in `SCHEMA.PKG.ROUTINE: the Oracle driver failed itself in ...`, and
+  the connection is discarded. The original is the cause. A failure inside `execute()`, which #137 handled, now names
+  the call too. The errors page says when calling again is safe. Building an object type or a
   collection kept its message, now for any runtime exception of the driver, not only an `IllegalArgumentException`.
 - `penitent-test`: an `IN OUT` parameter is matched by the value that came in, in a stub and in `verify`
   ([#150](https://github.com/rponte/penitent/issues/150)). A `PlsqlOut` given for it counted as `any()`, so
