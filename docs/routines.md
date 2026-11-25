@@ -19,7 +19,7 @@ builds the package used here.
 | `p_total IN OUT NUMBER` | `PlsqlOut<BigDecimal> total`, passed as `PlsqlOut.of(value)` | [`OUT` and `IN OUT`](#out-and-in-out-parameters) |
 | `p_percent NUMBER DEFAULT 10` | one more method, without that parameter | [`DEFAULT` values](#default-values) |
 | two versions of `describe` | one method per version, told apart by the Java types | [Overloaded routines](#overloaded-routines) |
-| `p_min_total => 100` | `bind = PlsqlBind.BY_NAME` on the interface | [Binding by name](#binding-by-name) |
+| a package whose parameters may change order, or `p_min_total => 100` | `bind = PlsqlBind.BY_NAME` on the interface | [By position or by name](#by-position-or-by-name) |
 | `CREATE FUNCTION round_to_cents(...)`, outside a package | an interface with `@PlsqlSchema` | [Routines outside a package](#routines-outside-a-package) |
 
 ## The package on this page
