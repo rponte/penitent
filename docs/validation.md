@@ -69,6 +69,7 @@ shows each case, and how binding by name avoids them.
 ## What it costs
 
 It uses one connection, and leaves what it read cached, so the first calls afterwards do not read the dictionary
-again. A method costs about 5 queries to the dictionary for a scalar routine, and up to about 16 for nested
-composites. A call pays this once, on its first run, and validation pays it for every method at once. The count is
-covered by a test, and reducing it is on the [roadmap](roadmap.md#metadata-cache).
+again. An interface costs about one query to the dictionary per method, and a few more for each composite type:
+46 queries for an interface of 38 scalar methods. A call pays this once, on its first run, and validation pays it
+for every method at once. The count is covered by a test, and reducing it further is on the
+[roadmap](roadmap.md#metadata-cache).
