@@ -225,6 +225,13 @@ class CheckoutServiceTest {
 
 [Testing](docs/testing.md) shows how to prepare a test database, test without Spring, and what to keep in mind.
 
+## What it does not do
+
+Penitent only calls PL/SQL, routines and anonymous blocks: keep your `JdbcTemplate`, jOOQ or ORM for plain SQL
+queries, on the same `DataSource` and transaction. It leaves the pool and the transactions to you or to Spring, never
+repeats a call that failed, and refuses a conversion that would lose information instead of guessing. The reasons are
+in the [roadmap](docs/roadmap.md#by-design).
+
 ## Compatibility
 
 Which Oracle JDBC driver works with which Oracle Database, as the build tests them on every change:
