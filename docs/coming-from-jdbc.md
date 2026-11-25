@@ -1,13 +1,13 @@
 # Coming from JDBC or Spring's `SimpleJdbcCall`
 
 If you call PL/SQL from Java today, you probably write a `CallableStatement` by hand, or use Spring's
-`SimpleJdbcCall`. Both work, and both leave a lot to you, often more than it seems. This page writes the same call in
-each style, and shows what each one asks you to get right.
+`SimpleJdbcCall`. Both work, and both leave a lot to you, often more than it seems. Here is the same call with
+Penitent, and then in each of the other two styles, with what each one asks you to get right.
 
-## The same call, three ways
+## The call
 
-The call is to `place_order`, in the `ORDERS_PKG` package. It takes a customer and a total, inserts the order, and
-returns its new id through an `OUT` parameter:
+`place_order`, in the `ORDERS_PKG` package, takes a customer and a total, inserts the order, and returns its new id
+through an `OUT` parameter:
 
 <!-- snippet: fixture -->
 ```sql
@@ -16,7 +16,42 @@ CREATE OR REPLACE PACKAGE orders_pkg AS
 END orders_pkg;
 ```
 
-### Plain JDBC
+## With Penitent
+
+<!-- snippet: jdbc/penitent-interface -->
+```java
+@PlsqlPackage("ORDERS_PKG")
+public interface Orders {
+    void placeOrder(long customerId, BigDecimal total, PlsqlOut<Long> orderId);
+}
+```
+
+<!-- snippet: jdbc/penitent-call -->
+```java
+PlsqlOut<Long> orderId = new PlsqlOut<>();
+orders.placeOrder(42, new BigDecimal("100.00"), orderId);
+long id = orderId.get();
+```
+
+One method, and a call that reads like any other Java call:
+
+- **A typed method.** The compiler checks every argument, your IDE completes them, a refactoring finds every caller,
+  and the result is a `Long`, not an `Object` to cast.
+- **The database checks your interface.** Penitent reads the routine's signature from the dictionary and matches
+  your method to it: the routine, the number of parameters, their types and directions, and the composite types.
+  [Validation](validation.md) does it for every interface at startup, or in a test, so a changed package is caught
+  before it reaches a request.
+- **Composites by name, cursors as lists.** An OBJECT, a RECORD or a `%ROWTYPE` is a Java `record` matched by
+  attribute name, a collection is a `List<T>`, and a `SYS_REFCURSOR` is a `List<T>` of records, read and closed for
+  you. See [Types](types.md).
+- **No type codes, no type names.** There is no `Types.NUMERIC` to register and no `"POSTAL_ADDRESS_T"` in your
+  code: the dictionary has them.
+- **Dates and drivers, handled.** `LocalDateTime` and `LocalDate` cross without the JVM's time zone, and `BOOLEAN` and
+  `%ROWTYPE` bind the same way on every driver version the build tests.
+- **Every call in the log.** The SQL Penitent built, the values it bound and the `OUT` values it read, by parameter
+  name. See [Logging](logging.md).
+
+## The same call in plain JDBC
 
 <!-- snippet: jdbc/callable-statement -->
 ```java
@@ -47,7 +82,7 @@ Eight lines for one call, and everything in them is yours to get right:
   the driver's own date types convert `java.time` values through the JVM's time zone. See
   [Driver versions](compatibility.md#driver-versions).
 
-### Spring's `SimpleJdbcCall`
+## The same call with Spring's `SimpleJdbcCall`
 
 <!-- snippet: untested -->
 ```java
@@ -74,40 +109,15 @@ need no codes, and it joins Spring's transactions and exceptions. What it still 
 - **Checked only when it runs.** The metadata is read on the first call, so a package that changed is noticed by
   whichever request happens to call it first.
 
-### Penitent
+## Side by side
 
-<!-- snippet: jdbc/penitent-interface -->
-```java
-@PlsqlPackage("ORDERS_PKG")
-public interface Orders {
-    void placeOrder(long customerId, BigDecimal total, PlsqlOut<Long> orderId);
-}
-```
-
-<!-- snippet: jdbc/penitent-call -->
-```java
-PlsqlOut<Long> orderId = new PlsqlOut<>();
-orders.placeOrder(42, new BigDecimal("100.00"), orderId);
-long id = orderId.get();
-```
-
-One method, and a call that reads like any other Java call. What you get:
-
-- **A typed method.** The compiler checks every argument, your IDE completes them, a refactoring finds every caller,
-  and the result is a `Long`, not an `Object` to cast.
-- **The database checks your interface.** Penitent reads the routine's signature from the dictionary and matches
-  your method to it: the routine, the number of parameters, their types and directions, and the composite types.
-  [Validation](validation.md) does it for every interface at startup, or in a test, so a changed package is caught
-  before it reaches a request.
-- **Composites by name, cursors as lists.** An OBJECT, a RECORD or a `%ROWTYPE` is a Java `record` matched by
-  attribute name, a collection is a `List<T>`, and a `SYS_REFCURSOR` is a `List<T>` of records, read and closed for
-  you. See [Types](types.md).
-- **No type codes, no type names.** There is no `Types.NUMERIC` to register and no `"POSTAL_ADDRESS_T"` in your
-  code: the dictionary has them.
-- **Dates and drivers, handled.** `LocalDateTime` and `LocalDate` cross without the JVM's time zone, and `BOOLEAN` and
-  `%ROWTYPE` bind the same way on every driver version the build tests.
-- **Every call in the log.** The SQL Penitent built, the values it bound and the `OUT` values it read, by parameter
-  name. See [Logging](logging.md).
+| | Plain JDBC | `SimpleJdbcCall` | Penitent |
+|---|---|---|---|
+| **A call is** | a `CallableStatement`, by hand | a `Map` in, a `Map` out | a Java method |
+| **Parameters** | by position, in your code | by name, as strings | typed, checked by the compiler |
+| **Oracle type codes and names** | yours, for every `OUT` and composite | read from the metadata for simple types | read from the dictionary for every type |
+| **OBJECT, RECORD, collection, cursor** | `Struct`, `Array`, `ResultSet`, by hand | by hand, or a `RowMapper` | `record`, `List`, `List` of `record`s |
+| **A package that changed** | found by the call that breaks | found by the first call | found by [validation](validation.md), at startup or in a test |
 
 ## What stays the same
 
@@ -115,7 +125,7 @@ One method, and a call that reads like any other Java call. What you get:
   commits: the transaction is yours, or Spring's. See [Transactions and connections](transactions.md).
 - **Spring transactions and exceptions.** With [`penitent-spring`](spring.md), a call takes part in the current
   transaction, and infrastructure failures are the same `DataAccessException` classes a `JdbcTemplate` throws.
-- **The SQL Oracle sees.** The call is a plain `{call PACKAGE.ROUTINE(?, ?)}`, which you can see in the
+- **The SQL Oracle sees.** The call is a plain `{call PACKAGE.ROUTINE(P_A => ?, P_B => ?)}`, which you can see in the
   [log](logging.md).
 
 ## Moving over
