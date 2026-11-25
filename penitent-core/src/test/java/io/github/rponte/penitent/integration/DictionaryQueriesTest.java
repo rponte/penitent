@@ -119,7 +119,7 @@ class DictionaryQueriesTest extends OracleIntegrationTest {
 	@Test
 	@DisplayName("validating an interface of 36 methods over overloaded routines: more rows, so more round trips")
 	void validate_overloads() {
-		assertCost(OverloadingTest.Overload.class, DictionaryQueriesTest::validate, 42, 49);
+		assertCost(OverloadingTest.Overload.class, DictionaryQueriesTest::validate, 42, 42);
 	}
 
 	@Test
