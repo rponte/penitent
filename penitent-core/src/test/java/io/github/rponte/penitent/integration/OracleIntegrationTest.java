@@ -96,6 +96,11 @@ abstract class OracleIntegrationTest {
 				"GRANT CREATE SESSION, CREATE TABLE, CREATE PROCEDURE, CREATE TYPE TO plsql_owner");
 	}
 
+	/** A connection as the database's administrator, which reads the statistics of another session. */
+	protected static Connection adminConnection() throws java.sql.SQLException {
+		return ORACLE.adminConnection();
+	}
+
 	protected static HikariDataSource newPool() {
 		HikariDataSource dataSource = new HikariDataSource();
 		dataSource.setJdbcUrl(ORACLE.jdbcUrl());

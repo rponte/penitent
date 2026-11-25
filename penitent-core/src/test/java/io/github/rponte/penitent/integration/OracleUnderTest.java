@@ -72,6 +72,11 @@ abstract class OracleUnderTest {
 		}
 	}
 
+	/** A connection as the database's administrator, which reads what the test user may not, such as v$sesstat. */
+	Connection adminConnection() throws SQLException {
+		return admin();
+	}
+
 	private Connection admin() throws SQLException {
 		return DriverManager.getConnection(jdbcUrl(), adminUser(), PASSWORD);
 	}
