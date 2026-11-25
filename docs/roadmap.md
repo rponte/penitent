@@ -40,12 +40,14 @@ against and a case that justifies keeping them working.
 Each proxy reads the dictionary on the first call of each method and keeps the result for its whole life, and
 `PlsqlPackages.validate` warms it. Still open:
 
-- **Fewer queries:** each method reads its own `ALL_ARGUMENTS`, an N+1 per interface. The current schema and the
-  package are looked up again for every method, and the same collection more than once within a method. Reading one
-  interface's routines in a single query, and caching the repeated lookups, would cut a scalar interface to a few
-  queries in total. `DictionaryQueriesTest` holds today's numbers.
-- **Cache shared between proxies:** two interfaces that use the same type read it twice. It cannot be static, because
-  of the classloader trap.
+- **Fewer queries** ([#169](https://github.com/rponte/penitent/issues/169)): the current schema and the package are
+  resolved once per proxy, and a method's versions are counted in the query of its parameters, so an interface costs
+  about one query per method. Still open: reading an interface's routines in a single query, instead of one per
+  method, and reading each composite type in one query, instead of one per question about it.
+  `DictionaryQueriesTest` holds today's numbers, and `DescribeTimingReport` the time.
+- **Cache shared between proxies** ([#170](https://github.com/rponte/penitent/issues/170)): two interfaces that use
+  the same type read it twice. It cannot be static, because of the classloader trap, and it touches rules the library
+  holds on purpose, so it is discussed before it is designed.
 
 ### Transactions without Spring
 

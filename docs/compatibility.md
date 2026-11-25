@@ -439,7 +439,9 @@ Where the PL/SQL guarantees the value is never `null`, driver 23 works as it is.
 | `PlsqlPackages.validate`: every mismatch in one exception, nested composites and collection elements, cursor not in a `List`, block placeholders, database failure translated | Validated |
 | `PlsqlPackages.validate` finds without calling the same mismatches that the calls find | Validated |
 | After `validate`, calls read nothing from the dictionary | Validated |
-| Dictionary queries on the first call: 5 for a scalar, 6 for an OBJECT, 12 for a collection of OBJECT, 16 for nested composites; none after | Validated |
+| Dictionary queries on the first call: 3 for a scalar, 4 for an OBJECT, 10 for a collection of OBJECT, 14 for nested composites; none after | Validated |
+| Validating an interface: about one dictionary query and one round trip per method, 46 for 38 methods | Validated |
+| A proxy resolves its package and the current schema once; a name not found is resolved again, so a package or synonym deployed later is found | Validated |
 | With `@EnablePlsqlPackages(validateOnStartup = true)`: a mismatch stops the context and names every interface; off by default | Validated |
 | Starter: interfaces of the application's packages, nested ones skipped; nothing without a `DataSource`; backs off with two and no primary | Validated |
 | Starter: an `@EnablePlsqlPackages` wins and the starter does not scan | Validated |

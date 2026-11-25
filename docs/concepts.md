@@ -33,9 +33,10 @@ When you call `orders.calculateFreight("SP", "CE")`:
    transaction's connection, if there is one. A view made with [`PlsqlPackages.using`](transactions.md) uses the
    connection it was given instead.
 2. **On the method's first call, the dictionary is read,** on that same connection: which routine the method calls,
-   its parameters and their types, and the attributes of every composite involved. That is about 5 queries for a
-   routine with scalars, and up to about 16 with nested composites. The result is cached in the proxy, so later
-   calls skip this step.
+   its parameters and their types, and the attributes of every composite involved. That is 3 queries for a routine
+   with scalars, and up to about 14 with nested composites. The result is cached in the proxy, so later calls skip
+   this step. Where the package is, through its synonyms, is resolved once per proxy, so the other methods' first
+   calls cost about one query each.
 3. **The method is checked against what was read:** the routine exists, procedure or function, the parameters, their
    directions and their types. A mismatch is a `PlsqlMappingException`, and nothing is sent to the database.
 4. **The call is built and the values are bound:**
