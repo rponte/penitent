@@ -1,20 +1,7 @@
 # Errors
 
-When a call fails, the first question is whose fault it is. Did the routine reject the request, as business logic
-does? Did the database or the network fail? Or does the interface not match the package? Penitent answers with three
-exceptions, all unchecked, in `io.github.rponte.penitent.exception`:
-
-| Exception | When | What to do |
-|---|---|---|
-| `PlsqlRoutineRaisedException` | The routine failed while running: a `RAISE_APPLICATION_ERROR`, a `NO_DATA_FOUND`, a violated constraint | Handle it, by its code |
-| `PlsqlExecutionException` | Any other database failure: connecting, a package that does not compile, a deadlock | Usually let it propagate |
-| `PlsqlMappingException` | The interface does not match the database, or a value does not convert | Fix the code. The message says what was looked up and what exists |
-
-`PlsqlRoutineRaisedException` extends `PlsqlExecutionException`, so catching the base class catches both. In every
-case, the original `SQLException` is the cause.
-
-With [`penitent-spring`](spring.md), every database failure except a routine error arrives as a Spring
-`DataAccessException` instead of a `PlsqlExecutionException`.
+A `RAISE_APPLICATION_ERROR` in your package becomes a Java exception you can catch, with the routine's code and its
+text. No `SQLException` to unwrap, no `ORA-` string to parse.
 
 ## Errors raised by the routine
 
@@ -55,26 +42,47 @@ customers.register(1, "Ana");    // the INSERT breaks the primary key: getCode()
 
 That includes an error in the query of a cursor the routine returns, which only shows up when the cursor is read.
 
-### Constraints the routine declares on its parameters
+## Your own exceptions
 
-A constraint on a formal parameter is part of the routine's contract, so a value that breaks it is the routine's
-error too, a `PlsqlRoutineRaisedException`, as if the routine checked it on its first line:
+To turn an error into an exception of your domain, give Penitent a `PlsqlExceptionTranslator`. It receives a
+`PlsqlFailure`, with the statement, the `SQLException` and the point of the call where it failed, and returns the
+exception to throw. Delegate everything else to the default:
 
-| The routine declares | The value | What arrives |
+<!-- snippet: errors/translator -->
+```java
+PlsqlExceptionTranslator translator = failure -> failure.cause().getErrorCode() == 20001
+        ? new OrderNotOpenException(failure.cause())
+        : new DefaultPlsqlExceptionTranslator().translate(failure);
+
+Orders orders = PlsqlPackages.create(Orders.class, dataSource,
+        PlsqlSettings.defaults().withExceptionTranslator(translator));
+```
+
+Now a second `cancelOrder` throws `OrderNotOpenException`, and every other failure arrives as before. To use the
+translator in every interface, see [Settings](settings.md).
+
+## Three exceptions, by whose fault it is
+
+Every failure of a call answers one question first: did the routine reject the request, did the database or the
+network fail, or does the interface not match the package? The three exceptions, all unchecked, in
+`io.github.rponte.penitent.exception`:
+
+| Exception | When | What to do |
 |---|---|---|
-| `p_qty POSITIVE` (or `NATURAL`, or a subtype with a `RANGE`) | `-1` | `PlsqlRoutineRaisedException`, code `6502` |
-| `p_id SIMPLE_INTEGER` (or `POSITIVEN`, or any `NOT NULL` subtype) | `null` | `PlsqlRoutineRaisedException`, code `6502` |
-| `p_count PLS_INTEGER` | `3_000_000_000L` | `PlsqlRoutineRaisedException`, code `1426`, numeric overflow |
+| `PlsqlRoutineRaisedException` | The routine failed while running: a `RAISE_APPLICATION_ERROR`, a `NO_DATA_FOUND`, a violated constraint | Handle it, by its code |
+| `PlsqlExecutionException` | Any other database failure: connecting, a package that does not compile, a deadlock | Usually let it propagate |
+| `PlsqlMappingException` | The interface does not match the database, or a value does not convert | Fix the code. The message says what was looked up and what exists |
 
-Oracle checks them when it assigns the value, before the routine's first line: the stack shows only `at line 1`. They
-are checked the same way whether the call comes from Java or from PL/SQL.
+`PlsqlRoutineRaisedException` extends `PlsqlExecutionException`, so catching the base class catches both. In every
+case, the original `SQLException` is the cause.
 
-**A size or a precision is not checked on a parameter.** Following Oracle's "Formal Parameters of Constrained
-Subtypes", a parameter inherits a `NOT NULL` and a range, but not a size nor a precision. A parameter declared as
-`t.code%TYPE`, of a `VARCHAR2(3)` column, or as a `VARCHAR2(3)` or `NUMBER(3)` subtype, takes a value of any size.
-Such a value fails only where the routine stores or copies it: `ORA-12899` for the column, `ORA-06502` for a local
-variable, both the routine's errors. The same holds for a return value: a `NUMBER(3)` subtype is checked, a
-`VARCHAR2(3)` one is not.
+<div class="admonition note" markdown>
+<p class="admonition-title">With Spring</p>
+
+With [`penitent-spring`](spring.md), every database failure except a routine error arrives as a Spring
+`DataAccessException` instead of a `PlsqlExecutionException`.
+
+</div>
 
 ## Other database failures
 
@@ -116,26 +124,33 @@ A failure of your own code, such as a converter's, is not the driver's: it arriv
 naming the parameter, and the connection is kept. A failure while the [call log](logging.md) reads a value is
 ignored, as the log never fails a call.
 
-## Your own exceptions
+## Good to know: constraints on a routine's parameters
 
-To turn an error into an exception of your domain, give Penitent a `PlsqlExceptionTranslator`. It receives a
-`PlsqlFailure`, with the statement, the `SQLException` and the point of the call where it failed, and returns the
-exception to throw. Delegate everything else to the default:
+A routine can declare a constraint on a parameter, such as `POSITIVE` or `NOT NULL`. A value that breaks it is the
+routine's error, a `PlsqlRoutineRaisedException`, as if the routine checked it on its first line:
 
-<!-- snippet: errors/translator -->
-```java
-PlsqlExceptionTranslator translator = failure -> failure.cause().getErrorCode() == 20001
-        ? new OrderNotOpenException(failure.cause())
-        : new DefaultPlsqlExceptionTranslator().translate(failure);
+| The routine declares | The value | What arrives |
+|---|---|---|
+| `p_qty POSITIVE` (or `NATURAL`, or a subtype with a `RANGE`) | `-1` | `PlsqlRoutineRaisedException`, code `6502` |
+| `p_id SIMPLE_INTEGER` (or `POSITIVEN`, or any `NOT NULL` subtype) | `null` | `PlsqlRoutineRaisedException`, code `6502` |
+| `p_count PLS_INTEGER` | `3_000_000_000L` | `PlsqlRoutineRaisedException`, code `1426`, numeric overflow |
 
-Orders orders = PlsqlPackages.create(Orders.class, dataSource,
-        PlsqlSettings.defaults().withExceptionTranslator(translator));
-```
+Oracle checks them when it assigns the value, before the routine's first line: the stack shows only `at line 1`. They
+are checked the same way whether the call comes from Java or from PL/SQL.
 
-Now a second `cancelOrder` throws `OrderNotOpenException`, and every other failure arrives as before. To use the
-translator in every interface, see [Settings](settings.md).
+<div class="admonition warning" markdown>
+<p class="admonition-title">A size or a precision is not checked on a parameter</p>
+
+A parameter declared as `t.code%TYPE`, of a `VARCHAR2(3)` column, or as a `VARCHAR2(3)` or `NUMBER(3)` subtype, takes
+a value of any size, as Oracle's "Formal Parameters of Constrained Subtypes" says: a parameter inherits a `NOT NULL`
+and a range, but not a size nor a precision. Such a value fails only where the routine stores or copies it:
+`ORA-12899` for the column, `ORA-06502` for a local variable, both the routine's errors. The same holds for a return
+value: a `NUMBER(3)` subtype is checked, a `VARCHAR2(3)` one is not.
+
+</div>
 
 ## See also
 
 - [Validation](validation.md): find every `PlsqlMappingException` up front, instead of one call at a time.
 - [Spring and Spring Boot](spring.md): how failures map to `DataAccessException`.
+- [Troubleshooting](troubleshooting.md): what an error message means, and what to do about it.
