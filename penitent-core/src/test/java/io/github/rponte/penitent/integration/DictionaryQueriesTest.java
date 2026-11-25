@@ -82,50 +82,50 @@ class DictionaryQueriesTest extends OracleIntegrationTest {
 	@Test
 	@DisplayName("the first call of a scalar routine")
 	void scalar() {
-		assertCost(ScalarsTest.Scalars.class, s -> s.plus(BigDecimal.ONE, BigDecimal.ONE), 4, 5);
+		assertCost(ScalarsTest.Scalars.class, s -> s.plus(BigDecimal.ONE, BigDecimal.ONE), 3, 4);
 	}
 
 	@Test
 	@DisplayName("the first call of a routine that takes an OBJECT: one more query, for its attributes")
 	void object() {
-		assertCost(ObjectTypesTest.Composites.class, s -> s.echoAddress(new ObjectTypesTest.Address("A", 1)), 5, 6);
+		assertCost(ObjectTypesTest.Composites.class, s -> s.echoAddress(new ObjectTypesTest.Address("A", 1)), 4, 5);
 	}
 
 	@Test
 	@DisplayName("the first call of a routine that takes a collection of OBJECT")
 	void collection_of_objects() {
 		assertCost(CollectionsTest.Composites.class,
-				s -> s.echoAddresses(List.of(new CollectionsTest.Address("A", 1))), 11, 12);
+				s -> s.echoAddresses(List.of(new CollectionsTest.Address("A", 1))), 10, 11);
 	}
 
 	@Test
 	@DisplayName("the first call of a routine that takes an OBJECT with nested OBJECTs and collections")
 	void nested_object() {
-		assertCost(ObjectTypesTest.Composites.class, s -> s.echoCustomer(customer()), 15, 16);
+		assertCost(ObjectTypesTest.Composites.class, s -> s.echoCustomer(customer()), 14, 15);
 	}
 
 	@Test
 	@DisplayName("validating an interface of 24 scalar methods")
 	void validate_scalars() {
-		assertCost(ScalarsTest.Scalars.class, DictionaryQueriesTest::validate, 50, 50);
+		assertCost(ScalarsTest.Scalars.class, DictionaryQueriesTest::validate, 27, 27);
 	}
 
 	@Test
 	@DisplayName("validating an interface of 33 methods with OUT parameters and composites")
 	void validate_outputs() {
-		assertCost(OutParametersTest.Outputs.class, DictionaryQueriesTest::validate, 82, 82);
+		assertCost(OutParametersTest.Outputs.class, DictionaryQueriesTest::validate, 49, 49);
 	}
 
 	@Test
 	@DisplayName("validating an interface of 36 methods over overloaded routines: more rows, so more round trips")
 	void validate_overloads() {
-		assertCost(OverloadingTest.Overload.class, DictionaryQueriesTest::validate, 78, 85);
+		assertCost(OverloadingTest.Overload.class, DictionaryQueriesTest::validate, 42, 49);
 	}
 
 	@Test
 	@DisplayName("validating an interface of 38 methods")
 	void validate_time_zones() {
-		assertCost(TimeZoneTest.TimeZones.class, DictionaryQueriesTest::validate, 84, 84);
+		assertCost(TimeZoneTest.TimeZones.class, DictionaryQueriesTest::validate, 46, 46);
 	}
 
 	@Test
@@ -153,7 +153,7 @@ class DictionaryQueriesTest extends OracleIntegrationTest {
 		counter.reset();
 		second.plus(BigDecimal.ONE, BigDecimal.ONE);
 
-		assertThat(counter.dictionaryQueries()).isEqualTo(4);
+		assertThat(counter.dictionaryQueries()).isEqualTo(3);
 	}
 
 	@Test
