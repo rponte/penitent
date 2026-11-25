@@ -60,7 +60,24 @@ final class RoutineCall {
 	 */
 	private final ConcurrentMap<Method, Unchanged> unchanged = new ConcurrentHashMap<>();
 
-	/** How long a routine read again and found the same is not read again for a failure of that kind. */
+	/**
+	 * How long a routine read again and found the same is not read again for a failure of that kind: one second, fixed
+	 * on purpose, not a setting (#165).
+	 *
+	 * <p><b>What it bounds.</b> A routine that keeps failing with {@code PLS-00306}, {@code PLS-00222} or
+	 * {@code PLS-00302} of its own, as from its dynamic PL/SQL, read the dictionary again on every call: a describe's
+	 * queries per failing call, under load, while something is already wrong. With this window, at most one read a
+	 * second per method, whatever the rate of calls.
+	 *
+	 * <p><b>What it costs.</b> A real change of the routine made within the second after such a read is noticed at
+	 * the first failure after the second has passed, not at once: until then, the failures go as Oracle says them.
+	 * Only failures of those three errors wait; a call that works, or another error, is not affected.
+	 *
+	 * <p><b>Why fixed.</b> Neither end needs tuning: shorter brings back a read per failing call under load, and longer
+	 * only delays noticing a change. HikariCP makes the same trade with a fixed window, 500 ms, in which a connection
+	 * used a moment ago is not validated again. A setting would ask every user to choose a number that only matters
+	 * while a routine keeps failing.
+	 */
 	private static final long RECHECK_AFTER_NANOS = java.util.concurrent.TimeUnit.SECONDS.toNanos(1);
 
 	/** {@code routine}, as read again at {@code at}, from {@link System#nanoTime()}, and found the same. */
