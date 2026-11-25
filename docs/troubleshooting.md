@@ -129,6 +129,14 @@ the old types in each connection, or the session had state in a package that was
 - **`... changed since this proxy described it: ...`:** the routine, or a type it takes, changed. Penitent read it
   again, and the rest of the message says what no longer fits the method, as a new proxy would. Update the method or
   the Java type.
+- **`... changed since this proxy described it, and was described again: the call did not run, and the next one uses
+  the new signature`:** the routine changed, and the method still fits it, as when a parameter is renamed and the
+  interface binds by position. Nothing ran, so nothing is to undo, and the next call works: the message shows the
+  parameters before and now. Oracle's `PLS-00306` follows, and stays the exception's cause and code. Whether to call
+  again is the application's choice: see [Errors](errors.md#when-the-driver-fails-itself).
+- **`PLS-00306` alone, the same on every call:** the routine raises it itself, from its own dynamic PL/SQL, and its
+  signature did not change. Penitent checks that by reading the routine again, at most once a second, and leaves the
+  error as Oracle says it.
 - **`ORA-17049`, with "The driver keeps, in each connection, a type as it was when the connection first used it":**
   a type changed, and the connection still has the old one. Renew the pool's connections, or restart the
   application.

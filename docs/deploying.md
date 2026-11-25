@@ -66,7 +66,7 @@ had changed, Penitent describes the routine again, and says what no longer fits.
 |---|---|
 | a parameter added at the end, with `DEFAULT` | works: the call leaves it out |
 | a parameter with `DEFAULT` inserted in the middle, or two parameters that swap places | works, with the right values: each value goes to the parameter it was meant for, by name |
-| a parameter renamed, binding by position | fails once, without running, with Oracle's `PLS-00306`; Penitent reads the routine again, and the next call uses the new name |
+| a parameter renamed, binding by position | fails once, without running, with a `PlsqlExecutionException` that says so: `PLSQL_TEST.ORDERS_PKG.F changed since this proxy described it, and was described again: the call did not run, and the next one uses the new signature. Parameters before: [P_A NUMBER, P_B NUMBER]; now: [P_A NUMBER, P_C NUMBER].`, followed by Oracle's `PLS-00306`, which stays its cause and its code. The next call uses the new name |
 | an overload added | works, as long as the method still fits the version it used |
 | a parameter added without `DEFAULT`, a parameter renamed when binding by name, a function turned into a procedure, or the routine removed | fails without running: Oracle refuses it with `PLS-00306: wrong number or types of arguments`, `PLS-00222` or `PLS-00302`, and Penitent, having read the routine again, throws a `PlsqlMappingException` that says so, such as `PLSQL_TEST.ORDERS_PKG.F changed since this proxy described it: the method declares 2 parameters, but PLSQL_TEST.ORDERS_PKG.F expects 3: [...]`. The calls after it are refused before they run, as a new proxy would, until the method fits again |
 | the return type changed | fails converting the value, such as `ORA-06502` |

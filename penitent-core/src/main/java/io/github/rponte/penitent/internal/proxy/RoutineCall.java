@@ -52,6 +52,21 @@ final class RoutineCall {
 	/** Per instance, for the same reason as {@link TypeCache}. */
 	private final ConcurrentMap<Method, RoutineMetadata> routines = new ConcurrentHashMap<>();
 
+	/**
+	 * The routines read again after a call failed as if they had changed, and found the same: the error was the
+	 * routine's own, such as a {@code PLS-00306} of its dynamic PL/SQL (#165). For {@link #RECHECK_AFTER_NANOS}, a
+	 * failure of that kind does not read the dictionary again, so that a routine that keeps failing so does not cost a
+	 * describe on every call; after it, the next one does, and a real change made meanwhile is still noticed.
+	 */
+	private final ConcurrentMap<Method, Unchanged> unchanged = new ConcurrentHashMap<>();
+
+	/** How long a routine read again and found the same is not read again for a failure of that kind. */
+	private static final long RECHECK_AFTER_NANOS = java.util.concurrent.TimeUnit.SECONDS.toNanos(1);
+
+	/** {@code routine}, as read again at {@code at}, from {@link System#nanoTime()}, and found the same. */
+	private record Unchanged(RoutineMetadata routine, long at) {
+	}
+
 	RoutineCall(Class<?> type, PlsqlBind defaultBind, TypeCache types, ValueEncoder encoder, ValueDecoder decoder) {
 		this.type = type;
 		this.defaultBind = defaultBind;
@@ -71,10 +86,7 @@ final class RoutineCall {
 			if (cause.getErrorCode() == UNRESOLVED_TYPE || cause.getErrorCode() == INVALID_NAME_PATTERN) {
 				new RoutineValidation(routine).explainUndescribableJson(method, new Dictionary(connection), cause);
 			}
-			if (described) {
-				explainChange(method, routine, cause, connection);
-			}
-			throw StaleTypes.explained(e);
+			throw StaleTypes.explained(described ? explainChange(method, routine, cause, connection, e) : e);
 		}
 	}
 
@@ -92,22 +104,45 @@ final class RoutineCall {
 	 * deploy under a running application does. The routine, or the types, are described again, so that the cache holds
 	 * them as they are now; if the method no longer fits, the error says so as a new proxy would, naming the change.
 	 * The call is not repeated: it failed, and only the caller knows whether it may run again. If the method still
-	 * fits, nothing is claimed, and the original error goes on; so it does if the dictionary cannot be read, as when the
-	 * error closed the connection, which 21c does: the cache is already cleared, and the next call reads it again.
+	 * fits a signature that changed, as a parameter renamed binding by position does, the failure says so, with
+	 * Oracle's error after it and as its cause (#165). If the routine read again is the same, the error is the
+	 * routine's own and goes on as it is, and for a short while such failures do not read the dictionary again (see
+	 * {@link #unchanged}). So it does if the dictionary cannot be read, as when the error closed the connection, which
+	 * 21c does: the cache is already cleared, and the next call reads it again.
 	 */
-	private void explainChange(Method method, RoutineMetadata routine, SQLException cause, Connection connection) {
+	private SqlFailure explainChange(Method method, RoutineMetadata routine, SQLException cause, Connection connection,
+			SqlFailure failure) {
 		String message = String.valueOf(cause.getMessage());
 		if (SIGNATURE_CHANGED.stream().anyMatch(message::contains)) {
+			Unchanged last = unchanged.get(method);
+			if (last != null && last.routine() == routine && System.nanoTime() - last.at() < RECHECK_AFTER_NANOS) {
+				// read again a moment ago, and the same: the routine's own error, as Oracle says it
+				return failure;
+			}
 			routines.remove(method, routine);
+			RoutineMetadata fresh;
 			try {
-				requireToAgree(method, Caches.get(routines, method, m -> describe(m, connection)),
-						method.getParameterCount());
+				fresh = Caches.get(routines, method, m -> describe(m, connection));
+				requireToAgree(method, fresh, method.getParameterCount());
 			} catch (PlsqlMappingException e) {
 				throw new PlsqlMappingException(routine.qualifiedName() + " changed since this proxy described it: "
 						+ e.getMessage(), cause);
 			} catch (SqlFailure unreadable) {
 				routines.remove(method);
+				return failure;
 			}
+			if (fresh.equals(routine)) {
+				unchanged.put(method, new Unchanged(fresh, System.nanoTime()));
+				return failure;
+			}
+			unchanged.remove(method);
+			// the method fits the new signature: the next call uses it; this one, which did not run, says so first,
+			// with Oracle's error after it, as its cause and with its code, so that it does not read as a broken package
+			return new SqlFailure(failure.failure().sql(), new SQLException(routine.qualifiedName()
+					+ " changed since this proxy described it, and was described again: the call did not run, and the"
+					+ " next one uses the new signature. Parameters before: " + routine.parameters() + "; now: "
+					+ fresh.parameters() + ". " + cause.getMessage(), cause.getSQLState(), cause.getErrorCode(), cause),
+					failure.failure().phase());
 		} else if (StaleTypes.OLDER_SHAPE.contains(cause.getErrorCode())) {
 			types.clear();
 			try {
@@ -119,6 +154,7 @@ final class RoutineCall {
 				types.clear();
 			}
 		}
+		return failure;
 	}
 
 	/**
