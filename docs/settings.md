@@ -16,14 +16,22 @@ CustomerLookup lookup = PlsqlPackages.create(CustomerLookup.class, dataSource, s
 ```
 
 `PlsqlSettings` is immutable: each `with...` returns a new object. "Global" means one object you pass to every
-`create`, not static state, so an interface never changes behavior after it is created. With Spring Boot, the starter
-builds it for you from `application.yaml`; see [Spring and Spring Boot](spring.md#spring-boot-starter).
+`create`, not static state, so an interface never changes behavior after it is created.
+
+With Spring Boot, the starter builds it for you, from `application.yaml` and from your `PlsqlSettingsCustomizer`
+beans; see [Spring and Spring Boot](spring.md#converters-and-translator-in-code):
+
+<!-- snippet: untested -->
+```yaml
+penitent:
+  bind: BY_NAME
+```
 
 ## What can be set
 
 | Setting | Method | Default |
 |---|---|---|
-| How parameters are bound | `withBind(PlsqlBind.BY_NAME)` | `BY_POSITION` |
+| How parameters are bound: see [By position or by name](routines.md#by-position-or-by-name) | `withBind(PlsqlBind.BY_NAME)` | `BY_POSITION` |
 | Converters of your types | `withConverters(PlsqlConverters.of(...))` | none |
 | Exception translator | `withExceptionTranslator(translator)` | `DefaultPlsqlExceptionTranslator`, or the Spring translator with `penitent-spring` |
 
@@ -48,10 +56,14 @@ public interface PositionalOrders {
 
 The annotations' default is `PlsqlBind.DEFAULT`, which means "use the settings".
 
-> **A global `BY_NAME` applies to every interface that does not declare `bind`.** Their parameters must then match
-> the routine's by name, with `@PlsqlParam` or with Java names that follow the convention. An interface written for
-> binding by position fails on its first call, with a message that lists the routine's parameters, so turn it on
-> with [`validate`](validation.md) in a test.
+<div class="admonition warning" markdown>
+<p class="admonition-title">A global <code>BY_NAME</code> applies to every interface that does not declare <code>bind</code></p>
+
+Their parameters must then match the routine's by name, with `@PlsqlParam` or with Java names that follow the
+convention. An interface written for binding by position fails on its first call, with a message that lists the
+routine's parameters, so turn it on with [`validate`](validation.md) in a test.
+
+</div>
 
 ## Adding to the global converters
 
