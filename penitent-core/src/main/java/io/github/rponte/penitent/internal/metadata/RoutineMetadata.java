@@ -275,7 +275,10 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 		String routine = standalone ? resolved.name() : routineName;
 
 		Map<String, List<Argument>> versions = new LinkedHashMap<>();
+		// the versions ALL_PROCEDURES counts, in the same query (#169): a version without arguments is not in ALL_ARGUMENTS
+		int[] counted = { 0 };
 		Dictionary.RowMapper<List<Argument>> toVersion = (rs, n) -> {
+			counted[0] = rs.getInt("versions");
 			List<Argument> version = versions.computeIfAbsent(String.valueOf(rs.getString("overload")),
 					k -> new ArrayList<>());
 			// a version without arguments shows up as a row without a type
@@ -295,19 +298,24 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 		if (standalone) {
 			dictionary.query("""
 					select overload, position, argument_name, data_type, in_out, type_owner, type_name, type_subname,
-					       defaulted
+					       defaulted,
+					       (select count(*) from all_procedures
+					         where owner = ? and object_name = ? and procedure_name is null
+					           and object_type in ('FUNCTION', 'PROCEDURE')) as versions
 					  from all_arguments
 					 where owner = ? and package_name is null and object_name = ? and data_level = 0
 					 order by overload nulls first, position
-					""", toVersion, target.owner(), routine);
+					""", toVersion, target.owner(), routine, target.owner(), routine);
 		} else {
 			dictionary.query("""
 					select overload, position, argument_name, data_type, in_out, type_owner, type_name, type_subname,
-					       defaulted
+					       defaulted,
+					       (select count(*) from all_procedures
+					         where owner = ? and object_name = ? and procedure_name = ?) as versions
 					  from all_arguments
 					 where owner = ? and package_name = ? and object_name = ? and data_level = 0
 					 order by overload nulls first, position
-					""", toVersion, target.owner(), target.name(), routine);
+					""", toVersion, target.owner(), target.name(), routine, target.owner(), target.name(), routine);
 		}
 
 		if (versions.isEmpty()) {
@@ -319,7 +327,7 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 				.map(arguments -> new RoutineMetadata(target.owner(), target.name(), routine, arguments, false))
 				.toList());
 		// a procedure without arguments does not show up in ALL_ARGUMENTS, not even as one version of an overload
-		if (countVersions(dictionary, target, routine) > routines.size()) {
+		if (counted[0] > routines.size()) {
 			routines.add(new RoutineMetadata(target.owner(), target.name(), routine, List.of(), false));
 		}
 		if (byName) {
