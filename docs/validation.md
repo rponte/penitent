@@ -1,8 +1,9 @@
 # Validation
 
-Penitent checks each method against the dictionary on its first call. That catches every mismatch, but late: a
-typo in a method that runs once a month only fails once a month. `PlsqlPackages.validate` checks every method of an
-interface at once, without calling any routine:
+Find every mismatch between your interfaces and the database at once, in a test or at startup, instead of one call
+at a time. Penitent checks each method on its first call anyway, but that is late: a typo in a method that runs once
+a month only fails once a month. `PlsqlPackages.validate` checks every method of an interface at once, without calling
+any routine:
 
 <!-- snippet: validation/validate -->
 ```java
@@ -34,9 +35,16 @@ you do not fix one only to find the next:
   }
   ```
 
-- **At startup,** so that an application deployed against the wrong schema does not start. With Spring Boot, that is
-  `penitent.validation.enabled: true`; with `@EnablePlsqlPackages`, `validateOnStartup = true`. See
-  [Spring and Spring Boot](spring.md).
+- **At startup,** so that an application deployed against the wrong schema does not start. With Spring Boot:
+
+  <!-- snippet: untested -->
+  ```yaml
+  penitent:
+    validation:
+      enabled: true
+  ```
+
+  With `@EnablePlsqlPackages`, `validateOnStartup = true`. See [Spring and Spring Boot](spring.md).
 
 ## What it checks
 
@@ -47,6 +55,16 @@ you do not fix one only to find the next:
 - **What depends on a value stays for the call:** a cursor's columns, which only exist when the query runs, and a
   composite sent as a subclass of the declared type.
 - **A database failure is not a mapping error:** it stops the validation, and arrives translated as on a call.
+
+<div class="admonition warning" markdown>
+<p class="admonition-title">What validation cannot see</p>
+
+A method that still fits the routine passes, even if the routine changed in a way that matters: binding by position,
+two parameters of the same type that swapped places, or a parameter with `DEFAULT` inserted in the middle. The call
+then runs with values in other parameters, with no error. [By position or by name](routines.md#by-position-or-by-name)
+shows each case, and how binding by name avoids them.
+
+</div>
 
 ## What it costs
 
