@@ -45,6 +45,14 @@ public final class Dictionary {
 		}
 	}
 
+	/**
+	 * The rows a dictionary query brings in each round trip (#169). The driver's default, 10, costs one more round
+	 * trip for each further 10 rows, as an overloaded routine's parameters have. The rows are small, a few names and
+	 * types, and a query's result lives only while it is read, so 100 costs little memory, and fixed: no setting,
+	 * since nothing about the application changes what fits.
+	 */
+	private static final int FETCH_SIZE = 100;
+
 	private final Connection connection;
 
 	public Dictionary(Connection connection) {
@@ -53,6 +61,7 @@ public final class Dictionary {
 
 	public <T> List<T> query(String sql, RowMapper<T> mapper, Object... parameters) {
 		try (PreparedStatement statement = connection.prepareStatement(sql)) {
+			statement.setFetchSize(FETCH_SIZE);
 			for (int i = 0; i < parameters.length; i++) {
 				statement.setObject(i + 1, parameters[i]);
 			}
