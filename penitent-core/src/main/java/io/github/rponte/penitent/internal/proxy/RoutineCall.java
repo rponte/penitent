@@ -52,6 +52,9 @@ final class RoutineCall {
 	/** Per instance, for the same reason as {@link TypeCache}. */
 	private final ConcurrentMap<Method, RoutineMetadata> routines = new ConcurrentHashMap<>();
 
+	/** Where the package, or the standalone routines, were found: resolved once, not per method (#169). */
+	private final RoutineMetadata.Names names = new RoutineMetadata.Names();
+
 	/**
 	 * The routines read again after a call failed as if they had changed, and found the same: the error was the
 	 * routine's own, such as a {@code PLS-00306} of its dynamic PL/SQL (#165). For {@link #RECHECK_AFTER_NANOS}, a
@@ -137,6 +140,8 @@ final class RoutineCall {
 				return failure;
 			}
 			routines.remove(method, routine);
+			// a deploy may also have moved the package, or pointed a synonym elsewhere
+			names.clear();
 			RoutineMetadata fresh;
 			try {
 				fresh = Caches.get(routines, method, m -> describe(m, connection));
@@ -317,7 +322,7 @@ final class RoutineCall {
 
 		long start = System.nanoTime();
 		Dictionary dictionary = new Dictionary(connection);
-		RoutineMetadata routine = RoutineMetadata.read(dictionary, schema, packageName, routineName, method,
+		RoutineMetadata routine = RoutineMetadata.read(dictionary, names, schema, packageName, routineName, method,
 				types.converters(), bind == PlsqlBind.BY_NAME);
 		// a wrong arity has its own message, at call time
 		if (method.getParameterCount() <= routine.parameters().size()) {

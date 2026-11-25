@@ -11,6 +11,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.stream.Collectors;
 
 import io.github.rponte.penitent.PlsqlBind;
@@ -263,11 +265,11 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 	 * confirmed in {@code ALL_PROCEDURES}; otherwise a wrong name would pass as "a routine with zero
 	 * arguments" and only blow up on the call.
 	 */
-	public static RoutineMetadata read(Dictionary dictionary, String schema, String packageName, String routineName,
-			Method method, PlsqlConverters converters, boolean byName) {
+	public static RoutineMetadata read(Dictionary dictionary, Names names, String schema, String packageName,
+			String routineName, Method method, PlsqlConverters converters, boolean byName) {
 
 		boolean standalone = packageName == null;
-		ObjectName resolved = resolve(dictionary, schema, standalone ? routineName : packageName, standalone);
+		ObjectName resolved = resolve(dictionary, names, schema, standalone ? routineName : packageName, standalone);
 		// outside a package, the synonym points to the routine itself, and it is the routine that gets the real name
 		ObjectName target = standalone ? new ObjectName(resolved.owner(), null) : resolved;
 		String routine = standalone ? resolved.name() : routineName;
@@ -509,6 +511,37 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 	}
 
 	/** A package or, outside a package, a standalone routine: the object a synonym can point to. */
+	/**
+	 * Where a proxy's names were found, so that its methods do not each ask again (#169): the session's
+	 * {@code current_schema}, and each package or standalone routine, through its synonyms. One per proxy, as its
+	 * other caches: the first method described resolves the name, and the others use it, so that a proxy's methods
+	 * never resolve the same name to two places, whichever session described each. A name that was not found is not
+	 * kept, since it may be created later, and a call that fails as if the routine had changed clears them (#165).
+	 */
+	public static final class Names {
+
+		private record Key(String schema, String name, boolean standalone) {
+		}
+
+		private volatile String currentSchema;
+		private final ConcurrentMap<Key, ObjectName> found = new ConcurrentHashMap<>();
+
+		String currentSchema(Dictionary dictionary) {
+			String schema = currentSchema;
+			if (schema == null) {
+				schema = dictionary.currentSchema();
+				currentSchema = schema;
+			}
+			return schema;
+		}
+
+		/** Forgets them all: the next describe resolves the names again. */
+		public void clear() {
+			currentSchema = null;
+			found.clear();
+		}
+	}
+
 	private record ObjectName(String owner, String name) {
 	}
 
@@ -519,8 +552,14 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 	 * name. A synonym can point to another, hence the loop; the limit only keeps it from running
 	 * forever on a synonym cycle. Each name is asked about once (#169).
 	 */
-	private static ObjectName resolve(Dictionary dictionary, String schema, String objectName, boolean standalone) {
-		String owner = schema != null ? schema : dictionary.currentSchema();
+	private static ObjectName resolve(Dictionary dictionary, Names names, String schema, String objectName,
+			boolean standalone) {
+		Names.Key key = new Names.Key(schema, objectName, standalone);
+		ObjectName known = names.found.get(key);
+		if (known != null) {
+			return known;
+		}
+		String owner = schema != null ? schema : names.currentSchema(dictionary);
 		ObjectName current = new ObjectName(owner, objectName);
 
 		boolean found = exists(dictionary, current, standalone);
@@ -540,7 +579,11 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 			current = next.get(0);
 			found = exists(dictionary, current, standalone);
 		}
-		return found ? current : new ObjectName(owner, objectName);
+		if (!found) {
+			return new ObjectName(owner, objectName);
+		}
+		names.found.put(key, current);
+		return current;
 	}
 
 	/** A package has its routines in {@code procedure_name}; a standalone routine is the object itself. */
