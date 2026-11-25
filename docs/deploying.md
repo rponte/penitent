@@ -58,27 +58,35 @@ lead to silent data corruption". To avoid the error, Oracle offers:
 
 ### The signature
 
-Penitent describes each routine once, on the method's first call, and keeps that description. When a call with it
-fails as if the routine had changed, Penitent describes the routine again, and says what no longer fits:
+Penitent describes each routine once, on the method's first call, and keeps that description. Every call names the
+parameters as that description did, by position too: `F(P_A => ?, P_B => ?)`. When a call fails as if the routine
+had changed, Penitent describes the routine again, and says what no longer fits. While the application runs:
 
 | Change | What the next call does |
 |---|---|
 | a parameter added at the end, with `DEFAULT` | works: the call leaves it out |
+| a parameter with `DEFAULT` inserted in the middle, or two parameters that swap places | works, with the right values: each value goes to the parameter it was meant for, by name |
+| a parameter renamed, binding by position | fails once, without running, with Oracle's `PLS-00306`; Penitent reads the routine again, and the next call uses the new name |
 | an overload added | works, as long as the method still fits the version it used |
 | a parameter added without `DEFAULT`, a parameter renamed when binding by name, a function turned into a procedure, or the routine removed | fails without running: Oracle refuses it with `PLS-00306: wrong number or types of arguments`, `PLS-00222` or `PLS-00302`, and Penitent, having read the routine again, throws a `PlsqlMappingException` that says so, such as `PLSQL_TEST.ORDERS_PKG.F changed since this proxy described it: the method declares 2 parameters, but PLSQL_TEST.ORDERS_PKG.F expects 3: [...]`. The calls after it are refused before they run, as a new proxy would, until the method fits again |
 | the return type changed | fails converting the value, such as `ORA-06502` |
-| **two parameters of the same type swap places** | **returns a wrong result with no error** when binding by position: `f(10, 3)` returned `-7` instead of `7`. Binding by name returned `7` |
 | **a parameter's type changed to one Oracle converts to**, such as `NUMBER` to `VARCHAR2` | **runs, with Oracle's implicit conversion**: the result depends on what the routine now does with the value |
 
 The failures are safe: the call does not run, and Penitent does not repeat it. Update the method to the new
 signature, as in [Troubleshooting](troubleshooting.md#the-method-does-not-match-the-routine). Penitent says a routine
 changed only when it reads it again and the method no longer fits: a `PLS-00306` raised inside the routine, by its own
-dynamic PL/SQL, stays as Oracle says it. Neither Penitent nor a restart can help the last two rows, which no error
-reveals:
+dynamic PL/SQL, stays as Oracle says it.
 
-- **Bind by name** when parameters of the same type may change places: `@PlsqlPackage(value = "...", bind =
-  PlsqlBind.BY_NAME)`, or for every interface in [Settings](settings.md). Swapped parameters then still get the
-  right values.
+**After a restart, binding by position follows the new order.** A new proxy describes the routine as it is now, so
+the order the Java method was written for is gone: measured with `f(p_a, p_b)` called as `f(10, 3)`, which returns
+`7`, a parameter with `DEFAULT` inserted in the middle returns `10`, and two parameters that swap places return
+`-7`, with no error. Validation at startup does not catch them either, since the method still fits.
+[By position or by name](routines.md#by-position-or-by-name) shows each case. What no error reveals:
+
+- **Bind by name** when the package's order may change, as Oracle recommends for a subprogram maintained by someone
+  else: `@PlsqlPackage(value = "...", bind = PlsqlBind.BY_NAME)`, or for every interface in
+  [Settings](settings.md). The values then go to the right parameters, while the application runs and after a
+  restart.
 - **Treat a parameter's type change as a change of the routine's contract**, as you would in Java, and review the
   callers.
 

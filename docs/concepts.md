@@ -70,7 +70,9 @@ When you call `orders.calculateFreight("SP", "CE")`:
    calls skip this step.
 3. **The method is checked against what was read:** the routine exists, procedure or function, the parameters, their
    directions and their types. A mismatch is a `PlsqlMappingException`, and nothing is sent to the database.
-4. **The call is built and the values are bound:** `{? = call SHOP.ORDERS_PKG.CALCULATE_FREIGHT(?, ?)}`, with each
+4. **The call is built and the values are bound:**
+   `{? = call SHOP.ORDERS_PKG.CALCULATE_FREIGHT(P_ORIGIN => ?, P_DESTINATION => ?)}`, naming each parameter as the
+   dictionary does, by position too, with each
    Java value converted to what the Oracle type expects, through your [converters](converters.md) when there are
    any.
 5. **The routine runs.**

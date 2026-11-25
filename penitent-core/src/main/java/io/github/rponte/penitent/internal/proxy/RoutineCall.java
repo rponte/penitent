@@ -297,7 +297,8 @@ final class RoutineCall {
 		Carriers carriers = Carriers.of(DriverProfile.of(connection));
 		String sql = routine.callStatement(args.length, expectsResult, carriers);
 		CallLog log = CallLog.routine(routine.qualifiedName(), method, sql,
-				routine.byName() ? routine.parameters().stream().limit(args.length).map(Argument::name).toList() : null);
+				// every call names its parameters, by position too (see RoutineMetadata.callStatement)
+				routine.parameters().stream().limit(args.length).map(Argument::name).toList());
 		try {
 			Object result = call(routine, method, args, expectsResult, connection, sql, log, carriers);
 			log.completed();

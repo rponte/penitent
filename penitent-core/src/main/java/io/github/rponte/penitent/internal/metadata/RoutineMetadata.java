@@ -633,10 +633,19 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 	}
 
 	/**
-	 * {@code {call PKG.ROUTINE(?, ?)}} for a procedure, {@code {? = call PKG.FUNC(?)}} for a
-	 * function, without the package for a standalone routine, with as many placeholders as the caller supplied, not as many as the routine
-	 * declares. A parameter with DEFAULT at the end can be omitted in a positional call, and Oracle
-	 * fills it in.
+	 * {@code {call PKG.ROUTINE(P_A => ?, P_B => ?)}} for a procedure, {@code {? = call PKG.FUNC(P_A => ?)}} for a
+	 * function, without the package for a standalone routine, with as many arguments as the caller supplied, not as
+	 * many as the routine declares: Oracle fills in a parameter left out with its DEFAULT.
+	 *
+	 * <p><b>Always in named notation (#159).</b> Binding by name, the parameters are in the Java order, each found by
+	 * its name. Binding by position, they are the routine's first ones as this description read them, so each value
+	 * goes to the parameter that was at its position when the proxy checked the method, by that parameter's name. A
+	 * call by position, {@code F(?, ?)}, matched the order of the routine at each execution instead: after a deploy
+	 * that inserts a parameter with DEFAULT in the middle, or swaps two of the same type, it sent the values to other
+	 * parameters with no error, and a renamed parameter took the value meant for the old one. In named notation those
+	 * get the values the method was written for, or fail without running, after which the routine is described again.
+	 * Measured on 23ai, 21c and 19c: where a call by position works, a named one gives the same result, overloads
+	 * and parameters left out at the end included.
 	 *
 	 * <p>An argument of a type that the driver does not know takes the placeholder and the return value of its
 	 * {@link Carrier}, such as {@code JSON(?)} and {@code JSON_SERIALIZE(... RETURNING CLOB)} for Oracle's JSON type
@@ -648,7 +657,7 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 		String call = callName();
 		if (providedArgumentCount > 0) {
 			call += java.util.stream.IntStream.range(0, providedArgumentCount)
-					.mapToObj(i -> (byName ? quoted(params.get(i).name()) + " => " : "")
+					.mapToObj(i -> quoted(params.get(i).name()) + " => "
 							+ carriers.of(params.get(i)).map(Carrier::placeholder).orElse("?"))
 					.collect(Collectors.joining(", ", "(", ")"));
 		}

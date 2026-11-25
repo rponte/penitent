@@ -6,6 +6,20 @@ All notable changes to this project are listed here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Every routine call is sent in named notation, `F(P_A => ?, P_B => ?)`, binding by position too
+  ([#159](https://github.com/rponte/penitent/issues/159)). By position, each Java parameter still goes to the
+  parameter at its position, as the proxy described the routine on the method's first call, and the call names it.
+  A call by position, `F(?, ?)`, matched the order of the routine at each execution instead, so a deploy made while the
+  application ran sent values to other parameters with no error: a parameter with `DEFAULT` inserted in the middle,
+  or two that swap places. Those now get the values meant for them. After a restart, a new description matches the
+  new order, as before: [By position or by name](docs/routines.md#by-position-or-by-name) shows each case, and when to
+  bind by name, as Oracle recommends for a subprogram maintained by someone else. The call log names each value of a
+  call by position too. **Upgrading:** a parameter renamed while the application runs, which a call by position
+  used to accept, fails one call without running, with `PLS-00306`, and the next call uses the new name. A tool that
+  reads the logged SQL sees the names.
+
 ## [0.32.0]
 
 Oracle's `JSON` type, as its text or as a `Map` or a `List`, checked the same way on every driver and database, in a

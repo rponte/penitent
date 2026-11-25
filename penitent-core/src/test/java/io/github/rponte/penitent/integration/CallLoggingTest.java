@@ -144,7 +144,7 @@ class CallLoggingTest extends OracleIntegrationTest {
 		assertThat(lineStartingWith("DEBUG Calling routine"))
 				.isEqualTo("DEBUG Calling routine     : PLSQL_TEST.FIXTURE_SCALARS.ECHO_TEXT <- Scalars.echoText");
 		assertThat(lineStartingWith("DEBUG -> SQL"))
-				.isEqualTo("DEBUG -> SQL              : {? = call PLSQL_TEST.FIXTURE_SCALARS.ECHO_TEXT(?)}");
+				.isEqualTo("DEBUG -> SQL              : {? = call PLSQL_TEST.FIXTURE_SCALARS.ECHO_TEXT(P_VALUE => ?)}");
 		assertThat(lineStartingWith("DEBUG <- completed")).matches("DEBUG <- completed        : \\d+ ms");
 		assertThat(lines()).noneMatch(l -> l.contains("secret"));
 	}

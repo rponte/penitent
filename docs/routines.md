@@ -63,7 +63,8 @@ orders.statusOf(orderId);              // "CANCELLED"
 ## Parameters by position
 
 By default, the first Java parameter goes to the first Oracle parameter, the second to the second, and so on. The
-types are not declared anywhere: Penitent reads them from the dictionary and checks that each Java type fits.
+types are not declared anywhere: Penitent reads them from the dictionary and checks that each Java type fits. The
+other way, by the parameters' names, and when to choose it, is in [By position or by name](#by-position-or-by-name).
 
 ### `DEFAULT` values
 
@@ -153,10 +154,64 @@ A few things to know:
 - **The direction must match.** An `OUT` parameter declared as a plain type, or a `PlsqlOut` on an `IN` parameter, is
   a `PlsqlMappingException`. Penitent cannot tell which side is wrong, so it does not guess.
 
+## By position or by name
+
+Penitent matches each Java parameter to an Oracle parameter in one of two ways, for a whole interface:
+
+| | By position, the default | By name, `bind = PlsqlBind.BY_NAME` |
+|---|---|---|
+| **The Java method declares** | the parameters in the routine's order | parameters named as the routine's, in any order |
+| **Java names** | free: `customerId` can stand for `PI_CUSTOMER_ID` | the Oracle name in SNAKE_CASE, or `@PlsqlParam("PI_CUSTOMER_ID")` |
+| **Compiling with `-parameters`** | not needed | needed, unless every parameter has `@PlsqlParam` |
+| **Leaving out a `DEFAULT` parameter** | only at the end of the list | anywhere |
+| **The routine renames a parameter** | keeps working | fails, saying which name is missing, until the Java is updated |
+| **The routine changes the order of its parameters** | the values can go to the wrong parameters, with no error: see below | keeps working |
+
+**Choose by position** when the Java interface should not depend on the database's parameter names: a package
+whose names follow a convention of their own, with prefixes or a letter for the type, or one with many parameters.
+It is the shortest interface to write, and it reads like the package spec.
+
+**Choose by name** when the package is maintained by someone else, or changes often: then the order is the part
+you cannot control. Oracle recommends named notation in that case, "when you invoke a subprogram defined or
+maintained by someone else" ([PL/SQL Language Reference, Subprogram Parameters](https://docs.oracle.com/en/database/oracle/oracle-database/23/lnpls/subprogram-parameters.html)).
+
+### What can go wrong by position
+
+Each example starts from this function, called as `f(10, 3)`, which returns `7`, with a method
+`BigDecimal f(BigDecimal pA, BigDecimal pB)`, and shows what the next call returns after a deploy changes the
+signature and the application restarts:
+
+<!-- snippet: untested -->
+```sql
+FUNCTION f(p_a NUMBER, p_b NUMBER) RETURN NUMBER;   -- RETURN p_a - p_b
+```
+
+| The function becomes | By position | By name |
+|---|---|---|
+| `f(p_a NUMBER, p_new NUMBER DEFAULT 100, p_b NUMBER DEFAULT 0)`: a parameter inserted in the middle | **`10`, with no error:** `3` goes to `p_new`, and `p_b` keeps its `DEFAULT` | `7` |
+| `f(p_a NUMBER, p_new VARCHAR2 DEFAULT 'x', p_b NUMBER DEFAULT 0)`: the same, of another type | **`10`, with no error:** Oracle converts `3` to the text `'3'` | `7` |
+| `f(p_b NUMBER, p_a NUMBER)`: two parameters of the same type that swap places | **`-7`, with no error** | `7` |
+| `f(p_a NUMBER, p_c NUMBER)`: a parameter renamed | `7` | fails: `parameter pB looks for P_B, which … does not have` |
+| `f(p_a NUMBER, p_b NUMBER, p_c NUMBER DEFAULT 1)`: a parameter added at the end, with `DEFAULT` | `7` | `7` |
+| `f(p_a NUMBER, p_b NUMBER, p_c NUMBER)`: a parameter added without `DEFAULT` | fails: the method declares 2 parameters, the routine expects 3 | fails, the same |
+
+Neither validation at startup nor a restart catches the first three: the method still fits the new signature, so the
+call runs. Only binding by name, or updating the method with the package, does.
+
+<div class="admonition note" markdown>
+<p class="admonition-title">While the application runs, position is protected too</p>
+
+A proxy matches each position once, when it first describes the routine, and every call names the parameters that
+were there: `F(P_A => ?, P_B => ?)`. So a deploy made while the application runs, before a restart, cannot shift
+the values: the first three rows return `7`, and a renamed parameter fails one call safely, after which the routine
+is described again. [Changing PL/SQL while the application runs](deploying.md) has the details.
+
+</div>
+
 ## Binding by name
 
-Binding by position has two weak spots. You cannot leave out a `DEFAULT` parameter in the middle of the list, and if
-someone swaps two parameters of the same type in the package, your calls keep working with the values swapped.
+You cannot leave out a `DEFAULT` parameter in the middle of the list by position, and the order of the parameters is
+the part of a package that can change under you without an error, as above.
 
 With `bind = PlsqlBind.BY_NAME`, each Java parameter goes to the Oracle parameter with the same name, and the call is
 sent as `COUNT_ORDERS(P_CUSTOMER_ID => ?, P_MIN_TOTAL => ?)`:

@@ -28,12 +28,12 @@ The first call of `normalizeAddress`, from [Types](types.md#object):
 
 <!-- snippet: composite -->
 ```text
-DEBUG Read dictionary     : SHOP.CUSTOMERS_PKG.NORMALIZE_ADDRESS in 38 ms
+DEBUG Read dictionary     : SHOP.CUSTOMERS_PKG.NORMALIZE_ADDRESS in # ms
 DEBUG Calling routine     : SHOP.CUSTOMERS_PKG.NORMALIZE_ADDRESS <- Customers.normalizeAddress
-DEBUG -> SQL              : {? = call SHOP.CUSTOMERS_PKG.NORMALIZE_ADDRESS(?)}
+DEBUG -> SQL              : {? = call SHOP.CUSTOMERS_PKG.NORMALIZE_ADDRESS(P_ADDRESS => ?)}
 TRACE -> with bind values : P_ADDRESS=SHOP.POSTAL_ADDRESS_T('rua das flores 10', 'Fortaleza', '60000-000')
 TRACE <- result           : SHOP.POSTAL_ADDRESS_T('Rua Das Flores 10', 'FORTALEZA', '60000000')
-DEBUG <- completed        : 4 ms
+DEBUG <- completed        : # ms
 ```
 
 - **`Read dictionary`** only shows up on the first call of each method, which is why that call takes longer. See
@@ -51,7 +51,7 @@ From 3 parameters on, the values are logged one per line, with the names aligned
 
 <!-- snippet: by-name-and-list -->
 ```text
-DEBUG Read dictionary     : SHOP.ORDERS_PKG.COUNT_ORDERS in 35 ms
+DEBUG Read dictionary     : SHOP.ORDERS_PKG.COUNT_ORDERS in # ms
 DEBUG Calling routine     : SHOP.ORDERS_PKG.COUNT_ORDERS <- OrderSearch.countOrders
 DEBUG -> SQL              : {? = call SHOP.ORDERS_PKG.COUNT_ORDERS(
 DEBUG                         P_CUSTOMER_ID => ?,
@@ -63,16 +63,16 @@ TRACE                         P_CUSTOMER_ID = 501,
 TRACE                         P_STATUS      = 'OPEN',
 TRACE                         P_MIN_TOTAL   = 100
 TRACE <- result           : 0
-DEBUG <- completed        : 3 ms
-DEBUG Read dictionary     : SHOP.CUSTOMERS_PKG.TAGS_OF in 22 ms
+DEBUG <- completed        : # ms
+DEBUG Read dictionary     : SHOP.CUSTOMERS_PKG.TAGS_OF in # ms
 DEBUG Calling routine     : SHOP.CUSTOMERS_PKG.TAGS_OF <- Customers.tagsOf
-DEBUG -> SQL              : {? = call SHOP.CUSTOMERS_PKG.TAGS_OF(?)}
+DEBUG -> SQL              : {? = call SHOP.CUSTOMERS_PKG.TAGS_OF(P_ID => ?)}
 TRACE -> with bind values : P_ID=1
 TRACE <- result           : [
 TRACE                         'vip',
 TRACE                         'newsletter'
 TRACE                       ]
-DEBUG <- completed        : 2 ms
+DEBUG <- completed        : # ms
 ```
 
 Bound by position, the SQL stays on one line, since one `?` per line would show nothing. Either way, the driver
@@ -85,17 +85,17 @@ failure is logged on one line, without a stack trace, because the exception alre
 
 <!-- snippet: out-and-failure -->
 ```text
-DEBUG Read dictionary     : SHOP.ORDERS_PKG.APPLY_DISCOUNT in 31 ms
+DEBUG Read dictionary     : SHOP.ORDERS_PKG.APPLY_DISCOUNT in # ms
 DEBUG Calling routine     : SHOP.ORDERS_PKG.APPLY_DISCOUNT <- Orders.applyDiscount
-DEBUG -> SQL              : {call SHOP.ORDERS_PKG.APPLY_DISCOUNT(?)}
+DEBUG -> SQL              : {call SHOP.ORDERS_PKG.APPLY_DISCOUNT(P_TOTAL => ?)}
 TRACE -> with bind values : P_TOTAL=200
 TRACE <- OUT values       : P_TOTAL=180
-DEBUG <- completed        : 2 ms
-DEBUG Read dictionary     : SHOP.ORDERS_PKG.ORDER_STATUS in 9 ms
+DEBUG <- completed        : # ms
+DEBUG Read dictionary     : SHOP.ORDERS_PKG.ORDER_STATUS in # ms
 DEBUG Calling routine     : SHOP.ORDERS_PKG.ORDER_STATUS <- Orders.orderStatus
-DEBUG -> SQL              : {? = call SHOP.ORDERS_PKG.ORDER_STATUS(?)}
+DEBUG -> SQL              : {? = call SHOP.ORDERS_PKG.ORDER_STATUS(P_ORDER_ID => ?)}
 TRACE -> with bind values : P_ORDER_ID=-1
-DEBUG <- failed           : 1 ms: SQLException: ORA-01403: no data found | ORA-06512: at "SHOP.ORDERS_PKG", line 26 | ORA-06512: at line 1 | https://docs.oracle.com/error-help/db/ora-01403/
+DEBUG <- failed           : # ms: SQLException: ORA-01403: no data found | ORA-06512: at "SHOP.ORDERS_PKG", line # | ORA-06512: at line # | https://docs.oracle.com/error-help/db/ora-01403/
 ```
 
 The message is the driver's, as it reaches the library. Driver 23 ends it with the link to the error's page;
