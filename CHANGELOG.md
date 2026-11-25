@@ -8,6 +8,14 @@ All notable changes to this project are listed here. The format follows
 
 ### Changed
 
+- A call that fails after its routine changed, while the method still fits the new signature, as a parameter renamed
+  binding by position, says so ([#165](https://github.com/rponte/penitent/issues/165)): the routine changed since
+  the proxy described it, was described again, the call did not run, and the next one uses the new signature, with
+  the parameters before and now. It reached the application as Oracle's raw `PLS-00306`. The exception is still a
+  `PlsqlExecutionException`, with Oracle's error as its cause and its code. A `PLS-00306` the routine raises itself,
+  its signature the same, stays as Oracle says it, and no longer reads the dictionary again on every call that fails
+  so: at most once a second.
+
 - Every routine call is sent in named notation, `F(P_A => ?, P_B => ?)`, binding by position too
   ([#159](https://github.com/rponte/penitent/issues/159)). By position, each Java parameter still goes to the
   parameter at its position, as the proxy described the routine on the method's first call, and the call names it.
