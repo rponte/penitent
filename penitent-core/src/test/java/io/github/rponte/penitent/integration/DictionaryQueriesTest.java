@@ -57,9 +57,11 @@ class DictionaryQueriesTest extends OracleIntegrationTest {
 		run(PlsqlPackages.create(type, profiler.dataSource()), action);
 		T proxy = PlsqlPackages.create(type, profiler.dataSource());
 		DictionaryProfiler.Cost cost = profiler.measure(() -> run(proxy, action));
-		assertThat(cost.count()).as("dictionary queries: %s", cost).isEqualTo(queries);
-		if (cost.roundTrips() >= 0) {
-			assertThat(cost.roundTrips()).as("round trips: %s", cost).isEqualTo(roundTrips);
+		if (cost.roundTrips() < 0) {
+			assertThat(cost.count()).as("dictionary queries: %s", cost).isEqualTo(queries);
+		} else {
+			assertThat(cost.count() + " queries, " + cost.roundTrips() + " round trips").as("%s", cost)
+					.isEqualTo(queries + " queries, " + roundTrips + " round trips");
 		}
 	}
 
@@ -78,52 +80,52 @@ class DictionaryQueriesTest extends OracleIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("the first call of a scalar routine: 5 queries, and the call itself, 6 round trips")
+	@DisplayName("the first call of a scalar routine")
 	void scalar() {
-		assertCost(ScalarsTest.Scalars.class, s -> s.plus(BigDecimal.ONE, BigDecimal.ONE), 5, 6);
+		assertCost(ScalarsTest.Scalars.class, s -> s.plus(BigDecimal.ONE, BigDecimal.ONE), 4, 5);
 	}
 
 	@Test
-	@DisplayName("an OBJECT: one more query, for its attributes")
+	@DisplayName("the first call of a routine that takes an OBJECT: one more query, for its attributes")
 	void object() {
-		assertCost(ObjectTypesTest.Composites.class, s -> s.echoAddress(new ObjectTypesTest.Address("A", 1)), 6, 7);
+		assertCost(ObjectTypesTest.Composites.class, s -> s.echoAddress(new ObjectTypesTest.Address("A", 1)), 5, 6);
 	}
 
 	@Test
-	@DisplayName("a collection of OBJECT: 12 queries, some of them repeated")
+	@DisplayName("the first call of a routine that takes a collection of OBJECT")
 	void collection_of_objects() {
 		assertCost(CollectionsTest.Composites.class,
-				s -> s.echoAddresses(List.of(new CollectionsTest.Address("A", 1))), 12, 13);
+				s -> s.echoAddresses(List.of(new CollectionsTest.Address("A", 1))), 11, 12);
 	}
 
 	@Test
-	@DisplayName("an OBJECT with nested OBJECTs and collections: 16 queries")
+	@DisplayName("the first call of a routine that takes an OBJECT with nested OBJECTs and collections")
 	void nested_object() {
-		assertCost(ObjectTypesTest.Composites.class, s -> s.echoCustomer(customer()), 16, 17);
+		assertCost(ObjectTypesTest.Composites.class, s -> s.echoCustomer(customer()), 15, 16);
 	}
 
 	@Test
-	@DisplayName("validating an interface of 24 scalar methods: 5 queries per method")
+	@DisplayName("validating an interface of 24 scalar methods")
 	void validate_scalars() {
-		assertCost(ScalarsTest.Scalars.class, DictionaryQueriesTest::validate, 120, 120);
+		assertCost(ScalarsTest.Scalars.class, DictionaryQueriesTest::validate, 96, 96);
 	}
 
 	@Test
 	@DisplayName("validating an interface of 33 methods with OUT parameters and composites")
 	void validate_outputs() {
-		assertCost(OutParametersTest.Outputs.class, DictionaryQueriesTest::validate, 179, 179);
+		assertCost(OutParametersTest.Outputs.class, DictionaryQueriesTest::validate, 146, 146);
 	}
 
 	@Test
 	@DisplayName("validating an interface of 36 methods over overloaded routines: more rows, so more round trips")
 	void validate_overloads() {
-		assertCost(OverloadingTest.Overload.class, DictionaryQueriesTest::validate, 184, 191);
+		assertCost(OverloadingTest.Overload.class, DictionaryQueriesTest::validate, 148, 155);
 	}
 
 	@Test
 	@DisplayName("validating an interface of 38 methods")
 	void validate_time_zones() {
-		assertCost(TimeZoneTest.TimeZones.class, DictionaryQueriesTest::validate, 196, 196);
+		assertCost(TimeZoneTest.TimeZones.class, DictionaryQueriesTest::validate, 158, 158);
 	}
 
 	@Test
@@ -151,7 +153,7 @@ class DictionaryQueriesTest extends OracleIntegrationTest {
 		counter.reset();
 		second.plus(BigDecimal.ONE, BigDecimal.ONE);
 
-		assertThat(counter.dictionaryQueries()).isEqualTo(5);
+		assertThat(counter.dictionaryQueries()).isEqualTo(4);
 	}
 
 	@Test

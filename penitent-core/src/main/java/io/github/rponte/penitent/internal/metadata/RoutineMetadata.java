@@ -517,13 +517,14 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 	 * object in the schema itself takes precedence, then a private synonym and, without an explicit
 	 * schema, a public one. This has to be done here because {@code ALL_ARGUMENTS} only knows the real
 	 * name. A synonym can point to another, hence the loop; the limit only keeps it from running
-	 * forever on a synonym cycle.
+	 * forever on a synonym cycle. Each name is asked about once (#169).
 	 */
 	private static ObjectName resolve(Dictionary dictionary, String schema, String objectName, boolean standalone) {
 		String owner = schema != null ? schema : dictionary.currentSchema();
 		ObjectName current = new ObjectName(owner, objectName);
 
-		for (int i = 0; i < MAX_SYNONYMS && !exists(dictionary, current, standalone); i++) {
+		boolean found = exists(dictionary, current, standalone);
+		for (int i = 0; i < MAX_SYNONYMS && !found; i++) {
 			List<ObjectName> next = dictionary.query("""
 					select table_owner, table_name
 					  from all_synonyms
@@ -537,8 +538,9 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 				break;
 			}
 			current = next.get(0);
+			found = exists(dictionary, current, standalone);
 		}
-		return exists(dictionary, current, standalone) ? current : new ObjectName(owner, objectName);
+		return found ? current : new ObjectName(owner, objectName);
 	}
 
 	/** A package has its routines in {@code procedure_name}; a standalone routine is the object itself. */
