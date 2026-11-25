@@ -209,7 +209,7 @@ use, virtual threads included, and how errors arrive through the future.
 
 These are decisions, not gaps. Changing one would need a strong case.
 
-- **No framework in the core.** `penitent-core` depends only on the JDK and the driver. Spring, Spring Boot and any
+- **No framework in the core.** `penitent-core` depends only on the JDK, SLF4J's API and the driver. Spring, Spring Boot and any
   future integration live in their own modules.
 - **A minimal transaction, not a transaction manager.** `PlsqlTransactions` is one connection, one thread and explicit
   participation through `tx.using`. Propagation, nested transactions, timeouts, automatic retries, synchronization
@@ -218,6 +218,8 @@ These are decisions, not gaps. Changing one would need a strong case.
   use different settings, and a proxy never changes behavior after it is created.
 - **No silent fallback.** When the Java side and the dictionary disagree, the library fails with a message that says
   what it looked up and what exists, instead of guessing.
-- **No metadata expiry.** The cache never expires, so with `BY_POSITION` a new parameter in the middle of the list
-  binds the values wrongly, without an error, until a restart. A package spec is a contract and rarely changes in
-  production, so restarting the application is the policy.
+- **No metadata expiry.** The cache never expires: a routine is described again only when a call fails as if it
+  had changed. Calls name each parameter as it was described, so a new parameter in the middle of the list binds
+  rightly while the application runs; after a restart, a new description matches the new order, and binding by
+  position sends the values to other parameters, without an error. A package spec is a contract and rarely changes in
+  production: deploy a change of it with the application, and bind by name where its order may change.

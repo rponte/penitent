@@ -219,6 +219,22 @@ See [Testing](testing.md).
 - **Tested against a real Oracle.** Every feature in the [compatibility table](compatibility.md) runs in the build,
   against a real database, and so do the Java and SQL examples on these pages.
 
+## What Penitent does not do
+
+Penitent does one thing: call PL/SQL from Java. What it leaves to others, on purpose:
+
+- **Plain SQL queries.** It calls routines and [anonymous blocks](anonymous-blocks.md), not tables: keep your
+  `JdbcTemplate`, jOOQ or ORM for queries. They can share the same `DataSource` and transaction.
+- **Connections.** It takes a connection from your `DataSource` for each call and gives it back: the pool is yours,
+  such as HikariCP.
+- **Transactions.** It never commits or rolls back on its own: the transaction is yours, Spring's, or a minimal
+  [`PlsqlTransactions`](transactions.md) block, not a transaction manager.
+- **Retries.** A call that failed is never repeated: only your application knows whether its work can run twice.
+- **Guesses.** A conversion that would lose information, such as a `NULL` turned into `0` or a time zone dropped, is
+  refused with a message, not done quietly.
+
+The reasons for each are in the [roadmap](roadmap.md#by-design).
+
 ## Install
 
 Penitent is on [Maven Central](https://central.sonatype.com/namespace/io.github.rponte). Pick the module that fits
