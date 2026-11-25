@@ -111,7 +111,11 @@ and type by type, and from then on every call binds and converts its values the 
 ```text
 DEBUG Read dictionary     : SHOP.ORDERS_PKG.PLACE_ORDER in 35 ms
 DEBUG Calling routine     : SHOP.ORDERS_PKG.PLACE_ORDER <- Orders.placeOrder
-DEBUG -> SQL              : {call SHOP.ORDERS_PKG.PLACE_ORDER(?, ?, ?)}
+DEBUG -> SQL              : {call SHOP.ORDERS_PKG.PLACE_ORDER(
+DEBUG                         P_CUSTOMER_ID => ?,
+DEBUG                         P_TOTAL       => ?,
+DEBUG                         P_ORDER_ID    => ?
+DEBUG                       )}
 TRACE -> with bind values : P_CUSTOMER_ID=42, P_TOTAL=100.00
 TRACE <- OUT values       : P_ORDER_ID=1
 DEBUG <- completed        : 3 ms

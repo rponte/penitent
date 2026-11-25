@@ -295,6 +295,8 @@ Where the PL/SQL guarantees the value is never `null`, driver 23 works as it is.
 | `null` in a parameter with `DEFAULT`: goes as `NULL`, and Oracle does not replace it with the default | Validated |
 | Omitting a parameter with `DEFAULT` in the middle of the list | With `BY_NAME`, validated. By position, not supported |
 | Binding by name (`bind = BY_NAME`): by Java name or by `@PlsqlParam`, in any order, with `OUT` and `IN OUT` | Validated |
+| Every routine call in named notation, by position too: `F(P_A => ?, P_B => ?)`, the names of the routine as the proxy described it, the log naming each value. Measured on 23ai, 21c and 19c, drivers 23 and 19: the same result as a call by position, with overloads by type, `DEFAULT` parameters left out at the end, quoted names, `OUT`, and a package of `SYS`, `DBMS_APPLICATION_INFO`; an overload that differs only by a parameter's name resolves, where a call by position was ambiguous ([#159](https://github.com/rponte/penitent/issues/159)) | Validated |
+| Binding by position, after the routine changed while the application runs: a parameter with `DEFAULT` inserted in the middle, of the same type or another, and two parameters that swap places, get the values meant for them; a renamed parameter fails one call without running, with `PLS-00306`, and the next uses the new name. Before #159, the first three ran with the values in other parameters, with no error, and the rename ran with the value in the renamed one | Validated |
 | `BY_NAME`: Java parameter with no match, duplicate name, or required parameter with no match | Not supported, with a clear error |
 | `BY_NAME`: overload that differs only in a parameter name | Validated |
 | `SYS` packages | Validated |
@@ -544,10 +546,11 @@ that text, on every version.
   connection, with `ORA-03138`, or `No more data to read from socket` with driver 19, measured once, by hand, on 23ai
   and 19c, not by a test that runs. It cannot be told apart from a network failure, and is left to the pool
   ([#118](https://github.com/rponte/penitent/issues/118)). A changed routine or object type is Validated above.
-- Two parameters of the same type that swap places in the routine, after a deploy: binding by position, each value
-  goes to the other parameter, with no error, measured by hand on 23ai and 19c; binding by name gives the right
-  result. A limit of binding by position, not a gap in the tests: see
-  [Changing PL/SQL while the application runs](deploying.md).
+- A routine whose parameters change order, described after the change, as after a restart: binding by position
+  matches the new order, so a parameter with `DEFAULT` inserted in the middle, or two that swap places, take values
+  meant for others, with no error; binding by name gives the right result. Measured on 23ai, 21c and 19c, and pinned
+  by `PositionAfterChangeTest`. A limit of binding by position, not a gap in the tests: see
+  [By position or by name](routines.md#by-position-or-by-name).
 - `java.util.Date`, `java.sql.Date` and `java.sql.Timestamp` for a local time that the JVM's time zone skips: they
   hold an instant in that zone, so they cannot represent it. Declare `LocalDateTime` or `LocalDate`. A limit of those
   Java types, not a gap in the tests.

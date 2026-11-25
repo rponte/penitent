@@ -205,13 +205,24 @@ class NamedNotationTest extends OracleIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("by position, the SQL stays on one line, and the values break the same way")
+	@DisplayName("by position, the call names the parameters as the dictionary does, and the log shows them as by name"
+			+ " (#159)")
 	void log_by_position() {
 		List<String> lines = capturing(() -> pkg(ByPosition.class).f(1, 2, 3));
 
-		assertThat(lines).filteredOn(l -> l.startsWith("DEBUG -> SQL")).containsExactly(
-				"DEBUG -> SQL              : {? = call PLSQL_TEST.FIXTURE_NAMED.F(?, ?, ?)}");
-		assertThat(lines).contains("TRACE -> with bind values : 3 parameters");
+		String debug = "DEBUG " + " ".repeat(22);
+		String trace = "TRACE " + " ".repeat(22);
+		assertThat(lines.subList(2, lines.size() - 1)).containsExactly(
+				"DEBUG -> SQL              : {? = call PLSQL_TEST.FIXTURE_NAMED.F(",
+				debug + "  P_A => ?,",
+				debug + "  P_B => ?,",
+				debug + "  P_C => ?",
+				debug + ")}",
+				"TRACE -> with bind values : 3 parameters",
+				trace + "  P_A = 1,",
+				trace + "  P_B = 2,",
+				trace + "  P_C = 3",
+				"TRACE <- result           : 123");
 	}
 
 	@Test

@@ -635,7 +635,7 @@ The first mock above then logs its test from beginning to end:
 DEBUG Began mocks         : edition PENITENT_MOCK_5F2A91C3D4E6 in 18 ms
 DEBUG Stubbed routine     : PLSQL_TEST.FREIGHTS.CALCULATE('SP', 'CE') -> RETURN 24.90 in 11 ms
 DEBUG Calling routine     : PLSQL_TEST.FREIGHTS.CALCULATE <- Freights.calculate
-DEBUG -> SQL              : {? = call PLSQL_TEST.FREIGHTS.CALCULATE(?, ?)}
+DEBUG -> SQL              : {? = call PLSQL_TEST.FREIGHTS.CALCULATE(P_ORIGIN => ?, P_DESTINATION => ?)}
 DEBUG <- completed        : 3 ms
 DEBUG Ended mocks         : edition PENITENT_MOCK_5F2A91C3D4E6 dropped in 15 ms
 ```
@@ -681,7 +681,7 @@ The stub is not a Java trick: it is PL/SQL, compiled into the database, where on
   <!-- snippet: untested -->
   ```text
   DEBUG Calling routine     : PLSQL_TEST.FREIGHTS.DESCRIBE <- Freights.describe
-  DEBUG -> SQL              : {? = call PLSQL_TEST.FREIGHTS.DESCRIBE(?)}
+  DEBUG -> SQL              : {? = call PLSQL_TEST.FREIGHTS.DESCRIBE(P_ROW => ?)}
   DEBUG -> type name        : "PLSQL_TEST".FREIGHT_ITEM%ROWTYPE as PLSQL_TEST.PENITENT_ROW_5F2A91C3D4E6_1.ROW_T
   DEBUG <- completed        : 4 ms
   ```

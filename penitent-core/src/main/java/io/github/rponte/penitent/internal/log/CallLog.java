@@ -70,8 +70,8 @@ public final class CallLog {
 	}
 
 	/**
-	 * @param names the names of a call by name, in SQL order, or {@code null} for a call by
-	 *        position
+	 * @param names the names of the parameters the call names, in SQL order, or {@code null} for a call that names
+	 *        none
 	 */
 	public static CallLog routine(String qualifiedName, Method method, String sql, List<String> names) {
 		if (CALLS.isDebugEnabled()) {
