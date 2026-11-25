@@ -127,9 +127,30 @@ Curious what that same call takes without Penitent?
 [See how much boilerplate plain JDBC needs](docs/coming-from-jdbc.md): every type registered by hand, every
 parameter in the right position, and every mistake found only when the call runs.
 
-### Objects, and errors
+### Objects and collections
 
-An OBJECT type is a Java record, matched by attribute name, with no type name to write:
+A routine often gives back more than a number or a text: an address, a list of tags, the rows of a query. Each is
+plain Java, matched by name, with no Oracle type name in your code:
+
+| In Oracle | In Java |
+|---|---|
+| an OBJECT type, a package's RECORD, a table's `%ROWTYPE` | a `record` or a JavaBean |
+| a collection: a nested table or a `VARRAY` | a `List` |
+| a `SYS_REFCURSOR` | a `List` of `record`s, as `ordersOf` above |
+
+An OBJECT type, which is Oracle's closest thing to a class, goes both ways as a record:
+
+```sql
+CREATE TYPE postal_address_t AS OBJECT (
+    street   VARCHAR2(100),
+    city     VARCHAR2(60),
+    zip_code VARCHAR2(9),
+
+    MEMBER FUNCTION formatted RETURN VARCHAR2   -- see Anonymous blocks
+);
+
+FUNCTION normalize_address(p_address postal_address_t) RETURN postal_address_t;
+```
 
 <!-- snippet: types/object -->
 ```java
@@ -145,21 +166,40 @@ customers.normalizeAddress(new Address("rua das flores 10", "Fortaleza", "60000-
 // Address[street=Rua Das Flores 10, city=FORTALEZA, zipCode=60000000]
 ```
 
-And a routine's `RAISE_APPLICATION_ERROR` is an exception with its code and its text:
+A collection is a `List`, of texts or of those same records, and a parameter takes a `Set` or an array too:
 
-<!-- snippet: getting-started/routine-error -->
-```java
-orders.cancelOrder(orderId.get());
+```sql
+CREATE TYPE tag_list_t AS TABLE OF VARCHAR2(30);
+CREATE TYPE postal_address_list_t AS TABLE OF postal_address_t;
 
-try {
-    orders.cancelOrder(orderId.get());
-} catch (PlsqlRoutineRaisedException e) {
-    e.getCode();     // 20001, without the sign
-    e.getReason();   // "order 1 is not open"
-}
+FUNCTION tags_of(p_id NUMBER) RETURN tag_list_t;
+FUNCTION count_tags(p_tags tag_list_t) RETURN NUMBER;
+FUNCTION cities(p_addresses postal_address_list_t) RETURN tag_list_t;
 ```
 
-RECORD, `%ROWTYPE`, collections, JSON and dates work the same way: see [Types](docs/types.md).
+<!-- snippet: types/collection-methods -->
+```java
+List<String> tagsOf(long id);
+
+int countTags(List<String> tags);
+int countTags(Set<String> tags);
+int countTags(String[] tags);
+
+List<String> cities(List<Address> addresses);
+```
+
+<!-- snippet: types/collection-calls -->
+```java
+customers.tagsOf(1);                                    // [vip, newsletter]
+customers.countTags(new String[] { "a", "b", "c" });   // 3
+customers.cities(List.of(
+        new Address("Rua A 1", "Fortaleza", "60000000"),
+        new Address("Rua B 2", "Recife", "50000000"))); // [Fortaleza, Recife]
+```
+
+Records nest objects and lists at any depth, and JSON and dates have their own mappings: see
+[Types](docs/types.md). A routine's `RAISE_APPLICATION_ERROR`, in turn, arrives as a `PlsqlRoutineRaisedException`
+with its code and its text: see [Errors](docs/errors.md).
 
 ### With Spring Boot
 
