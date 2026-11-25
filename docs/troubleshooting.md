@@ -6,6 +6,19 @@ Penitent prints, word for word.
 A mapping error always starts with the method and the types of its parameters, as in `countOrders(long, String):`,
 so you can tell overloads apart, and then says what was looked up and what exists.
 
+| You see | Go to |
+|---|---|
+| `does not exist or is not visible`, `does not exist. Available: ...` | [The routine or package is not found](#the-routine-or-package-is-not-found) |
+| `the method declares ...`, `is OUT; declare PlsqlOut<T>` | [The method does not match the routine](#the-method-does-not-match-the-routine) |
+| `parameter names are not in the bytecode` | [Parameter names are missing](#parameter-names-are-missing) |
+| `parameter ... looks for ..., which ... does not have` | [Binding by name fails](#binding-by-name-fails-for-an-interface-that-used-to-work) |
+| `cannot convert`, `does not fit in`, `has no time zone` | [A value does not convert](#a-value-does-not-convert) |
+| `does not cover attribute(s)` | [A composite is missing an attribute](#a-composite-is-missing-an-attribute) |
+| `changed since this proxy described it`, `ORA-04068`, `ORA-17049` | [A call fails after a deploy](#a-call-fails-after-a-deploy-while-it-worked-before) |
+| a wrong result after a deploy, with no error | [A call returns a wrong value after a deploy](#a-call-returns-a-wrong-value-after-a-deploy-with-no-error) |
+| the first call takes long | [The first call is slow](#the-first-call-is-slow) |
+| `ORA-12516` under load | [Connections run out](#connections-run-out) |
+
 ## The routine or package is not found
 
 <!-- snippet: package-not-found -->
@@ -17,6 +30,8 @@ orderStatus(long): package SHOP.ORDER_PKG does not exist or is not visible to th
 ```text
 calculateFrieght(String, String): routine SHOP.ORDERS_PKG.CALCULATE_FRIEGHT does not exist. Available: APPLY_DISCOUNT, CALCULATE_FREIGHT, CANCEL_ORDER, COUNT_ORDERS, DESCRIBE, ORDER_STATUS, PLACE_ORDER
 ```
+
+**What to do:** check the name, the schema and the grant, in that order.
 
 - **A typo** in `@PlsqlPackage`, `@PlsqlRoutine` or the method name. The second message lists what the package does
   have; remember that `calculateFreight` looks for `CALCULATE_FREIGHT`.
@@ -44,7 +59,7 @@ calculateFreight(String): the method declares 1 parameter, but SHOP.ORDERS_PKG.C
 placeOrder(long, BigDecimal, Long): P_ORDER_ID of SHOP.ORDERS_PKG.PLACE_ORDER is OUT; declare PlsqlOut<T> in this position, not Long
 ```
 
-The message says what the database has. A procedure maps to a `void` method, and an `OUT` or `IN OUT` parameter to
+**What to do:** change the method to what the message says the database has. A procedure maps to a `void` method, and an `OUT` or `IN OUT` parameter to
 a `PlsqlOut<T>`. Only `DEFAULT` parameters can be left out: at the end of the list, or anywhere when binding
 [by name](routines.md#binding-by-name).
 
@@ -57,6 +72,8 @@ To find every mismatch of an interface at once, instead of one call at a time, r
 ```text
 upper(String): parameter names are not in the bytecode (compile with -parameters) or use @PlsqlParam on each one
 ```
+
+**What to do:** compile with `-parameters`, or give each parameter a `@PlsqlParam`.
 
 An [anonymous block](anonymous-blocks.md) binds `:name` by the Java parameter's name, and so does binding by name
 without `@PlsqlParam`. Java only keeps parameter names in the class file when you compile with `-parameters`:
@@ -82,6 +99,8 @@ The Spring Boot parent already turns it on. With Gradle, add `options.compilerAr
 countOrders(long): parameter customerId looks for P_CUSTOMER, which SHOP.ORDERS_PKG.COUNT_ORDERS does not have. Parameters: [P_CUSTOMER_ID NUMBER, P_STATUS VARCHAR2, P_MIN_TOTAL NUMBER]. Use @PlsqlParam with the Oracle name.
 ```
 
+**What to do:** give the parameter the Oracle name with `@PlsqlParam`, or bind the interface by position.
+
 - **A Java name that does not follow the routine's:** there is no prefix convention, so `customerId` looks for
   `CUSTOMER_ID`, not `P_CUSTOMER_ID`. Use `@PlsqlParam("P_CUSTOMER_ID")`.
 - **A global `BY_NAME`**, in [Settings](settings.md) or `penitent.bind`, also applies to the interfaces written for
@@ -104,9 +123,10 @@ vipFlag(long): the return value of SHOP.CUSTOMERS_PKG.VIP_FLAG: cannot convert '
 deliveryDeadline(LocalDateTime): P_ORDERED_AT of SHOP.CUSTOMERS_PKG.DELIVERY_DEADLINE is TIMESTAMP WITH TIME ZONE, and LocalDateTime has no time zone; declare OffsetDateTime, ZonedDateTime or Instant
 ```
 
+**What to do:** declare a type that can hold the value, as each message suggests.
+
 Penitent refuses a conversion that would lose information: a `NULL` turned into `0`, an unknown flag turned into
-`false`, a time zone dropped. Declare a type that can hold the value, as each message suggests. See
-[Types](types.md).
+`false`, a time zone dropped. See [Types](types.md).
 
 ## A composite is missing an attribute
 
@@ -115,10 +135,14 @@ Penitent refuses a conversion that would lose information: a `NULL` turned into 
 normalizeAddress(Address): Address does not cover attribute(s) of POSTAL_ADDRESS_T: [ZIP_CODE VARCHAR2]. Available properties: [STREET, CITY]. Use @PlsqlAttr to declare the name.
 ```
 
-Every Oracle attribute needs a Java property, matched by name: `zipCode` is `ZIP_CODE`. Add the property, or map a
-different name with `@PlsqlAttr("ZIP_CODE")`. Extra Java properties are fine.
+**What to do:** add the property, or map a different name with `@PlsqlAttr("ZIP_CODE")`.
+
+Every Oracle attribute needs a Java property, matched by name: `zipCode` is `ZIP_CODE`. Extra Java properties are
+fine.
 
 ## A call fails after a deploy, while it worked before
+
+**What to do:** read the message: it says what changed, and whether the next call works by itself.
 
 The PL/SQL changed under the running application: Penitent described the routine before the change, the driver kept
 the old types in each connection, or the session had state in a package that was compiled again.
@@ -146,17 +170,32 @@ the old types in each connection, or the session had state in a package that was
 What each change does, and how to avoid the errors, is in
 [Changing PL/SQL while the application runs](deploying.md).
 
+## A call returns a wrong value after a deploy, with no error
+
+**What to do:** bind the interface by name, `@PlsqlPackage(value = "...", bind = PlsqlBind.BY_NAME)`, and update the
+method to the routine's new signature.
+
+Binding by position, the values go to the routine's parameters in its order. If a deploy inserted a parameter with
+`DEFAULT` in the middle, or swapped two parameters of the same type, a proxy that describes the routine after the
+change, as after a restart, sends the values to other parameters, and the call runs. Validation does not catch it
+either, since the method still fits. While the application keeps running, the calls name the parameters they were
+written for, so this only shows after a restart. [By position or by name](routines.md#by-position-or-by-name) shows
+each case.
+
 ## The first call is slow
 
+**What to do:** run [validation](validation.md) at startup, to pay that cost before the first request.
+
 The first call of each method reads the dictionary, with about 5 queries for a scalar routine and up to about 16
-with nested composites. Later calls use the cache. To pay that cost at startup instead of on the first request, run
-[validation](validation.md) at startup. See [How Penitent works](concepts.md#what-happens-in-a-call).
+with nested composites. Later calls use the cache. See [How Penitent works](concepts.md#what-happens-in-a-call).
 
 ## Connections run out
 
+**What to do:** use a connection pool, such as HikariCP, which Spring Boot already configures.
+
 Each call takes a connection from the `DataSource` and gives it back. A `DataSource` that opens a new physical
 connection each time, such as a plain `OracleDataSource`, can exhaust the Oracle listener under load, with
-`ORA-12516`. Use a connection pool, such as HikariCP, which Spring Boot already configures.
+`ORA-12516`.
 
 ## With Spring
 
