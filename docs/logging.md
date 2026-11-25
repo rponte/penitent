@@ -1,14 +1,7 @@
 # Logging
 
-When a call does not do what you expected, the first thing to see is what was actually sent. Penitent logs each
-call through SLF4J: the routine, the SQL, the values in and out, the time it took and the failure, if any. It uses
-two loggers for the calls, so you can see the SQL without exposing the data, and one more for the mocks of tests:
-
-| Logger | Level | What it logs |
-|---|---|---|
-| `io.github.rponte.penitent.call` | `DEBUG` | The routine and the Java method, the SQL as sent to the driver or the block text, the elapsed time, the failure and the dictionary lookup |
-| `io.github.rponte.penitent.bind` | `TRACE` | The values sent, the return value and the `OUT` values |
-| `io.github.rponte.penitent.mock` | `DEBUG` | With `penitent-test`: the edition of each test, each stub and each `verify`; at `TRACE`, the PL/SQL generated for each stub. See [Testing](testing.md#seeing-what-the-mocks-do) |
+When a call does not do what you expected, the first thing to see is what was actually sent. Turn on two loggers,
+and every call shows the routine, the SQL, the values in and out, and the time it took:
 
 <!-- snippet: untested -->
 ```yaml
@@ -18,9 +11,6 @@ logging:
     io.github.rponte.penitent.call: debug
     io.github.rponte.penitent.bind: trace   # only where the data may appear in the log
 ```
-
-Without an SLF4J implementation on the classpath, SLF4J warns once and discards the log. Spring Boot already ships
-Logback.
 
 ## What a call looks like
 
@@ -44,10 +34,25 @@ DEBUG <- completed        : # ms
   `%ROWTYPE`: see [Testing](testing.md#how-it-works). It is how to tell whether a call bound a type by another name:
   each call that does shows it.
 
+## The loggers
+
+Two loggers cover the calls, so you can see the SQL without exposing the data, and one more covers the mocks of
+tests:
+
+| Logger | Level | What it logs |
+|---|---|---|
+| `io.github.rponte.penitent.call` | `DEBUG` | The routine and the Java method, the SQL as sent to the driver or the block text, the elapsed time, the failure and the dictionary lookup |
+| `io.github.rponte.penitent.bind` | `TRACE` | The values sent, the return value and the `OUT` values |
+| `io.github.rponte.penitent.mock` | `DEBUG` | With `penitent-test`: the edition of each test, each stub and each `verify`; at `TRACE`, the PL/SQL generated for each stub. See [Testing](testing.md#seeing-what-the-mocks-do) |
+
+Penitent logs through SLF4J. Without an SLF4J implementation on the classpath, SLF4J warns once and discards the log.
+Spring Boot already ships Logback.
+
 ## Many parameters, and collections
 
-From 3 parameters on, the values are logged one per line, with the names aligned. So is the SQL of a call bound
-[by name](routines.md#binding-by-name). A collection with more than one element is logged one element per line:
+From 3 parameters on, the SQL and the values are logged one per line, with the names aligned, whether the interface
+binds by position or [by name](routines.md#binding-by-name): every call names its parameters. A collection with more
+than one element is logged one element per line:
 
 <!-- snippet: by-name-and-list -->
 ```text
@@ -75,8 +80,7 @@ TRACE                       ]
 DEBUG <- completed        : # ms
 ```
 
-Bound by position, the SQL stays on one line, since one `?` per line would show nothing. Either way, the driver
-always receives the SQL on one line: the line breaks are only in the log.
+The driver always receives the SQL on one line: the line breaks are only in the log.
 
 ## `OUT` values and failures
 
