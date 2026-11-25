@@ -109,6 +109,39 @@ need no codes, and it joins Spring's transactions and exceptions. What it still 
 - **Checked only when it runs.** The metadata is read on the first call, so a package that changed is noticed by
   whichever request happens to call it first.
 
+## When something goes wrong
+
+A call can fail for three very different reasons, and each one asks for a different reaction: the routine refused
+the operation, your code does not match the routine, or the database or the driver failed. Plain JDBC gives you the
+same `SQLException` for all three, and leaves telling them apart to you:
+
+| What happened | Plain JDBC | `SimpleJdbcCall` | Penitent |
+|---|---|---|---|
+| **The routine refused the operation**, as in `RAISE_APPLICATION_ERROR(-20001, 'order 7 is not open')` | a `SQLException` with code `20001`, its text mixed with the `ORA-` prefix and the PL/SQL stack | not in Spring's error codes for Oracle, so no exception of its own: you check the code yourself | a `PlsqlRoutineRaisedException`, with `getCode()` `20001` and `getReason()` `"order 7 is not open"` |
+| **Your code does not match the routine:** a misspelled name, a parameter missing or added | a `SQLException`, `ORA-06550` with `PLS-00302` or `PLS-00306`, when the call runs | a `BadSqlGrammarException`, the same as a typo in a SQL statement, when the call runs | a `PlsqlMappingException`, **before anything is sent**, naming the method and what the routine has; at startup, with [validation](validation.md) |
+| **The database or the driver failed:** a deadlock, a lost connection, the driver failing itself | a `SQLException` again, or, for some of the driver's own failures, an unchecked exception that is not even a `SQLException` | one of Spring's `DataAccessException` classes, by code | a `PlsqlExecutionException`, or, with Spring, a `DataAccessException`, never taken for the routine's error; the connection is discarded when the driver failed |
+
+So `catch (PlsqlRoutineRaisedException e)` handles your business rules, and nothing else reaches it by accident:
+not a typo, not a deadlock. See [Errors](errors.md).
+
+**A message that says what to do.** With a misspelled routine name, Oracle says:
+
+<!-- snippet: untested -->
+```text
+ORA-06550: line 1, column 7:
+PLS-00302: component 'CALCULATE_FRIEGHT' must be declared
+```
+
+Penitent says it before the call, starting with your method, and lists what the package does have:
+
+<!-- snippet: routine-not-found -->
+```text
+calculateFrieght(String, String): routine SHOP.ORDERS_PKG.CALCULATE_FRIEGHT does not exist. Available: APPLY_DISCOUNT, CALCULATE_FREIGHT, CANCEL_ORDER, COUNT_ORDERS, DESCRIBE, ORDER_STATUS, PLACE_ORDER
+```
+
+Every mapping error works the same way: the method, what the database has, and, when there is one, the fix, such
+as `Use @PlsqlParam with the Oracle name`. [Troubleshooting](troubleshooting.md) has one entry for each.
+
 ## Side by side
 
 | | Plain JDBC | `SimpleJdbcCall` | Penitent |
@@ -118,6 +151,7 @@ need no codes, and it joins Spring's transactions and exceptions. What it still 
 | **Oracle type codes and names** | yours, for every `OUT` and composite | read from the metadata for simple types | read from the dictionary for every type |
 | **OBJECT, RECORD, collection, cursor** | `Struct`, `Array`, `ResultSet`, by hand | by hand, or a `RowMapper` | `record`, `List`, `List` of `record`s |
 | **A package that changed** | found by the call that breaks | found by the first call | found by [validation](validation.md), at startup or in a test |
+| **When a call fails** | a `SQLException`, the same for a business rule, a mismatch and an outage | Spring's exceptions, by code; a routine's own error is not one of them | three exceptions, by whose fault it is, with messages that say what to do |
 
 ## What stays the same
 

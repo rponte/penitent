@@ -219,7 +219,8 @@ class DocsRoutinesTest extends OracleIntegrationTest {
 		assertThatThrownBy(() -> broken.calculateFrieght("SP", "CE"))
 				.isInstanceOf(PlsqlMappingException.class)
 				.satisfies(e -> Docs.assertPagesShow(Docs.asDocumented(e.getMessage(), Broken.class),
-						"routines.md#routine-not-found", "troubleshooting.md#routine-not-found"));
+						"routines.md#routine-not-found", "troubleshooting.md#routine-not-found",
+						"coming-from-jdbc.md#routine-not-found"));
 
 		assertThatThrownBy(() -> broken.calculateFreight("SP"))
 				.isInstanceOf(PlsqlMappingException.class)
