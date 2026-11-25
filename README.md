@@ -21,14 +21,16 @@ Orders orders = PlsqlPackages.create(Orders.class, dataSource);
 BigDecimal freight = orders.calculateFreight("SP", "CE");   // 25.5
 ```
 
-- **The database is the source of truth.** The dictionary says which routine, parameters and types exist, and the
-  interface only has to agree with it. OBJECT, RECORD, `%ROWTYPE`, collections and cursors map to Java records and
-  JavaBeans without naming a type.
-- **Checked, not guessed.** Each method is matched to its routine parameter by parameter and type by type, and
-  `PlsqlPackages.validate` checks every interface at startup, so a package that changed is noticed before the first
-  request. Every mapping in the [compatibility table](docs/compatibility.md) is tested against a real Oracle.
-- **No framework required.** `penitent-core` depends only on the JDK, SLF4J and the Oracle driver. Spring and Spring
-  Boot support live in their own modules.
+## Design principles
+
+Penitent is opinionated by design. It prioritizes:
+
+- **Correctness over convenience** — It refuses what it cannot map exactly, instead of guessing: a wrong value is worse than an error
+- **Reliability over speed** — Each value checked before the call, the driver's own failures caught, a broken connection discarded
+- **The database over configuration** — Signatures, types and parameter names come from Oracle's dictionary, never from strings in your code
+- **Clear errors over generic ones** — Three exceptions, by whose fault it is, each naming your method, what the database has, and the fix
+- **Explicit over implicit** — No hidden retries, no silent fallbacks, no commits of its own: a proxy behaves the same from its first call to its last
+- **Plain Java over frameworks** — Interfaces, records and lists; the core needs only the JDK, the Oracle driver and SLF4J's API
 
 The version is `0.32.0`. Every feature in the [compatibility table](docs/compatibility.md) has a test against a real
 Oracle, but the library is in `0.x`, so the public API may still change between minor versions. The documentation is

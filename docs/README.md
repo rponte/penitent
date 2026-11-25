@@ -58,6 +58,17 @@ No `CallableStatement`, no `registerOutParameter`, no positions to keep in order
 signatures from the database, and checked that your methods agree with them. Curious what that same call takes
 without Penitent? [See how much boilerplate plain JDBC needs](coming-from-jdbc.md).
 
+## Design principles
+
+Penitent is opinionated by design. It prioritizes:
+
+- **Correctness over convenience** — It refuses what it cannot map exactly, instead of guessing: a wrong value is worse than an error
+- **Reliability over speed** — Each value checked before the call, the driver's own failures caught, a broken connection discarded
+- **The database over configuration** — Signatures, types and parameter names come from Oracle's dictionary, never from strings in your code
+- **Clear errors over generic ones** — Three exceptions, by whose fault it is, each naming your method, what the database has, and the fix
+- **Explicit over implicit** — No hidden retries, no silent fallbacks, no commits of its own: a proxy behaves the same from its first call to its last
+- **Plain Java over frameworks** — Interfaces, records and lists; the core needs only the JDK, the Oracle driver and SLF4J's API
+
 ## What else you get
 
 The same interface style covers the rest of what a PL/SQL API returns. A few of the things it does for you:
