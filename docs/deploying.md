@@ -1,15 +1,27 @@
 # Changing PL/SQL while the application runs
 
 A deploy often changes PL/SQL while the application keeps running: a package body gets a fix, a function gets a new
-parameter, a table gets a column. This page says what each kind of change does to the calls already running, and what
-to do about it. In short:
+parameter, a table gets a column. Most changes need nothing from you. In short:
 
-- **A body that changes** is picked up at once, unless the package keeps state between calls: then each connection
-  of the pool fails once with `ORA-04068`.
-- **A signature or a type that changes** is noticed at the next call, which says what changed. A changed type also
-  needs the pool's connections renewed, or the application restarted.
-- **Two parameters of the same type that swap places** give a wrong result with no error, unless the interface binds
-  [by name](routines.md#binding-by-name).
+| The deploy changes | What the calls do | What to do |
+|---|---|---|
+| a package body | pick it up at once | nothing; a package that keeps state between calls fails each connection once with `ORA-04068` |
+| a routine's signature, in a way the method no longer fits | the next call says what changed | update the method |
+| a routine's signature, in a way the method still fits, as a renamed parameter | the next call says so, without running, and the one after works | nothing |
+| the order of a routine's parameters | right while the application runs; **after a restart, binding by position sends values to other parameters, with no error** | bind [by name](routines.md#by-position-or-by-name) where the order may change |
+| an object type | the next call says what changed | update the Java type, and renew the pool's connections, [as below](#recovering-without-a-restart) |
+| the table of a `%ROWTYPE` | the database closes the connection, which the pool replaces | update the Java type if a column was added |
+
+## Before and after a deploy
+
+- **Before:** prefer packages without state, and bind by name where the order of a routine's parameters could
+  change.
+- **During:** a change of signature or type is a change of the application's contract with the database: deploy it
+  with the application, not under it.
+- **After:** update the methods and types that no longer fit, as the calls' errors say, and renew the pool's
+  connections, or restart the application, when a type changed. Run
+  [validation](validation.md) at startup, so that a method that no longer matches fails then, with a clear message,
+  rather than on the first request.
 
 ## Why a change can go unnoticed
 
@@ -175,18 +187,9 @@ Two ways to handle it, both outside Penitent:
   error above. A retry there runs the transaction again from its start, with a new state, rather than one call in
   the middle of it. It is still the application's call: only it knows whether its work can run twice.
 
-## Before and after a deploy
-
-- **Before:** prefer packages without state, and bind by name where parameters of the same type could change places.
-- **During:** a change of signature or type is a change of the application's contract with the database: deploy it
-  with the application, not under it.
-- **After:** update the methods and types that no longer fit, as the calls' errors say, and renew the pool's
-  connections, or restart the application, when a type changed. Run
-  [validation](validation.md) at startup, so that a method that no longer matches fails then, with a clear message,
-  rather than on the first request.
-
 ## See also
 
 - [Validation](validation.md): checks every interface against the database, at startup.
-- [Calling routines](routines.md#binding-by-name): binding by name.
+- [By position or by name](routines.md#by-position-or-by-name): what each binding protects, with an example of each
+  risk.
 - [Troubleshooting](troubleshooting.md): the messages Penitent gives when a method does not match.
