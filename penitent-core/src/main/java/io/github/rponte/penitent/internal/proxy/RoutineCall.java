@@ -9,8 +9,10 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicReference;
 
 import io.github.rponte.penitent.PlsqlBind;
+import io.github.rponte.penitent.PlsqlBlock;
 import io.github.rponte.penitent.PlsqlBoolean;
 import io.github.rponte.penitent.PlsqlOut;
 import io.github.rponte.penitent.PlsqlPackage;
@@ -35,6 +37,7 @@ import io.github.rponte.penitent.internal.metadata.OutParameters;
 import io.github.rponte.penitent.internal.metadata.ReturnType;
 import io.github.rponte.penitent.internal.metadata.RoutineMetadata.Argument;
 import io.github.rponte.penitent.internal.metadata.RoutineMetadata;
+import io.github.rponte.penitent.internal.metadata.RoutineSignatures;
 import io.github.rponte.penitent.internal.metadata.RoutineValidation;
 
 /**
@@ -54,6 +57,17 @@ final class RoutineCall {
 
 	/** Where the package, or the standalone routines, were found: resolved once, not per method (#169). */
 	private final RoutineMetadata.Names names = new RoutineMetadata.Names();
+
+	/**
+	 * The signatures of the package's routines that the interface maps, read in one query on the first call of any
+	 * method, or by validate, and kept while the proxy lives (#169). Each method is still described from them when
+	 * it is first used. No lock is held while reading them: two threads may both read, and the first stored wins, as
+	 * in {@link Caches}. Outside a package, as {@code @PlsqlSchema}, each routine is read on its own.
+	 */
+	private final AtomicReference<RoutineSignatures> signatures = new AtomicReference<>();
+
+	/** The names of the routines the interface's methods call, for {@link #signatures}. */
+	private final List<String> routineNames;
 
 	/**
 	 * The routines read again after a call failed as if they had changed, and found the same: the error was the
@@ -93,11 +107,22 @@ final class RoutineCall {
 		this.types = types;
 		this.encoder = encoder;
 		this.decoder = decoder;
+		this.routineNames = java.util.Arrays.stream(type.getMethods())
+				.filter(m -> !m.isDefault() && !java.lang.reflect.Modifier.isStatic(m.getModifiers())
+						&& !m.isAnnotationPresent(PlsqlBlock.class))
+				.map(RoutineCall::routineName).distinct().toList();
+	}
+
+	/** The routine a method calls: its {@code @PlsqlRoutine}, or its name, as {@code calculateFreight}. */
+	private static String routineName(Method method) {
+		PlsqlRoutine named = method.getAnnotation(PlsqlRoutine.class);
+		return named != null ? RoutineMetadata.normalize(named.value()) : RoutineMetadata.toRoutineName(method.getName());
 	}
 
 	Object call(Method method, Object[] arguments, Connection connection) {
-		boolean described = routines.containsKey(method);
-		RoutineMetadata routine = Caches.get(routines, method, m -> describe(m, connection));
+		// described before this call, or from signatures read before it: a failure may then be a change since (#165)
+		boolean described = routines.containsKey(method) || signatures.get() != null;
+		RoutineMetadata routine = Caches.get(routines, method, m -> describe(m, connection, false));
 		requireToAgree(method, routine, arguments.length);
 		try {
 			return call(routine, method, arguments, ReturnType.of(method) != void.class, connection);
@@ -144,7 +169,7 @@ final class RoutineCall {
 			names.clear();
 			RoutineMetadata fresh;
 			try {
-				fresh = Caches.get(routines, method, m -> describe(m, connection));
+				fresh = Caches.get(routines, method, m -> describe(m, connection, true));
 				requireToAgree(method, fresh, method.getParameterCount());
 			} catch (PlsqlMappingException e) {
 				throw new PlsqlMappingException(routine.qualifiedName() + " changed since this proxy described it: "
@@ -220,7 +245,7 @@ final class RoutineCall {
 
 	/** What a call of {@code method} would run: the routine, its owner and the version that fits the method. */
 	RoutineMetadata describeOnce(Method method, Connection connection) {
-		RoutineMetadata routine = Caches.get(routines, method, m -> describe(m, connection));
+		RoutineMetadata routine = Caches.get(routines, method, m -> describe(m, connection, false));
 		requireToAgree(method, routine, method.getParameterCount());
 		return routine;
 	}
@@ -231,7 +256,7 @@ final class RoutineCall {
 	 * on a value: a cursor's columns, and a composite sent as a subclass of the declared type.
 	 */
 	void validate(Method method, Connection connection) {
-		RoutineMetadata routine = Caches.get(routines, method, m -> describe(m, connection));
+		RoutineMetadata routine = Caches.get(routines, method, m -> describe(m, connection, false));
 		requireToAgree(method, routine, method.getParameterCount());
 
 		java.lang.reflect.Parameter[] javaParameters = method.getParameters();
@@ -303,7 +328,11 @@ final class RoutineCall {
 		}
 	}
 
-	private RoutineMetadata describe(Method method, Connection connection) {
+	/**
+	 * {@code method}'s routine, from the interface's signatures, read once, or, if {@code fresh}, as after a call
+	 * failed as if it had changed, from the dictionary as it is now, for this routine alone.
+	 */
+	private RoutineMetadata describe(Method method, Connection connection, boolean fresh) {
 		// from the proxy's interface, not the one declaring the method: that may be an inherited one, without the annotation
 		PlsqlPackage pkg = type.getAnnotation(PlsqlPackage.class);
 		PlsqlSchema container = type.getAnnotation(PlsqlSchema.class);
@@ -315,15 +344,23 @@ final class RoutineCall {
 		PlsqlBind declared = pkg != null ? pkg.bind() : container.bind();
 		PlsqlBind bind = declared == PlsqlBind.DEFAULT ? defaultBind : declared;
 
-		PlsqlRoutine named = method.getAnnotation(PlsqlRoutine.class);
-		String routineName = named != null
-				? RoutineMetadata.normalize(named.value())
-				: RoutineMetadata.toRoutineName(method.getName());
+		String routineName = routineName(method);
 
 		long start = System.nanoTime();
 		Dictionary dictionary = new Dictionary(connection);
-		RoutineMetadata routine = RoutineMetadata.read(dictionary, names, schema, packageName, routineName, method,
-				types.converters(), bind == PlsqlBind.BY_NAME);
+		RoutineMetadata routine;
+		RoutineMetadata.Target target = packageName == null || fresh ? null
+				: RoutineMetadata.target(dictionary, names, schema, packageName, routineName);
+		RoutineSignatures listed = target == null ? null : signaturesOf(target, dictionary);
+		if (listed != null && listed.of(target.routine()).isPresent()) {
+			routine = RoutineMetadata.of(dictionary, target, listed, method, types.converters(),
+					bind == PlsqlBind.BY_NAME);
+		} else {
+			// a routine the signatures do not list is read on its own, as it is now: it may not exist, it may have been
+			// created since they were read, or it may be a procedure without arguments, which has no rows to list
+			routine = RoutineMetadata.read(dictionary, names, schema, packageName, routineName, method,
+					types.converters(), bind == PlsqlBind.BY_NAME);
+		}
 		// a wrong arity has its own message, at call time
 		if (method.getParameterCount() <= routine.parameters().size()) {
 			RoutineValidation validation = new RoutineValidation(routine);
@@ -337,6 +374,24 @@ final class RoutineCall {
 		CallLog.described(routine.qualifiedName(), start);
 		warnIfNullBooleanMisread(routine, method, connection);
 		return routine;
+	}
+
+	/** The interface's signatures, read now if they were not, or if the package now resolves elsewhere. */
+	private RoutineSignatures signaturesOf(RoutineMetadata.Target target, Dictionary dictionary) {
+		RoutineSignatures known = signatures.get();
+		if (known != null && known.isOf(target.owner(), target.packageName())) {
+			return known;
+		}
+		RoutineSignatures read = RoutineSignatures.read(dictionary, target.owner(), target.packageName(), routineNames);
+		// none found, as before the package is deployed: nothing worth keeping
+		if (read.isEmpty()) {
+			return read;
+		}
+		if (signatures.compareAndSet(known, read)) {
+			return read;
+		}
+		RoutineSignatures raced = signatures.get();
+		return raced != null && raced.isOf(target.owner(), target.packageName()) ? raced : read;
 	}
 
 	/** A BOOLEAN that comes back, which some versions read wrong when null: see {@link NullBooleanOutputs}. */

@@ -258,77 +258,53 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 		}
 	}
 
+	/** Where a routine is, after synonyms: its owner, its package, {@code null} outside one, and its name. */
+	public record Target(String owner, String packageName, String routine) {
+	}
+
+	/** Where {@code routineName}, of {@code packageName} or outside a package when it is {@code null}, is. */
+	public static Target target(Dictionary dictionary, Names names, String schema, String packageName,
+			String routineName) {
+		boolean standalone = packageName == null;
+		ObjectName resolved = resolve(dictionary, names, schema, standalone ? routineName : packageName, standalone);
+		// outside a package, the synonym points to the routine itself, and it is the routine that gets the real name
+		return standalone ? new Target(resolved.owner(), null, resolved.name())
+				: new Target(resolved.owner(), resolved.name(), routineName);
+	}
+
+	/** Reads the signature of one routine, and describes it for {@code method}: see {@link #of}. */
+	public static RoutineMetadata read(Dictionary dictionary, Names names, String schema, String packageName,
+			String routineName, Method method, PlsqlConverters converters, boolean byName) {
+		Target target = target(dictionary, names, schema, packageName, routineName);
+		RoutineSignatures signatures = RoutineSignatures.read(dictionary, target.owner(), target.packageName(),
+				List.of(target.routine()));
+		return of(dictionary, target, signatures, method, converters, byName);
+	}
+
 	/**
-	 * Reads the signature, or fails saying what exists.
+	 * The routine at {@code target}, as {@code signatures} list it, in the version that fits {@code method}; or fails
+	 * saying what exists.
 	 *
 	 * <p>A routine without arguments has no row in {@code ALL_ARGUMENTS}, so its existence is
 	 * confirmed in {@code ALL_PROCEDURES}; otherwise a wrong name would pass as "a routine with zero
 	 * arguments" and only blow up on the call.
 	 */
-	public static RoutineMetadata read(Dictionary dictionary, Names names, String schema, String packageName,
-			String routineName, Method method, PlsqlConverters converters, boolean byName) {
-
-		boolean standalone = packageName == null;
-		ObjectName resolved = resolve(dictionary, names, schema, standalone ? routineName : packageName, standalone);
-		// outside a package, the synonym points to the routine itself, and it is the routine that gets the real name
-		ObjectName target = standalone ? new ObjectName(resolved.owner(), null) : resolved;
-		String routine = standalone ? resolved.name() : routineName;
-
-		Map<String, List<Argument>> versions = new LinkedHashMap<>();
-		// the versions ALL_PROCEDURES counts, in the same query (#169): a version without arguments is not in ALL_ARGUMENTS
-		int[] counted = { 0 };
-		Dictionary.RowMapper<List<Argument>> toVersion = (rs, n) -> {
-			counted[0] = rs.getInt("versions");
-			List<Argument> version = versions.computeIfAbsent(String.valueOf(rs.getString("overload")),
-					k -> new ArrayList<>());
-			// a version without arguments shows up as a row without a type
-			if (rs.getString("data_type") != null) {
-				version.add(new Argument(
-						rs.getInt("position"),
-						rs.getString("argument_name"),
-						rs.getString("data_type"),
-						rs.getString("in_out"),
-						rs.getString("type_owner"),
-						rs.getString("type_name"),
-						rs.getString("type_subname"),
-						"Y".equals(rs.getString("defaulted"))));
-			}
-			return version;
-		};
-		if (standalone) {
-			dictionary.query("""
-					select overload, position, argument_name, data_type, in_out, type_owner, type_name, type_subname,
-					       defaulted,
-					       (select count(*) from all_procedures
-					         where owner = ? and object_name = ? and procedure_name is null
-					           and object_type in ('FUNCTION', 'PROCEDURE')) as versions
-					  from all_arguments
-					 where owner = ? and package_name is null and object_name = ? and data_level = 0
-					 order by overload nulls first, position
-					""", toVersion, target.owner(), routine, target.owner(), routine);
-		} else {
-			dictionary.query("""
-					select overload, position, argument_name, data_type, in_out, type_owner, type_name, type_subname,
-					       defaulted,
-					       (select count(*) from all_procedures
-					         where owner = ? and object_name = ? and procedure_name = ?) as versions
-					  from all_arguments
-					 where owner = ? and package_name = ? and object_name = ? and data_level = 0
-					 order by overload nulls first, position
-					""", toVersion, target.owner(), target.name(), routine, target.owner(), target.name(), routine);
-		}
-
-		if (versions.isEmpty()) {
-			requireRoutineExists(dictionary, target, routine);
-			RoutineMetadata empty = new RoutineMetadata(target.owner(), target.name(), routine, List.of(), false);
+	public static RoutineMetadata of(Dictionary dictionary, Target target, RoutineSignatures signatures,
+			Method method, PlsqlConverters converters, boolean byName) {
+		String routine = target.routine();
+		java.util.Optional<RoutineSignatures.Listing> listing = signatures.of(routine);
+		if (listing.isEmpty()) {
+			requireRoutineExists(dictionary, new ObjectName(target.owner(), target.packageName()), routine);
+			RoutineMetadata empty = new RoutineMetadata(target.owner(), target.packageName(), routine, List.of(),
+					false);
 			return byName ? empty.boundByName(method) : empty;
 		}
-		List<RoutineMetadata> routines = new ArrayList<>(versions.values().stream()
-				.map(arguments -> new RoutineMetadata(target.owner(), target.name(), routine, arguments, false))
+		List<RoutineMetadata> routines = new ArrayList<>(listing.get().versions().values().stream()
+				.map(arguments -> new RoutineMetadata(target.owner(), target.packageName(), routine, arguments, false))
 				.toList());
 		// a procedure without arguments does not show up in ALL_ARGUMENTS, not even as one version of an overload
-		if (counted[0] > routines.size()) {
-			routines.add(new RoutineMetadata(target.owner(), target.name(), routine, List.of(), false));
+		if (listing.get().counted() > routines.size()) {
+			routines.add(new RoutineMetadata(target.owner(), target.packageName(), routine, List.of(), false));
 		}
 		if (byName) {
 			return chooseByName(routines, method, converters);

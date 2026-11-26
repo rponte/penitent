@@ -34,6 +34,11 @@ final class QueryCounter {
 		return statements.stream().filter(sql -> sql.matches("(?is).*\\b(all_\\w+|sys_context)\\b.*")).count();
 	}
 
+	/** Every statement prepared since the last {@link #reset()}. */
+	List<String> statements() {
+		return List.copyOf(statements);
+	}
+
 	void reset() {
 		statements.clear();
 	}
