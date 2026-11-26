@@ -133,7 +133,8 @@ final class RoutineCall {
 		} catch (SqlFailure e) {
 			SQLException cause = e.failure().cause();
 			if (cause.getErrorCode() == UNRESOLVED_TYPE || cause.getErrorCode() == INVALID_NAME_PATTERN) {
-				new RoutineValidation(routine).explainUndescribableJson(method, new Dictionary(connection), cause);
+				new RoutineValidation(routine).explainUndescribableJson(method, types.descriptions(),
+						new Dictionary(connection), cause);
 			}
 			throw StaleTypes.explained(described ? explainChange(method, routine, cause, connection, e) : e);
 		}
@@ -382,10 +383,10 @@ final class RoutineCall {
 		// a wrong arity has its own message, at call time
 		if (method.getParameterCount() <= routine.parameters().size()) {
 			RoutineValidation validation = new RoutineValidation(routine);
-			validation.requireCollectionsToBeSupported(method, dictionary, types.converters());
-			validation.requireConvertersToFit(method, dictionary, types.converters());
-			validation.requireTemporalElementsToAgree(method, dictionary, types.converters());
-			validation.requireNestingToAgree(method, dictionary);
+			validation.requireCollectionsToBeSupported(method, types.descriptions(), dictionary, types.converters());
+			validation.requireConvertersToFit(method, types.descriptions(), dictionary, types.converters());
+			validation.requireTemporalElementsToAgree(method, types.descriptions(), dictionary, types.converters());
+			validation.requireNestingToAgree(method, types.descriptions(), dictionary);
 			validation.requireJsonToBeSupported(method, DriverProfile.of(connection));
 			validation.requireJsonTypesToFit(method, types.converters());
 		}

@@ -209,15 +209,15 @@ public final class RoutineValidation {
 	 * failed, so that a call that works reads nothing more from the dictionary; with no JSON found, the original error
 	 * goes on.
 	 */
-	public void explainUndescribableJson(Method method, Dictionary dictionary, java.sql.SQLException cause) {
+	public void explainUndescribableJson(Method method, TypeDescriptions types, Dictionary dictionary, java.sql.SQLException cause) {
 		for (Argument argument : boundArguments(method)) {
 			if (argument.isCollection() && "JSON".equals(
-					RoutineMetadata.collectionTypeOf(dictionary, argument, routine.schema()).scalarElement())) {
+					RoutineMetadata.collectionTypeOf(types, dictionary, argument, routine.schema()).scalarElement())) {
 				throw new PlsqlMappingException(nameOf(argument) + " is " + JSON_COLLECTION, cause);
 			}
 			if (argument.isStruct()) {
 				CompositeType type = argument.compositeType(routine.schema());
-				List<String> json = jsonAttributesOf(dictionary, type);
+				List<String> json = jsonAttributesOf(types, dictionary, type);
 				if (!json.isEmpty()) {
 					throw new PlsqlMappingException(nameOf(argument) + ": " + jsonRefusal(type, json), cause);
 				}
@@ -230,8 +230,8 @@ public final class RoutineValidation {
 			+ " (ORA-17074): pass the documents one at a time, or as one JSON array";
 
 	/** The JSON fields of a RECORD, or the JSON columns behind a {@code %ROWTYPE}; an OBJECT cannot have any. */
-	private static List<String> jsonAttributesOf(Dictionary dictionary, CompositeType type) {
-		return dictionary.jsonAttributesOf(type.kind(), type.schema(), type.container(), type.simpleName());
+	private static List<String> jsonAttributesOf(TypeDescriptions types, Dictionary dictionary, CompositeType type) {
+		return types.composite(type, dictionary).jsonAttributes();
 	}
 
 	/**
@@ -246,14 +246,14 @@ public final class RoutineValidation {
 						: "declare the field as VARCHAR2 or CLOB, or pass the document as a parameter of its own");
 	}
 
-	public void requireCollectionsToBeSupported(Method method, Dictionary dictionary, PlsqlConverters converters) {
+	public void requireCollectionsToBeSupported(Method method, TypeDescriptions types, Dictionary dictionary, PlsqlConverters converters) {
 		Parameter[] javaParameters = method.getParameters();
 		List<Argument> params = routine.parameters();
 
 		for (int i = 0; i < javaParameters.length; i++) {
 			Argument param = params.get(i);
 			if ("PL/SQL TABLE".equals(param.dataType())) {
-				requireIndexBySupported(dictionary, param);
+				requireIndexBySupported(types, dictionary, param);
 				if (param.isIn()) {
 					throw new PlsqlMappingException(nameOf(param)
 							+ " is INDEX BY, and the driver would write it starting at index 0, not 1. Declare the"
@@ -265,17 +265,17 @@ public final class RoutineValidation {
 		}
 		if (ReturnType.of(method) != void.class) {
 			routine.returnValue().filter(value -> "PL/SQL TABLE".equals(value.dataType())).ifPresent(value -> {
-				requireIndexBySupported(dictionary, value);
+				requireIndexBySupported(types, dictionary, value);
 				requireReadableIndexBy(method, value, "the return value", ReturnType.genericOf(method),
 						RoutineMetadata.converterOfReturn(method, converters));
 			});
 		}
 	}
 
-	private void requireIndexBySupported(Dictionary dictionary, Argument argument) {
+	private void requireIndexBySupported(TypeDescriptions types, Dictionary dictionary, Argument argument) {
 		String owner = argument.ownerOr(routine.schema());
 		requireNotIndexedByText(
-				RoutineMetadata.indexByOf(dictionary, owner, argument.typeName(), argument.typeSubname()),
+				RoutineMetadata.indexByOf(types, dictionary, owner, argument.typeName(), argument.typeSubname()),
 				argument.typeName(), argument.typeSubname());
 	}
 
@@ -292,7 +292,7 @@ public final class RoutineValidation {
 	 * The element of a collection lives in another dictionary query, so this validation only runs
 	 * when the routine is described, and only for a date element, the only kind it rejects.
 	 */
-	public void requireTemporalElementsToAgree(Method method, Dictionary dictionary, PlsqlConverters converters) {
+	public void requireTemporalElementsToAgree(Method method, TypeDescriptions types, Dictionary dictionary, PlsqlConverters converters) {
 		Parameter[] javaParameters = method.getParameters();
 		List<Argument> params = routine.parameters();
 
@@ -301,12 +301,12 @@ public final class RoutineValidation {
 					? OutParameters.valueTypeOf(javaParameters[i])
 					: javaParameters[i].getParameterizedType();
 			requireTemporalElementToAgree(method, params.get(i), declared,
-					RoutineMetadata.converterOf(method, javaParameters[i], converters), dictionary);
+					RoutineMetadata.converterOf(method, javaParameters[i], converters), types, dictionary);
 		}
 		if (ReturnType.of(method) != void.class) {
 			AppliedConverter applied = RoutineMetadata.converterOfReturn(method, converters);
 			routine.returnValue().ifPresent(value -> requireTemporalElementToAgree(method, value,
-					ReturnType.genericOf(method), applied, dictionary));
+					ReturnType.genericOf(method), applied, types, dictionary));
 		}
 	}
 
@@ -315,22 +315,22 @@ public final class RoutineValidation {
 	 * and columns that each have their own. For a collection, it must be per element, and the element
 	 * must be a scalar.
 	 */
-	public void requireConvertersToFit(Method method, Dictionary dictionary, PlsqlConverters converters) {
+	public void requireConvertersToFit(Method method, TypeDescriptions types, Dictionary dictionary, PlsqlConverters converters) {
 		Parameter[] javaParameters = method.getParameters();
 		List<Argument> params = routine.parameters();
 
 		for (int i = 0; i < javaParameters.length; i++) {
 			requireConverterToFit(method, params.get(i),
-					RoutineMetadata.converterOf(method, javaParameters[i], converters), dictionary);
+					RoutineMetadata.converterOf(method, javaParameters[i], converters), types, dictionary);
 		}
 		if (ReturnType.of(method) != void.class) {
 			AppliedConverter applied = RoutineMetadata.converterOfReturn(method, converters);
-			routine.returnValue().ifPresent(value -> requireConverterToFit(method, value, applied, dictionary));
+			routine.returnValue().ifPresent(value -> requireConverterToFit(method, value, applied, types, dictionary));
 		}
 	}
 
 	private void requireConverterToFit(Method method, Argument argument, AppliedConverter applied,
-			Dictionary dictionary) {
+			TypeDescriptions types, Dictionary dictionary) {
 		if (applied == null) {
 			return;
 		}
@@ -338,7 +338,7 @@ public final class RoutineValidation {
 		boolean fits = !argument.isStruct()
 				&& (argument.isCollection() || argument.isCursor()) == applied.elementWise()
 				&& (!argument.isCollection()
-						|| RoutineMetadata.collectionTypeOf(dictionary, argument, routine.schema()).holdsScalars());
+						|| RoutineMetadata.collectionTypeOf(types, dictionary, argument, routine.schema()).holdsScalars());
 		if (!fits) {
 			throw new PlsqlMappingException(nameOf(argument) + " is "
 					+ argument.dataType() + ", and a converter only applies to a scalar value, or to the"
@@ -347,13 +347,13 @@ public final class RoutineValidation {
 	}
 
 	private void requireTemporalElementToAgree(Method method, Argument argument, java.lang.reflect.Type declared,
-			AppliedConverter applied, Dictionary dictionary) {
+			AppliedConverter applied, TypeDescriptions types, Dictionary dictionary) {
 		Class<?> element = applied != null && applied.elementWise() ? applied.databaseType()
 				: RoutineMetadata.elementClassOf(declared);
 		if (!argument.isCollection() || element == null || !Temporal.class.isAssignableFrom(element)) {
 			return;
 		}
-		String oracleElement = RoutineMetadata.elementTypeNameOf(dictionary, argument, routine.schema());
+		String oracleElement = RoutineMetadata.elementTypeNameOf(types, dictionary, argument, routine.schema());
 		String refusal = ScalarCodec.temporalRefusal(oracleElement, element);
 		if (refusal != null) {
 			throw new PlsqlMappingException(nameOf(argument) + " is a collection of " + oracleElement + ", and "
@@ -402,7 +402,7 @@ public final class RoutineValidation {
 	 * Checked when the routine is described: otherwise an inner {@code Array} would be read as a scalar,
 	 * or a {@code List} sent as one, with a driver message that does not say which level is wrong.
 	 */
-	public void requireNestingToAgree(Method method, Dictionary dictionary) {
+	public void requireNestingToAgree(Method method, TypeDescriptions types, Dictionary dictionary) {
 		Parameter[] javaParameters = method.getParameters();
 		List<Argument> params = routine.parameters();
 
@@ -411,19 +411,19 @@ public final class RoutineValidation {
 				java.lang.reflect.Type declared = OutParameters.isDeclaredBy(javaParameters[i])
 						? OutParameters.valueTypeOf(javaParameters[i])
 						: javaParameters[i].getParameterizedType();
-				requireNestingToAgree(method, params.get(i), declared, dictionary);
+				requireNestingToAgree(method, params.get(i), declared, types, dictionary);
 			}
 		}
 		if (ReturnType.of(method) != void.class) {
 			routine.returnValue().filter(Argument::isCollection)
-					.ifPresent(value -> requireNestingToAgree(method, value, ReturnType.genericOf(method), dictionary));
+					.ifPresent(value -> requireNestingToAgree(method, value, ReturnType.genericOf(method), types, dictionary));
 		}
 	}
 
 	private void requireNestingToAgree(Method method, Argument argument, java.lang.reflect.Type declared,
-			Dictionary dictionary) {
+			TypeDescriptions types, Dictionary dictionary) {
 		String refusal = declared == null ? null
-				: nestingRefusal(RoutineMetadata.collectionTypeOf(dictionary, argument, routine.schema()),
+				: nestingRefusal(RoutineMetadata.collectionTypeOf(types, dictionary, argument, routine.schema()),
 						RoutineMetadata.elementTypeOf(declared));
 		if (refusal != null) {
 			throw new PlsqlMappingException(nameOf(argument) + ": " + refusal);

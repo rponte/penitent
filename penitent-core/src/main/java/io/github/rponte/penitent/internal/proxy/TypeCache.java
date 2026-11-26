@@ -13,6 +13,7 @@ import io.github.rponte.penitent.internal.metadata.CollectionType;
 import io.github.rponte.penitent.internal.metadata.CompositeType;
 import io.github.rponte.penitent.internal.metadata.Dictionary;
 import io.github.rponte.penitent.internal.metadata.RoutineMetadata;
+import io.github.rponte.penitent.internal.metadata.TypeDescriptions;
 import io.github.rponte.penitent.internal.metadata.RoutineMetadata.Argument;
 
 /**
@@ -25,6 +26,8 @@ import io.github.rponte.penitent.internal.metadata.RoutineMetadata.Argument;
 final class TypeCache {
 
 	private final PlsqlConverters converters;
+	/** The types described, which the bindings, the collections and the validation read (#169). */
+	private final TypeDescriptions descriptions = new TypeDescriptions();
 
 	private final ConcurrentMap<String, TypeBinding> bindings = new ConcurrentHashMap<>();
 	private final ConcurrentMap<String, CollectionType> collectionTypes = new ConcurrentHashMap<>();
@@ -35,6 +38,11 @@ final class TypeCache {
 		this.converters = converters;
 	}
 
+	/** The types this proxy has described. */
+	TypeDescriptions descriptions() {
+		return descriptions;
+	}
+
 	/** The converters of the whole interface. */
 	PlsqlConverters converters() {
 		return converters;
@@ -42,7 +50,8 @@ final class TypeCache {
 
 	TypeBinding binding(Class<?> javaType, CompositeType type, Connection connection) {
 		String key = javaType.getName() + "@" + type.qualifiedBindName();
-		return Caches.get(bindings, key, k -> TypeBinding.of(new Dictionary(connection), javaType, type, converters));
+		return Caches.get(bindings, key,
+				k -> TypeBinding.of(descriptions, new Dictionary(connection), javaType, type, converters));
 	}
 
 	/**
@@ -56,18 +65,19 @@ final class TypeCache {
 	CollectionType collectionType(Argument collection, String schema, Connection connection) {
 		String key = collection.ownerOr(schema) + "." + collection.typeName() + "." + collection.typeSubname();
 		return Caches.get(collectionTypes, key,
-				k -> RoutineMetadata.collectionTypeOf(new Dictionary(connection), collection, schema));
+				k -> RoutineMetadata.collectionTypeOf(descriptions, new Dictionary(connection), collection, schema));
 	}
 
 	/** A type a block declares, resolved in {@code schema}. */
 	BlockMetadata.DeclaredType declaredType(String schema, String declared, Connection connection) {
 		return Caches.get(declaredTypes, schema + "|" + declared,
-				k -> BlockMetadata.declaredType(new Dictionary(connection), schema, declared));
+				k -> BlockMetadata.declaredType(descriptions, new Dictionary(connection), schema, declared));
 	}
 
 	/** Forgets every type it read, after one changed in the database: the next use reads them again. */
 	void clear() {
 		bindings.clear();
+		descriptions.clear();
 		collectionTypes.clear();
 		declaredTypes.clear();
 		cursors.clear();
