@@ -42,9 +42,10 @@ Each proxy reads the dictionary on the first call of each method and keeps the r
 
 - **Fewer queries** ([#169](https://github.com/rponte/penitent/issues/169)): the current schema and the package are
   resolved once per proxy, and a package interface's routines are read in a single query, so an interface costs a
-  few queries whatever its number of methods; an `@PlsqlSchema` interface's routines resolve their names together, in
-  a few queries per round of synonyms, and their signatures are read in a query per owner. Still open: each composite
-  type is read in one query per question about it, instead of one query.
+  few queries whatever its number of methods; Oracle resolves the names of an interface's routines itself, all in one
+  round trip ([#174](https://github.com/rponte/penitent/issues/174)), and an `@PlsqlSchema` interface's signatures
+  are read in a query per owner. Still open: each composite type is read in one query per question about it, instead
+  of one query; and reading the signatures of every owner in one query, by `OBJECT_ID`.
   `DictionaryQueriesTest` holds today's numbers, and `DescribeTimingReport` the time.
 - **Cache shared between proxies** ([#170](https://github.com/rponte/penitent/issues/170)): two interfaces that use
   the same type read it twice. It cannot be static, because of the classloader trap, and it touches rules the library
