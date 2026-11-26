@@ -92,6 +92,15 @@ class DocsDeployingTest extends OracleIntegrationTest {
 						+ " END deploy_counter;");
 	}
 
+	/** Runs {@code call}, whether it works or fails. */
+	private static void attempt(Runnable call) {
+		try {
+			call.run();
+		} catch (PlsqlExecutionException e) {
+			// either way: see soft_evict
+		}
+	}
+
 	private static HikariDataSource pool(HikariConfig config) {
 		try (HikariDataSource template = newPool()) {
 			config.setJdbcUrl(template.getJdbcUrl());
@@ -151,8 +160,15 @@ class DocsDeployingTest extends OracleIntegrationTest {
 			ddl("ALTER TYPE deploy_pair_t ADD ATTRIBUTE (c NUMBER) CASCADE");
 			assertThatThrownBy(() -> PlsqlPackages.create(Triples.class, hikari).echo(TRIPLE))
 					.isInstanceOfSatisfying(PlsqlExecutionException.class, e -> assertThat(e.getCode()).isEqualTo(17049));
-			assertThatThrownBy(() -> PlsqlPackages.create(Triples.class, hikari).echo(TRIPLE))
-					.as("HikariCP keeps the connection by itself").isInstanceOf(PlsqlExecutionException.class);
+			if (DATABASE_MAJOR_VERSION >= 21) {
+				assertThatThrownBy(() -> PlsqlPackages.create(Triples.class, hikari).echo(TRIPLE))
+						.as("HikariCP keeps the connection by itself").isInstanceOf(PlsqlExecutionException.class);
+			} else {
+				// On 19c, DBMS_UTILITY.NAME_RESOLVE, which a new proxy's describe calls on the connection (#174), was
+				// measured to make the session drop the old type: the next call may work. Not something Oracle
+				// documents, nor that the library relies on: the advice stays to replace the connections.
+				attempt(() -> PlsqlPackages.create(Triples.class, hikari).echo(TRIPLE));
+			}
 
 			// snippet: deploying/soft-evict
 			hikari.getHikariPoolMXBean().softEvictConnections();

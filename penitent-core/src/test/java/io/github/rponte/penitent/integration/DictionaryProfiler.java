@@ -30,7 +30,7 @@ import javax.sql.DataSource;
  */
 final class DictionaryProfiler implements AutoCloseable {
 
-	private static final Pattern VIEW = Pattern.compile("(?i)\\bfrom (all_\\w+|dual)");
+	private static final Pattern VIEW = Pattern.compile("(?i)\\bfrom (all_\\w+|dual)|\\b(dbms_utility)\\b");
 
 	/** One dictionary query: its SQL, as one line, and the rows it returned. */
 	record Query(String sql, int rows) {
@@ -90,6 +90,10 @@ final class DictionaryProfiler implements AutoCloseable {
 					if (m.getName().equals("prepareStatement") && result instanceof PreparedStatement statement
 							&& isDictionary((String) a[0])) {
 						return timed(statement, (String) a[0]);
+					}
+					if (m.getName().equals("prepareCall") && result instanceof java.sql.CallableStatement call
+							&& isDictionary((String) a[0])) {
+						return counted(call, (String) a[0]);
 					}
 					return result;
 				});
@@ -164,13 +168,25 @@ final class DictionaryProfiler implements AutoCloseable {
 				});
 	}
 
+	/** A dictionary call, as DBMS_UTILITY.NAME_RESOLVE's block: counted as a query when it runs. */
+	private java.sql.CallableStatement counted(java.sql.CallableStatement real, String sql) {
+		return (java.sql.CallableStatement) Proxy.newProxyInstance(getClass().getClassLoader(),
+				new Class<?>[] { java.sql.CallableStatement.class }, (p, m, a) -> {
+					Object result = invoke(real, m, a);
+					if (m.getName().equals("execute")) {
+						queries.add(new Query(sql.replaceAll("\\s+", " ").trim(), 0));
+					}
+					return result;
+				});
+	}
+
 	private static boolean isDictionary(String sql) {
-		return sql.matches("(?is).*\\b(all_\\w+|sys_context)\\b.*");
+		return sql.matches("(?is).*\\b(all_\\w+|sys_context|dbms_utility)\\b.*");
 	}
 
 	static String viewOf(String sql) {
 		Matcher view = VIEW.matcher(sql);
-		return view.find() ? view.group(1).toLowerCase(Locale.ROOT) : "other";
+		return view.find() ? (view.group(1) != null ? view.group(1) : view.group(2)).toLowerCase(Locale.ROOT) : "other";
 	}
 
 	private static Object invoke(Object target, Method method, Object[] args) throws Throwable {
