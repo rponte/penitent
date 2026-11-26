@@ -129,7 +129,9 @@ Boot's pool, each one measured on Oracle 23ai and 19c.
 
 HikariCP replaces a connection by itself only when the connection is broken: a SQLState of class `08`, as when the
 database closes the session after a `%ROWTYPE` changed. `ORA-17049` and `ORA-03101` come from a healthy connection,
-which HikariCP keeps, still holding the old type. Two ways to replace it:
+which HikariCP keeps, still holding the old type. On Oracle 19c, the connection was measured to drop the old type after
+a new proxy described a routine on it, a side effect of `DBMS_UTILITY.NAME_RESOLVE` that Oracle does not document:
+do not rely on it. Two ways to replace it:
 
 - **At once, for every connection,** as a step of the deploy, through the pool's MXBean, also reachable through JMX
   with `registerMbeans`:

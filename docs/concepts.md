@@ -33,8 +33,8 @@ When you call `orders.calculateFreight("SP", "CE")`:
    transaction's connection, if there is one. A view made with [`PlsqlPackages.using`](transactions.md) uses the
    connection it was given instead.
 2. **On the method's first call, the dictionary is read,** on that same connection: which routine the method calls,
-   its parameters and their types, and the attributes of every composite involved. That is 3 queries for a routine
-   with scalars, and up to about 14 with nested composites. The result is cached in the proxy, so later calls skip
+   its parameters and their types, and the attributes of every composite involved. That is 2 queries for a routine
+   with scalars, and up to about 13 with nested composites. The result is cached in the proxy, so later calls skip
    this step. The parameters of every routine the interface maps come in that same query, so the other methods'
    first calls read nothing more, except the composite types they use. Each method is still checked on its own
    first call.

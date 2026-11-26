@@ -8,6 +8,17 @@ All notable changes to this project are listed here. The format follows
 
 ### Changed
 
+- Oracle resolves the names of an interface's routines itself, with `DBMS_UTILITY.NAME_RESOLVE`, every name in one
+  round trip ([#174](https://github.com/rponte/penitent/issues/174)), instead of Penitent following Oracle's order
+  through `ALL_OBJECTS` and `ALL_SYNONYMS`, a query per owner each round of synonyms. The order is Oracle's by
+  definition, and `ALL_SYNONYMS`, which costs about 50 ms a query on 21c, is no longer read. The first call of a
+  scalar routine goes from 3 dictionary queries to 2, and validating an `@PlsqlSchema` interface of 30 standalone
+  routines, 10 of them through synonyms, from 9 to 3: on 21c, from about 107 ms to about 5 ms. **Upgrading:** a
+  routine this user sees but may not execute, reached through a synonym, is refused as before, and the message now
+  names the synonym rather than what it points to, which Oracle does not reveal. On Oracle 19c, a connection holding
+  an object type a deploy changed was measured to drop it after a new proxy described a routine on it; do not rely on
+  it, and replace the connections, as [Deploying](docs/deploying.md#when-a-type-changed) says.
+
 - Describing routines reads the dictionary in fewer queries and round trips
   ([#169](https://github.com/rponte/penitent/issues/169)). A proxy resolves the current schema and its package,
   through synonyms, once instead of for every method; resolving a name asks once whether it exists; a routine's
