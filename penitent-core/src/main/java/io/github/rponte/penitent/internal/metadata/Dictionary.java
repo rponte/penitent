@@ -354,8 +354,17 @@ public final class Dictionary {
 		return first(found);
 	}
 
-	/** One attribute of a composite, or a column of a {@code %ROWTYPE}: its position, name and type. */
-	public record Attribute(int position, String name, String typeName, String typeOwner, String typePackage) {
+	/**
+	 * One attribute of a composite, or a column of a {@code %ROWTYPE}: its position, name and type, and the type's
+	 * modifier, {@code REF} for a pointer to a row of an object table, or null.
+	 */
+	public record Attribute(int position, String name, String typeName, String typeOwner, String typePackage,
+			String modifier) {
+
+		/** Whether it is an object-relational {@code REF}, a pointer to a row of an object table, not the object. */
+		public boolean isRef() {
+			return "REF".equals(modifier);
+		}
 	}
 
 	/**
@@ -367,27 +376,29 @@ public final class Dictionary {
 	public List<Attribute> attributesOf(CompositeType.Kind kind, String owner, String packageName, String type) {
 		return switch (kind) {
 			case OBJECT -> query("""
-					select attr_no, attr_name, attr_type_name, attr_type_owner
+					select attr_no, attr_name, attr_type_name, attr_type_owner, attr_type_mod
 					  from all_type_attrs
 					 where owner = ? and type_name = ?
 					 order by attr_no
 					""", (rs, n) -> new Attribute(rs.getInt("attr_no"), rs.getString("attr_name"),
-					rs.getString("attr_type_name"), rs.getString("attr_type_owner"), null), owner, type);
+					rs.getString("attr_type_name"), rs.getString("attr_type_owner"), null,
+					rs.getString("attr_type_mod")), owner, type);
 			case PLSQL_RECORD -> query("""
-					select attr_no, attr_name, attr_type_name, attr_type_owner, attr_type_package
+					select attr_no, attr_name, attr_type_name, attr_type_owner, attr_type_package, attr_type_mod
 					  from all_plsql_type_attrs
 					 where owner = ? and package_name = ? and type_name = ?
 					 order by attr_no
 					""", (rs, n) -> new Attribute(rs.getInt("attr_no"), rs.getString("attr_name"),
 					rs.getString("attr_type_name"), rs.getString("attr_type_owner"),
-					rs.getString("attr_type_package")), owner, packageName, type);
+					rs.getString("attr_type_package"), rs.getString("attr_type_mod")), owner, packageName, type);
 			case ROWTYPE -> query("""
-					select column_id, column_name, data_type, data_type_owner
+					select column_id, column_name, data_type, data_type_owner, data_type_mod
 					  from all_tab_columns
 					 where owner = ? and table_name = ? and column_id is not null
 					 order by column_id
 					""", (rs, n) -> new Attribute(rs.getInt("column_id"), rs.getString("column_name"),
-					rs.getString("data_type"), rs.getString("data_type_owner"), null), owner, type);
+					rs.getString("data_type"), rs.getString("data_type_owner"), null, rs.getString("data_type_mod")),
+					owner, type);
 		};
 	}
 
@@ -408,22 +419,27 @@ public final class Dictionary {
 		};
 	}
 
-	/** What a collection holds: its element's owner, package and name, as the dictionary lists them. */
-	public record Element(String owner, String packageName, String name) {
+	/** What a collection holds: its element's owner, package and name, as the dictionary lists them, and modifier. */
+	public record Element(String owner, String packageName, String name, String modifier) {
+
+		/** Whether the collection holds object-relational {@code REF}s, pointers to rows, not the objects. */
+		public boolean isRef() {
+			return "REF".equals(modifier);
+		}
 	}
 
 	/** The element of {@code collection}, of a package or of the schema; or empty. */
 	public java.util.Optional<Element> elementOf(String owner, String packageName, String collection) {
 		RowMapper<Element> toElement = (rs, n) -> new Element(rs.getString("elem_type_owner"),
-				rs.getString("elem_type_package"), rs.getString("elem_type_name"));
+				rs.getString("elem_type_package"), rs.getString("elem_type_name"), rs.getString("elem_type_mod"));
 		List<Element> elements = packageName != null
 				? query("""
-						select elem_type_owner, elem_type_package, elem_type_name
+						select elem_type_owner, elem_type_package, elem_type_name, elem_type_mod
 						  from all_plsql_coll_types
 						 where owner = ? and package_name = ? and type_name = ?
 						""", toElement, owner, packageName, collection)
 				: query("""
-						select elem_type_owner, null as elem_type_package, elem_type_name
+						select elem_type_owner, null as elem_type_package, elem_type_name, elem_type_mod
 						  from all_coll_types
 						 where owner = ? and type_name = ?
 						""", toElement, owner, collection);

@@ -8,6 +8,12 @@ All notable changes to this project are listed here. The format follows
 
 ### Changed
 
+- An attribute that is an object-relational `REF`, a pointer to a row of an object table, and a collection of `REF`s,
+  are refused with a `PlsqlMappingException` that names them, by `validate` and by the call alike
+  ([#125](https://github.com/rponte/penitent/issues/125)). They were read as the object they point to: `validate`
+  refused them for not covering its attributes, while a call whose `REF` was `null` ran. **Upgrading:** such a call
+  now fails; pass the object itself, or follow the `REF` in PL/SQL.
+
 - Oracle resolves the names of an interface's routines itself, with `DBMS_UTILITY.NAME_RESOLVE`, every name in one
   round trip ([#174](https://github.com/rponte/penitent/issues/174)), instead of Penitent following Oracle's order
   through `ALL_OBJECTS` and `ALL_SYNONYMS`, a query per owner each round of synonyms. The order is Oracle's by

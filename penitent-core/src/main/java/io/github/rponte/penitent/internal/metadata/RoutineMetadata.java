@@ -793,6 +793,11 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 	 */
 	public static CollectionType collectionTypeOf(Dictionary dictionary, String schema, String container, String typeName) {
 		java.util.Optional<Dictionary.Element> element = dictionary.elementOf(schema, container, typeName);
+		if (element.isPresent() && element.get().isRef()) {
+			throw new PlsqlMappingException("collection " + (container == null ? typeName : container + "." + typeName)
+					+ " holds REFs to " + element.get().name() + ", pointers to rows of an object table, which"
+					+ " Penitent does not map: pass the objects themselves, or follow the REFs in PL/SQL");
+		}
 		if (element.isEmpty()) {
 			throw new PlsqlMappingException("collection "
 					+ (container == null ? typeName : container + "." + typeName) + " in " + schema
