@@ -31,7 +31,7 @@ final class QueryCounter {
 
 	/** The statements that read the dictionary since the last {@link #reset()}. */
 	long dictionaryQueries() {
-		return statements.stream().filter(sql -> sql.matches("(?is).*\\b(all_\\w+|sys_context)\\b.*")).count();
+		return statements.stream().filter(sql -> sql.matches("(?is).*\\b(all_\\w+|sys_context|dbms_utility)\\b.*")).count();
 	}
 
 	/** Every statement prepared since the last {@link #reset()}. */

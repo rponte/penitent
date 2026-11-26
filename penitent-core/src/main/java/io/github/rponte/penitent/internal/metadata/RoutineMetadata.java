@@ -40,7 +40,6 @@ import io.github.rponte.penitent.internal.driver.Carriers;
 public record RoutineMetadata(String schema, String packageName, String routineName, List<Argument> arguments,
 		boolean byName) {
 
-	private static final int MAX_SYNONYMS = 10;
 
 	/**
 	 * A row of {@code ALL_ARGUMENTS}. {@code typeName} is only filled in for a composite type, and
@@ -553,140 +552,82 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 	}
 
 	/**
-	 * Where each of {@code objectNames} actually is, following Oracle's resolution: an object in the schema itself
-	 * takes precedence, then a private synonym and, without an explicit schema, a public one. This has to be done here
-	 * because {@code ALL_ARGUMENTS} only knows the real name. A synonym can point to another, hence the rounds; the
-	 * limit only keeps a cycle of synonyms from going on forever. Only the names found are returned, and kept in
-	 * {@code names}.
+	 * Where each of {@code objectNames} actually is, as Oracle resolves it: an object in the schema itself takes
+	 * precedence, then a private synonym and, without an explicit schema, a public one, through synonyms of synonyms.
+	 * This has to be done here because {@code ALL_ARGUMENTS} only knows the real name. Only the names found are
+	 * returned, and kept in {@code names}.
 	 *
-	 * <p>The names are resolved together, in rounds (#169): which exist, then the synonyms of those that do not, then
-	 * which of their targets exist, and so on, each round a query per owner, not per name. An {@code @PlsqlSchema}
-	 * interface's routines each resolve on their own, to an owner each, and one at a time cost a few queries per
-	 * routine. The rule is the one each name followed alone: a name is asked whether it exists, then, if not, for its
-	 * synonym, the private one first, and so on.
+	 * <p>Oracle resolves them itself, with {@code DBMS_UTILITY.NAME_RESOLVE}, all of them in one round trip, up to
+	 * {@value #NAMES_PER_RESOLVE} at a time (#174): the order is Oracle's by definition, not this library's rendering
+	 * of it. It replaced rounds of {@code ALL_OBJECTS} and {@code ALL_SYNONYMS}, a query per owner each, and
+	 * {@code ALL_SYNONYMS} costs about 50 ms a query on 21c. A name does not resolve when Oracle says it does not exist
+	 * or is not accessible ({@code ORA-06564}), it is a cycle of synonyms ({@code ORA-00980}) or not something PL/SQL
+	 * calls ({@code ORA-04047}), it is remote, or it is not of the kind asked for: a package for a standalone routine,
+	 * or the other way round. Any other error is a failure reading the dictionary.
 	 */
 	private static Map<String, ObjectName> resolveAll(Dictionary dictionary, Names names, String schema,
 			java.util.Collection<String> objectNames, boolean standalone) {
 		Map<String, ObjectName> found = new LinkedHashMap<>();
-		Map<String, ObjectName> pending = new LinkedHashMap<>();
+		List<String> pending = new ArrayList<>();
 		for (String objectName : new java.util.LinkedHashSet<>(objectNames)) {
 			ObjectName known = names.found.get(new Names.Key(schema, objectName, standalone));
 			if (known != null) {
 				found.put(objectName, known);
 			} else {
-				pending.put(objectName, null);
+				pending.add(objectName);
 			}
 		}
-		if (pending.isEmpty()) {
-			return found;
-		}
-		String owner = schema != null ? schema : names.currentSchema(dictionary);
-		pending.replaceAll((objectName, none) -> new ObjectName(owner, objectName));
-
-		for (int hop = 0;; hop++) {
-			java.util.Set<ObjectName> existing = existing(dictionary, pending.values(), standalone);
-			for (java.util.Iterator<Map.Entry<String, ObjectName>> it = pending.entrySet().iterator(); it.hasNext();) {
-				Map.Entry<String, ObjectName> entry = it.next();
-				if (existing.contains(entry.getValue())) {
-					found.put(entry.getKey(), entry.getValue());
-					names.found.put(new Names.Key(schema, entry.getKey(), standalone), entry.getValue());
-					it.remove();
+		for (int from = 0; from < pending.size(); from += NAMES_PER_RESOLVE) {
+			List<String> chunk = pending.subList(from, Math.min(pending.size(), from + NAMES_PER_RESOLVE));
+			// quoted, so that Oracle takes each name as the library normalized it, and the schema too when declared
+			List<String> quoted = chunk.stream()
+					.map(n -> schema != null ? quote(schema) + "." + quote(n) : quote(n)).toList();
+			List<Dictionary.Resolution> resolutions = dictionary.resolve(quoted);
+			for (int k = 0; k < chunk.size(); k++) {
+				ObjectName at = resolved(resolutions.get(k), quoted.get(k), standalone);
+				if (at != null) {
+					found.put(chunk.get(k), at);
+					names.found.put(new Names.Key(schema, chunk.get(k), standalone), at);
 				}
 			}
-			if (pending.isEmpty() || hop == MAX_SYNONYMS) {
-				return found;
-			}
-			Map<ObjectName, ObjectName> synonyms = synonymsOf(dictionary, pending.values(), schema == null);
-			// a name without a synonym does not exist: it stops here, not found
-			pending.replaceAll((objectName, current) -> synonyms.get(current));
-			pending.values().removeIf(java.util.Objects::isNull);
-			if (pending.isEmpty()) {
-				return found;
-			}
 		}
+		return found;
 	}
 
-	/** Which of {@code candidates} exist, as a package or as a standalone routine: a query per owner. */
-	private static java.util.Set<ObjectName> existing(Dictionary dictionary, java.util.Collection<ObjectName> candidates,
-			boolean standalone) {
-		java.util.Set<ObjectName> existing = new java.util.HashSet<>();
-		byOwner(candidates).forEach((owner, objectNames) -> {
-			for (List<String> chunk : chunks(objectNames)) {
-				List<Object> binds = new ArrayList<>(List.of(owner));
-				binds.addAll(chunk);
-				dictionary.query((standalone
-						? """
-								select object_name from all_objects
-								 where owner = ? and object_name in (:names)
-								   and object_type in ('FUNCTION', 'PROCEDURE')
-								"""
-						: """
-								select object_name from all_objects
-								 where owner = ? and object_name in (:names) and object_type = 'PACKAGE'
-								""").replace(":names", marks(chunk.size())),
-						(rs, n) -> existing.add(new ObjectName(owner, rs.getString(1))), binds.toArray());
+	/** How many names one call of {@code NAME_RESOLVE}'s block takes: 9 binds each. */
+	private static final int NAMES_PER_RESOLVE = 50;
+
+	/** Oracle's errors for a name that does not resolve: not accessible or not there, a cycle, not PL/SQL. */
+	private static final java.util.Set<Integer> NOT_RESOLVED = java.util.Set.of(6564, 980, 4047);
+
+	/** The object {@code resolution} names, if it is of the kind asked for; or {@code null}. */
+	private static ObjectName resolved(Dictionary.Resolution resolution, String name, boolean standalone) {
+		if (resolution.error() != 0) {
+			if (NOT_RESOLVED.contains(resolution.error())) {
+				return null;
 			}
-		});
-		return existing;
-	}
-
-	/**
-	 * The synonym each of {@code names} has, as the object it points to: the private one, of the name's owner, over a
-	 * public one, which counts only when {@code withPublic}. A query per owner.
-	 */
-	private static Map<ObjectName, ObjectName> synonymsOf(Dictionary dictionary, java.util.Collection<ObjectName> names,
-			boolean withPublic) {
-		Map<ObjectName, ObjectName> privates = new java.util.HashMap<>();
-		Map<String, ObjectName> publics = new java.util.HashMap<>();
-		byOwner(names).forEach((owner, synonymNames) -> {
-			for (List<String> chunk : chunks(synonymNames)) {
-				List<Object> binds = new ArrayList<>(chunk);
-				binds.add(owner);
-				binds.add(withPublic ? "S" : "N");
-				dictionary.query("""
-						select owner, synonym_name, table_owner, table_name
-						  from all_synonyms
-						 where synonym_name in (:names) and db_link is null
-						   and (owner = ? or (owner = 'PUBLIC' and ? = 'S'))
-						""".replace(":names", marks(chunk.size())), (rs, n) -> {
-					ObjectName target = new ObjectName(rs.getString("table_owner"), rs.getString("table_name"));
-					if ("PUBLIC".equals(rs.getString("owner"))) {
-						publics.put(rs.getString("synonym_name"), target);
-					} else {
-						privates.put(new ObjectName(rs.getString("owner"), rs.getString("synonym_name")), target);
-					}
-					return null;
-				}, binds.toArray());
-			}
-		});
-		Map<ObjectName, ObjectName> synonyms = new java.util.HashMap<>();
-		for (ObjectName name : names) {
-			ObjectName target = privates.containsKey(name) ? privates.get(name) : publics.get(name.name());
-			if (target != null) {
-				synonyms.put(name, target);
-			}
+			throw new Dictionary.SqlFailure("DBMS_UTILITY.NAME_RESOLVE('" + name + "')",
+					new java.sql.SQLException(resolution.message(), null, resolution.error()),
+					io.github.rponte.penitent.exception.PlsqlFailure.Phase.DICTIONARY);
 		}
-		return synonyms;
-	}
-
-	private static Map<String, List<String>> byOwner(java.util.Collection<ObjectName> names) {
-		Map<String, List<String>> byOwner = new LinkedHashMap<>();
-		for (ObjectName name : names) {
-			byOwner.computeIfAbsent(name.owner(), k -> new ArrayList<>()).add(name.name());
+		if (resolution.dblink() != null) {
+			return null;
 		}
-		return byOwner;
-	}
-
-	private static List<List<String>> chunks(List<String> names) {
-		List<List<String>> chunks = new ArrayList<>();
-		for (int from = 0; from < names.size(); from += RoutineSignatures.NAMES_PER_QUERY) {
-			chunks.add(names.subList(from, Math.min(names.size(), from + RoutineSignatures.NAMES_PER_QUERY)));
+		boolean routine = (resolution.type() == PROCEDURE || resolution.type() == FUNCTION) && resolution.part1() == null;
+		boolean pkg = resolution.type() == PACKAGE && resolution.part2() == null;
+		if (standalone && routine) {
+			return new ObjectName(resolution.schema(), resolution.part2());
 		}
-		return chunks;
+		return !standalone && pkg ? new ObjectName(resolution.schema(), resolution.part1()) : null;
 	}
 
-	private static String marks(int count) {
-		return String.join(", ", java.util.Collections.nCopies(count, "?"));
+	/** {@code NAME_RESOLVE}'s {@code part1_type}: a standalone procedure, a standalone function, a package. */
+	private static final int PROCEDURE = 7;
+	private static final int FUNCTION = 8;
+	private static final int PACKAGE = 9;
+
+	private static String quote(String identifier) {
+		return '"' + identifier + '"';
 	}
 
 	/** A package has its routines in {@code procedure_name}; a standalone routine is the object itself. */

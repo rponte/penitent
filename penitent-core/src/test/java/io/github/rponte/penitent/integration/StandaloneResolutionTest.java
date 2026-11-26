@@ -134,6 +134,18 @@ class StandaloneResolutionTest extends OracleIntegrationTest {
 		BigDecimal precNoSuchName(BigDecimal pA);
 	}
 
+	@PlsqlSchema
+	interface NoExecute {
+		@PlsqlRoutine("NOEXEC")
+		BigDecimal throughSynonym(BigDecimal pA);
+	}
+
+	@PlsqlSchema("plsql_owner")
+	interface NoExecuteInItsSchema {
+		@PlsqlRoutine("NOEXEC_T")
+		BigDecimal direct(BigDecimal pA);
+	}
+
 	@PlsqlSchema("plsql_test")
 	interface PrecedenceInSchema {
 		/** With a schema declared, a public synonym does not count. */
@@ -185,6 +197,16 @@ class StandaloneResolutionTest extends OracleIntegrationTest {
 		assertThatThrownBy(() -> precedence.precNoSuchName(BigDecimal.TEN)).isInstanceOf(PlsqlMappingException.class)
 				.hasMessageContaining("PREC_NO_SUCH_NAME does not exist");
 		assertThat(precedence.precShadowed(BigDecimal.TEN)).isEqualByComparingTo("1");
+	}
+
+	@Test
+	@DisplayName("a function this user sees but may not execute fails as not existing, before any call")
+	void seen_but_not_executable() {
+		assertThatThrownBy(() -> PlsqlPackages.create(NoExecute.class, DATA_SOURCE).throughSynonym(BigDecimal.ONE))
+				.isInstanceOf(PlsqlMappingException.class).hasMessageContaining("NOEXEC")
+				.hasMessageContaining("does not exist");
+		assertThatThrownBy(() -> PlsqlPackages.create(NoExecuteInItsSchema.class, DATA_SOURCE).direct(BigDecimal.ONE))
+				.isInstanceOf(PlsqlMappingException.class).hasMessageContaining("PLSQL_OWNER.NOEXEC_T does not exist");
 	}
 
 	@Test
