@@ -231,19 +231,7 @@ public final class RoutineValidation {
 
 	/** The JSON fields of a RECORD, or the JSON columns behind a {@code %ROWTYPE}; an OBJECT cannot have any. */
 	private static List<String> jsonAttributesOf(Dictionary dictionary, CompositeType type) {
-		return switch (type.kind()) {
-			case PLSQL_RECORD -> dictionary.strings("""
-					select attr_name from all_plsql_type_attrs
-					 where owner = ? and package_name = ? and type_name = ? and attr_type_name = 'JSON'
-					 order by attr_no
-					""", type.schema(), type.container(), type.simpleName());
-			case ROWTYPE -> dictionary.strings("""
-					select column_name from all_tab_columns
-					 where owner = ? and table_name = ? and column_id is not null and data_type = 'JSON'
-					 order by column_id
-					""", type.schema(), type.simpleName());
-			case OBJECT -> List.of();
-		};
+		return dictionary.jsonAttributesOf(type.kind(), type.schema(), type.container(), type.simpleName());
 	}
 
 	/**

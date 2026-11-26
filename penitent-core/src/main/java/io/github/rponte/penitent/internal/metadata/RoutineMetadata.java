@@ -275,7 +275,7 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 	public static RoutineMetadata read(Dictionary dictionary, Names names, String schema, String packageName,
 			String routineName, Method method, PlsqlConverters converters, boolean byName) {
 		Target target = target(dictionary, names, schema, packageName, routineName);
-		RoutineSignatures signatures = RoutineSignatures.read(dictionary, target.owner(), target.packageName(),
+		RoutineSignatures signatures = dictionary.signatures(target.owner(), target.packageName(),
 				List.of(target.routine()));
 		return of(dictionary, target, signatures, method, converters, byName);
 	}
@@ -563,7 +563,7 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 	 * {@code ALL_SYNONYMS} costs about 50 ms a query on 21c. A name does not resolve when Oracle says it does not exist
 	 * or is not accessible ({@code ORA-06564}), it is a cycle of synonyms ({@code ORA-00980}) or not something PL/SQL
 	 * calls ({@code ORA-04047}), it is remote, or it is not of the kind asked for: a package for a standalone routine,
-	 * or the other way round. Any other error is a failure reading the dictionary.
+	 * or the other way round. {@link Dictionary#resolve} raises any other error, as a failure reading the dictionary.
 	 */
 	private static Map<String, ObjectName> resolveAll(Dictionary dictionary, Names names, String schema,
 			java.util.Collection<String> objectNames, boolean standalone) {
@@ -584,7 +584,7 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 					.map(n -> schema != null ? quote(schema) + "." + quote(n) : quote(n)).toList();
 			List<Dictionary.Resolution> resolutions = dictionary.resolve(quoted);
 			for (int k = 0; k < chunk.size(); k++) {
-				ObjectName at = resolved(resolutions.get(k), quoted.get(k), standalone);
+				ObjectName at = resolved(resolutions.get(k), standalone);
 				if (at != null) {
 					found.put(chunk.get(k), at);
 					names.found.put(new Names.Key(schema, chunk.get(k), standalone), at);
@@ -597,20 +597,9 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 	/** How many names one call of {@code NAME_RESOLVE}'s block takes: 9 binds each. */
 	private static final int NAMES_PER_RESOLVE = 50;
 
-	/** Oracle's errors for a name that does not resolve: not accessible or not there, a cycle, not PL/SQL. */
-	private static final java.util.Set<Integer> NOT_RESOLVED = java.util.Set.of(6564, 980, 4047);
-
 	/** The object {@code resolution} names, if it is of the kind asked for; or {@code null}. */
-	private static ObjectName resolved(Dictionary.Resolution resolution, String name, boolean standalone) {
-		if (resolution.error() != 0) {
-			if (NOT_RESOLVED.contains(resolution.error())) {
-				return null;
-			}
-			throw new Dictionary.SqlFailure("DBMS_UTILITY.NAME_RESOLVE('" + name + "')",
-					new java.sql.SQLException(resolution.message(), null, resolution.error()),
-					io.github.rponte.penitent.exception.PlsqlFailure.Phase.DICTIONARY);
-		}
-		if (resolution.dblink() != null) {
+	private static ObjectName resolved(Dictionary.Resolution resolution, boolean standalone) {
+		if (!resolution.resolved() || resolution.dblink() != null) {
 			return null;
 		}
 		boolean routine = (resolution.type() == PROCEDURE || resolution.type() == FUNCTION) && resolution.part1() == null;
@@ -630,25 +619,10 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 		return '"' + identifier + '"';
 	}
 
-	/** A package has its routines in {@code procedure_name}; a standalone routine is the object itself. */
-	private static int countVersions(Dictionary dictionary, ObjectName target, String routineName) {
-		if (target.name() == null) {
-			return dictionary.count("""
-					select count(*) from all_procedures
-					 where owner = ? and object_name = ? and procedure_name is null
-					   and object_type in ('FUNCTION', 'PROCEDURE')
-					""", target.owner(), routineName);
-		}
-		return dictionary.count("""
-				select count(*) from all_procedures
-				 where owner = ? and object_name = ? and procedure_name = ?
-				""", target.owner(), target.name(), routineName);
-	}
-
 	private static void requireRoutineExists(Dictionary dictionary, ObjectName target, String routineName) {
 		String owner = target.owner();
 		String packageName = target.name();
-		if (countVersions(dictionary, target, routineName) > 0) {
+		if (dictionary.versionsOf(owner, packageName, routineName) > 0) {
 			return;
 		}
 		if (packageName == null) {
@@ -656,11 +630,7 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 					+ " does not exist or is not visible to this user (@PlsqlSchema maps the functions and"
 					+ " procedures outside a package)");
 		}
-		List<String> available = dictionary.strings("""
-				select distinct procedure_name from all_procedures
-				 where owner = ? and object_name = ? and procedure_name is not null
-				 order by procedure_name
-				""", owner, packageName);
+		List<String> available = dictionary.routinesOf(owner, packageName);
 
 		if (available.isEmpty()) {
 			throw new PlsqlMappingException("package " + owner + "." + packageName
@@ -780,12 +750,7 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 
 	/** The index type of a collection, such as {@code PLS_INTEGER}, or {@code null} if it is not {@code INDEX BY}. */
 	public static String indexByOf(Dictionary dictionary, String schema, String container, String typeName) {
-		List<String> indices = container == null ? List.of() : dictionary.strings("""
-				select index_by
-				  from all_plsql_coll_types
-				 where owner = ? and package_name = ? and type_name = ?
-				""", schema, container, typeName);
-		return indices.isEmpty() ? null : indices.get(0);
+		return dictionary.indexByOf(schema, container, typeName).orElse(null);
 	}
 
 	static String elementTypeNameOf(Dictionary dictionary, Argument collection, String schema) {
@@ -797,18 +762,7 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 
 	/** The name as the dictionary spells it, including for a scalar element: {@code TIMESTAMP(6) WITH TIME ZONE}. */
 	public static String elementTypeNameOf(Dictionary dictionary, String schema, String container, String typeName) {
-		List<String> names = container != null
-				? dictionary.strings("""
-						select elem_type_name
-						  from all_plsql_coll_types
-						 where owner = ? and package_name = ? and type_name = ?
-						""", schema, container, typeName)
-				: dictionary.strings("""
-						select elem_type_name
-						  from all_coll_types
-						 where owner = ? and type_name = ?
-						""", schema, typeName);
-		return names.isEmpty() ? "" : names.get(0);
+		return dictionary.elementTypeNameOf(schema, container, typeName).orElse("");
 	}
 
 	public static Class<?> elementClassOf(java.lang.reflect.Type declared) {
@@ -838,29 +792,16 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 	 * apart; treated as an OBJECT, it would be looked up for attributes it does not have.
 	 */
 	public static CollectionType collectionTypeOf(Dictionary dictionary, String schema, String container, String typeName) {
-		Dictionary.RowMapper<String[]> toElement = (rs, n) -> new String[] { rs.getString("elem_type_owner"),
-				rs.getString("elem_type_package"), rs.getString("elem_type_name") };
-		List<String[]> elements = container != null
-				? dictionary.query("""
-						select elem_type_owner, elem_type_package, elem_type_name
-						  from all_plsql_coll_types
-						 where owner = ? and package_name = ? and type_name = ?
-						""", toElement, schema, container, typeName)
-				: dictionary.query("""
-						select elem_type_owner, null as elem_type_package, elem_type_name
-						  from all_coll_types
-						 where owner = ? and type_name = ?
-						""", toElement, schema, typeName);
-
-		if (elements.isEmpty()) {
+		java.util.Optional<Dictionary.Element> element = dictionary.elementOf(schema, container, typeName);
+		if (element.isEmpty()) {
 			throw new PlsqlMappingException("collection "
 					+ (container == null ? typeName : container + "." + typeName) + " in " + schema
 					+ " does not exist or is not visible to this user");
 		}
 		String bindName = CompositeType.qualified(schema, container, typeName);
-		String elementOwner = elements.get(0)[0];
-		String elementContainer = elements.get(0)[1];
-		String elementName = elements.get(0)[2];
+		String elementOwner = element.get().owner();
+		String elementContainer = element.get().packageName();
+		String elementName = element.get().name();
 		if (isCollection(dictionary, schema, elementOwner, elementContainer, elementName)) {
 			return new CollectionType(bindName, null, collectionTypeOf(dictionary,
 					elementOwner != null ? elementOwner : schema, elementContainer, elementName), null);
@@ -873,14 +814,10 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 			String name) {
 		String typeOwner = owner != null ? owner : schema;
 		if (container != null) {
-			return dictionary.strings("""
-					select typecode from all_plsql_types
-					 where owner = ? and package_name = ? and type_name = ?
-					""", typeOwner, container, name).contains("COLLECTION");
+			return dictionary.typecodeOf(typeOwner, container, name).filter("COLLECTION"::equals).isPresent();
 		}
 		return owner != null && name != null && !name.endsWith("%ROWTYPE")
-				&& dictionary.strings("select typecode from all_types where owner = ? and type_name = ?",
-						typeOwner, name).contains("COLLECTION");
+				&& dictionary.typecodeOf(typeOwner, null, name).filter("COLLECTION"::equals).isPresent();
 	}
 
 	/** The {@code T} of a {@code List<T>} or {@code T[]}, which may itself be generic, as in {@code List<List<String>>}. */

@@ -99,8 +99,8 @@ class RoutineSignaturesTest extends OracleIntegrationTest {
 		names.forEach(n -> spec.append("FUNCTION ").append(n).append("(p_a NUMBER) RETURN NUMBER;\n"));
 		ddl(spec.append("END;").toString());
 		try (Connection c = DATA_SOURCE.getConnection()) {
-			RoutineSignatures signatures = RoutineSignatures.read(new Dictionary(c),
-					OracleUnderTest.USER.toUpperCase(Locale.ROOT), "SIG_MANY", names);
+			RoutineSignatures signatures = new Dictionary(c).signatures(OracleUnderTest.USER.toUpperCase(Locale.ROOT),
+					"SIG_MANY", names);
 
 			assertThat(names).allSatisfy(n -> assertThat(signatures.of(n)).isPresent());
 			assertThat(signatures.of("F1100").orElseThrow().versions().values().iterator().next())

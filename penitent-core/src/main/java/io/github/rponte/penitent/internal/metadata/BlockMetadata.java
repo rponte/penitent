@@ -13,6 +13,7 @@ import io.github.rponte.penitent.PlsqlBlock;
 import io.github.rponte.penitent.PlsqlParam;
 import io.github.rponte.penitent.PlsqlType;
 import io.github.rponte.penitent.exception.PlsqlMappingException;
+import io.github.rponte.penitent.internal.metadata.Dictionary.ObjectName;
 
 /**
  * A {@link PlsqlBlock} block translated into what JDBC understands: text with {@code ?} and the order
@@ -212,15 +213,15 @@ public record BlockMetadata(String sql, List<String> placeholders, String result
 		}
 		List<String> parts = RoutineMetadata.normalizeParts(declared);
 		if (parts.size() == 3) {
-			ObjectName pkg = resolve(dictionary, parts.get(0), parts.get(1), true, "PACKAGE");
+			ObjectName pkg = dictionary.objectBehind(parts.get(0), parts.get(1), true, "PACKAGE").orElse(null);
 			return packageType(dictionary, pkg != null ? pkg : new ObjectName(parts.get(0), parts.get(1)), parts.get(2));
 		}
 		if (parts.size() == 2) {
-			ObjectName pkg = resolve(dictionary, schema, parts.get(0), false, "PACKAGE");
+			ObjectName pkg = dictionary.objectBehind(schema, parts.get(0), false, "PACKAGE").orElse(null);
 			if (pkg != null && hasPackageType(dictionary, pkg, parts.get(1))) {
 				return packageType(dictionary, pkg, parts.get(1));
 			}
-			ObjectName type = resolve(dictionary, parts.get(0), parts.get(1), true, "TYPE");
+			ObjectName type = dictionary.objectBehind(parts.get(0), parts.get(1), true, "TYPE").orElse(null);
 			if (type != null) {
 				return schemaType(dictionary, type);
 			}
@@ -230,15 +231,15 @@ public record BlockMetadata(String sql, List<String> placeholders, String result
 			throw new PlsqlMappingException("type " + declared + ": declare TYPE, PACKAGE.TYPE, SCHEMA.TYPE,"
 					+ " SCHEMA.PACKAGE.TYPE or TABLE%ROWTYPE, with or without its schema");
 		}
-		ObjectName type = resolve(dictionary, schema, parts.get(0), false, "TYPE");
+		ObjectName type = dictionary.objectBehind(schema, parts.get(0), false, "TYPE").orElse(null);
 		return schemaType(dictionary, type != null ? type : new ObjectName(schema, parts.get(0)));
 	}
 
 	private static DeclaredType rowType(Dictionary dictionary, String schema, String table, String typeName) {
 		List<String> parts = RoutineMetadata.normalizeParts(table);
 		ObjectName resolved = parts.size() == 2
-				? resolve(dictionary, parts.get(0), parts.get(1), true, "TABLE", "VIEW")
-				: resolve(dictionary, schema, parts.get(0), false, "TABLE", "VIEW");
+				? dictionary.objectBehind(parts.get(0), parts.get(1), true, "TABLE", "VIEW").orElse(null)
+				: dictionary.objectBehind(schema, parts.get(0), false, "TABLE", "VIEW").orElse(null);
 		if (resolved == null) {
 			return new DeclaredType(new CompositeType(CompositeType.Kind.ROWTYPE, schema, null,
 					typeName.substring(0, typeName.length() - "%ROWTYPE".length()), typeName), null);
@@ -248,15 +249,12 @@ public record BlockMetadata(String sql, List<String> placeholders, String result
 	}
 
 	private static boolean hasPackageType(Dictionary dictionary, ObjectName pkg, String name) {
-		return !dictionary.strings("select typecode from all_plsql_types where owner = ? and package_name = ?"
-				+ " and type_name = ?", pkg.owner(), pkg.name(), name).isEmpty();
+		return dictionary.typecodeOf(pkg.owner(), pkg.name(), name).isPresent();
 	}
 
 	private static DeclaredType packageType(Dictionary dictionary, ObjectName pkg, String name) {
-		boolean collection = dictionary.strings("""
-				select typecode from all_plsql_types
-				 where owner = ? and package_name = ? and type_name = ?
-				""", pkg.owner(), pkg.name(), name).contains("COLLECTION");
+		boolean collection = dictionary.typecodeOf(pkg.owner(), pkg.name(), name).filter("COLLECTION"::equals)
+				.isPresent();
 		return collection
 				? new DeclaredType(null, RoutineMetadata.collectionTypeOf(dictionary, pkg.owner(), pkg.name(), name))
 				: new DeclaredType(new CompositeType(CompositeType.Kind.PLSQL_RECORD, pkg.owner(), pkg.name(), name,
@@ -264,51 +262,11 @@ public record BlockMetadata(String sql, List<String> placeholders, String result
 	}
 
 	private static DeclaredType schemaType(Dictionary dictionary, ObjectName type) {
-		boolean collection = dictionary.strings("select typecode from all_types where owner = ? and type_name = ?",
-				type.owner(), type.name()).contains("COLLECTION");
+		boolean collection = dictionary.typecodeOf(type.owner(), null, type.name()).filter("COLLECTION"::equals)
+				.isPresent();
 		return collection
 				? new DeclaredType(null, RoutineMetadata.collectionTypeOf(dictionary, type.owner(), null, type.name()))
 				: new DeclaredType(new CompositeType(CompositeType.Kind.OBJECT, type.owner(), null, type.name(),
 						type.name()), null);
-	}
-
-	/** An object a block's type names: a type, a package, a table or a view. */
-	private record ObjectName(String owner, String name) {
-	}
-
-	private static final int MAX_SYNONYMS = 10;
-
-	/**
-	 * Where the object of one of {@code types} named {@code name} in {@code owner} actually is, or null: the object
-	 * itself, then a private synonym of {@code owner} and, when the name did not say its schema, a public one. A synonym
-	 * can point to another, hence the loop; the limit only keeps it from running forever on a cycle.
-	 */
-	private static ObjectName resolve(Dictionary dictionary, String owner, String name, boolean ownerNamed,
-			String... types) {
-		String in = String.join(", ", java.util.Collections.nCopies(types.length, "?"));
-		ObjectName current = new ObjectName(owner, name);
-		for (int i = 0; i <= MAX_SYNONYMS; i++) {
-			List<Object> parameters = new ArrayList<>(List.of(current.owner(), current.name()));
-			parameters.addAll(List.of(types));
-			if (dictionary.count("select count(*) from all_objects where owner = ? and object_name = ?"
-					+ " and object_type in (" + in + ")", parameters.toArray()) > 0) {
-				return current;
-			}
-			List<ObjectName> next = dictionary.query("""
-					select table_owner, table_name
-					  from all_synonyms
-					 where synonym_name = ? and db_link is null
-					   and (owner = ? or (owner = 'PUBLIC' and ? = 'S'))
-					 order by case when owner = 'PUBLIC' then 1 else 0 end
-					""",
-					(rs, n) -> new ObjectName(rs.getString("table_owner"), rs.getString("table_name")),
-					current.name(), current.owner(), ownerNamed ? "N" : "S");
-			if (next.isEmpty()) {
-				return null;
-			}
-			current = next.get(0);
-			ownerNamed = true;
-		}
-		return null;
 	}
 }
