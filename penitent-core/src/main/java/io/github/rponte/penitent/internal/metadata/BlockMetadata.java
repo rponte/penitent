@@ -205,37 +205,38 @@ public record BlockMetadata(String sql, List<String> placeholders, String result
 	 * dictionary does not know is left to {@link io.github.rponte.penitent.internal.binding.TypeBinding}, which says it
 	 * does not exist.
 	 */
-	public static DeclaredType declaredType(Dictionary dictionary, String schema, String declared) {
+	public static DeclaredType declaredType(TypeDescriptions types, Dictionary dictionary, String schema,
+			String declared) {
 		String typeName = RoutineMetadata.normalizeTypeName(declared);
 		if (typeName.endsWith("%ROWTYPE")) {
-			return rowType(dictionary, schema, declared.strip().substring(0, declared.strip().length()
+			return rowType(types, dictionary, schema, declared.strip().substring(0, declared.strip().length()
 					- "%ROWTYPE".length()), typeName);
 		}
 		List<String> parts = RoutineMetadata.normalizeParts(declared);
 		if (parts.size() == 3) {
 			ObjectName pkg = dictionary.objectBehind(parts.get(0), parts.get(1), true, "PACKAGE").orElse(null);
-			return packageType(dictionary, pkg != null ? pkg : new ObjectName(parts.get(0), parts.get(1)), parts.get(2));
+			return packageType(types, dictionary, pkg != null ? pkg : new ObjectName(parts.get(0), parts.get(1)), parts.get(2));
 		}
 		if (parts.size() == 2) {
 			ObjectName pkg = dictionary.objectBehind(schema, parts.get(0), false, "PACKAGE").orElse(null);
-			if (pkg != null && hasPackageType(dictionary, pkg, parts.get(1))) {
-				return packageType(dictionary, pkg, parts.get(1));
+			if (pkg != null && hasPackageType(types, dictionary, pkg, parts.get(1))) {
+				return packageType(types, dictionary, pkg, parts.get(1));
 			}
 			ObjectName type = dictionary.objectBehind(parts.get(0), parts.get(1), true, "TYPE").orElse(null);
 			if (type != null) {
-				return schemaType(dictionary, type);
+				return schemaType(types, dictionary, type);
 			}
-			return packageType(dictionary, new ObjectName(schema, parts.get(0)), parts.get(1));
+			return packageType(types, dictionary, new ObjectName(schema, parts.get(0)), parts.get(1));
 		}
 		if (parts.size() != 1) {
 			throw new PlsqlMappingException("type " + declared + ": declare TYPE, PACKAGE.TYPE, SCHEMA.TYPE,"
 					+ " SCHEMA.PACKAGE.TYPE or TABLE%ROWTYPE, with or without its schema");
 		}
 		ObjectName type = dictionary.objectBehind(schema, parts.get(0), false, "TYPE").orElse(null);
-		return schemaType(dictionary, type != null ? type : new ObjectName(schema, parts.get(0)));
+		return schemaType(types, dictionary, type != null ? type : new ObjectName(schema, parts.get(0)));
 	}
 
-	private static DeclaredType rowType(Dictionary dictionary, String schema, String table, String typeName) {
+	private static DeclaredType rowType(TypeDescriptions types, Dictionary dictionary, String schema, String table, String typeName) {
 		List<String> parts = RoutineMetadata.normalizeParts(table);
 		ObjectName resolved = parts.size() == 2
 				? dictionary.objectBehind(parts.get(0), parts.get(1), true, "TABLE", "VIEW").orElse(null)
@@ -248,24 +249,24 @@ public record BlockMetadata(String sql, List<String> placeholders, String result
 				resolved.name() + "%ROWTYPE"), null);
 	}
 
-	private static boolean hasPackageType(Dictionary dictionary, ObjectName pkg, String name) {
-		return dictionary.typecodeOf(pkg.owner(), pkg.name(), name).isPresent();
+	private static boolean hasPackageType(TypeDescriptions types, Dictionary dictionary, ObjectName pkg, String name) {
+		return types.typecode(new TypeDescription.TypeName(pkg.owner(), pkg.name(), name), dictionary).isPresent();
 	}
 
-	private static DeclaredType packageType(Dictionary dictionary, ObjectName pkg, String name) {
-		boolean collection = dictionary.typecodeOf(pkg.owner(), pkg.name(), name).filter("COLLECTION"::equals)
-				.isPresent();
+	private static DeclaredType packageType(TypeDescriptions types, Dictionary dictionary, ObjectName pkg, String name) {
+		boolean collection = types.typecode(new TypeDescription.TypeName(pkg.owner(), pkg.name(), name), dictionary)
+				.filter("COLLECTION"::equals).isPresent();
 		return collection
-				? new DeclaredType(null, RoutineMetadata.collectionTypeOf(dictionary, pkg.owner(), pkg.name(), name))
+				? new DeclaredType(null, RoutineMetadata.collectionTypeOf(types, dictionary, pkg.owner(), pkg.name(), name))
 				: new DeclaredType(new CompositeType(CompositeType.Kind.PLSQL_RECORD, pkg.owner(), pkg.name(), name,
 						pkg.name() + "." + name), null);
 	}
 
-	private static DeclaredType schemaType(Dictionary dictionary, ObjectName type) {
-		boolean collection = dictionary.typecodeOf(type.owner(), null, type.name()).filter("COLLECTION"::equals)
-				.isPresent();
+	private static DeclaredType schemaType(TypeDescriptions types, Dictionary dictionary, ObjectName type) {
+		boolean collection = types.typecode(new TypeDescription.TypeName(type.owner(), null, type.name()), dictionary)
+				.filter("COLLECTION"::equals).isPresent();
 		return collection
-				? new DeclaredType(null, RoutineMetadata.collectionTypeOf(dictionary, type.owner(), null, type.name()))
+				? new DeclaredType(null, RoutineMetadata.collectionTypeOf(types, dictionary, type.owner(), null, type.name()))
 				: new DeclaredType(new CompositeType(CompositeType.Kind.OBJECT, type.owner(), null, type.name(),
 						type.name()), null);
 	}

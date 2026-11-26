@@ -27,6 +27,8 @@ import io.github.rponte.penitent.internal.convert.ScalarCodec.ValueConversion;
 import io.github.rponte.penitent.internal.metadata.CollectionType;
 import io.github.rponte.penitent.internal.metadata.CompositeType;
 import io.github.rponte.penitent.internal.metadata.Dictionary;
+import io.github.rponte.penitent.internal.metadata.TypeDescription;
+import io.github.rponte.penitent.internal.metadata.TypeDescriptions;
 import io.github.rponte.penitent.internal.metadata.RoutineMetadata;
 import io.github.rponte.penitent.internal.metadata.RoutineValidation;
 
@@ -95,10 +97,13 @@ public final class TypeBinding {
 	private final Constructor<?> recordConstructor;
 	private final java.util.concurrent.ConcurrentMap<String, TypeBinding> nested = new java.util.concurrent.ConcurrentHashMap<>();
 	private final PlsqlConverters converters;
+	/** The proxy's types, which its nested bindings read too, built on demand (#169). */
+	private final TypeDescriptions types;
 
 	private TypeBinding(Class<?> javaType, CompositeType type, List<Attribute> attributes,
-			Constructor<?> recordConstructor, PlsqlConverters converters) {
+			Constructor<?> recordConstructor, PlsqlConverters converters, TypeDescriptions types) {
 		this.converters = converters;
+		this.types = types;
 		this.javaType = javaType;
 		this.type = type;
 		this.oracleTypeName = type.qualifiedBindName();
@@ -110,15 +115,16 @@ public final class TypeBinding {
 	private TypeBinding nestedBinding(Attribute attribute, Connection connection) {
 		Shape.Composite composite = (Shape.Composite) attribute.shape();
 		return Caches.get(nested, attribute.oracleName(),
-				k -> TypeBinding.of(new Dictionary(connection), attribute.javaType(), composite.type(), converters));
+				k -> TypeBinding.of(types, new Dictionary(connection), attribute.javaType(), composite.type(),
+						converters));
 	}
 
 	/** The binding of the <b>element</b> of a collection attribute. */
 	private TypeBinding elementBinding(Attribute attribute, Connection connection) {
 		Shape.CollectionOf collection = (Shape.CollectionOf) attribute.shape();
 		return Caches.get(nested, attribute.oracleName() + "[]",
-				k -> TypeBinding.of(new Dictionary(connection), attribute.javaElementType(), collection.element(),
-						converters));
+				k -> TypeBinding.of(types, new Dictionary(connection), attribute.javaElementType(),
+						collection.element(), converters));
 	}
 
 	/**
@@ -151,11 +157,12 @@ public final class TypeBinding {
 	 * Builds the binding, or fails naming exactly what did not match, which is the reason the
 	 * validation exists: the alternative is the user getting an {@code ORA-06550} and having to guess.
 	 */
-	public static TypeBinding of(Dictionary dictionary, Class<?> javaType, CompositeType type, PlsqlConverters converters) {
+	public static TypeBinding of(TypeDescriptions types, Dictionary dictionary, Class<?> javaType, CompositeType type,
+			PlsqlConverters converters) {
 
 		String oracleType = type.bindName();
 		requireDeclaredTypeToAgree(javaType, type);
-		List<OracleAttribute> oracleAttributes = readAttributes(dictionary, type);
+		List<OracleAttribute> oracleAttributes = readAttributes(types, dictionary, type);
 		requireNoJson(type, oracleAttributes);
 
 		Map<String, JavaProperty> properties = JavaProperties.of(javaType);
@@ -214,7 +221,7 @@ public final class TypeBinding {
 		}
 
 		Constructor<?> ctor = javaType.isRecord() ? JavaProperties.canonicalConstructor(javaType) : null;
-		return new TypeBinding(javaType, type, List.copyOf(bound), ctor, converters);
+		return new TypeBinding(javaType, type, List.copyOf(bound), ctor, converters, types);
 	}
 
 	/** A composite attribute has its own attributes, and the converter applies to those. */
@@ -292,11 +299,11 @@ public final class TypeBinding {
 	 * The attributes, read from wherever the dictionary keeps them for each form of composite type.
 	 * See {@link CompositeType} for the table of the three.
 	 */
-	private static List<OracleAttribute> readAttributes(Dictionary dictionary, CompositeType type) {
+	private static List<OracleAttribute> readAttributes(TypeDescriptions types, Dictionary dictionary,
+			CompositeType type) {
 		// a %ROWTYPE's column of an object type or a collection has its type's owner, and is one in the record too
 		List<OracleAttribute> attributes = new java.util.ArrayList<>();
-		for (Dictionary.Attribute attribute : dictionary.attributesOf(type.kind(), type.schema(), type.container(),
-				type.simpleName())) {
+		for (Dictionary.Attribute attribute : types.composite(type, dictionary).attributes()) {
 			if (attribute.isRef()) {
 				// not the object it points to, which it was read as before, and a type refers to itself only so
 				throw new PlsqlMappingException("attribute " + attribute.name() + " of " + type.simpleName()
@@ -304,7 +311,7 @@ public final class TypeBinding {
 						+ " Penitent does not map: pass the object itself, or follow the REF in PL/SQL");
 			}
 			attributes.add(new OracleAttribute(attribute.position(), attribute.name(), attribute.typeName(),
-					shapeOf(dictionary, type.schema(), attribute.typePackage(), attribute.typeOwner(),
+					shapeOf(types, dictionary, type.schema(), attribute.typePackage(), attribute.typeOwner(),
 							attribute.typeName())));
 		}
 
@@ -324,24 +331,23 @@ public final class TypeBinding {
 	 * {@code PERIOD_T} can both be schema-level types in the same schema, and only one of them is a
 	 * collection.
 	 */
-	private static Shape shapeOf(Dictionary dictionary, String schema, String container, String owner,
-			String typeName) {
+	private static Shape shapeOf(TypeDescriptions types, Dictionary dictionary, String schema, String container,
+			String owner, String typeName) {
 
 		if (owner == null && container == null) {
 			return new Shape.Scalar();
 		}
 
 		String typeOwner = owner != null ? owner : schema;
-		String typecode = container != null
-				? typecodeOf(dictionary, typeOwner, container, typeName)
-				: typecodeOf(dictionary, typeOwner, null, typeName);
+		String typecode = typecodeOf(types, dictionary, typeOwner, container, typeName);
 
 		if ("COLLECTION".equals(typecode)) {
-			String indexBy = RoutineMetadata.indexByOf(dictionary, typeOwner, container, typeName);
+			String indexBy = RoutineMetadata.indexByOf(types, dictionary, typeOwner, container, typeName);
 			RoutineValidation.requireNotIndexedByText(indexBy, container, typeName);
-			CollectionType collection = RoutineMetadata.collectionTypeOf(dictionary, typeOwner, container, typeName);
+			CollectionType collection = RoutineMetadata.collectionTypeOf(types, dictionary, typeOwner, container,
+					typeName);
 			return new Shape.CollectionOf(collection.bindName(), collection.compositeElement(),
-					RoutineMetadata.elementTypeNameOf(dictionary, typeOwner, container, typeName), indexBy,
+					RoutineMetadata.elementTypeNameOf(types, dictionary, typeOwner, container, typeName), indexBy,
 					collection.collectionElement() != null);
 		}
 		return new Shape.Composite(container != null
@@ -350,8 +356,10 @@ public final class TypeBinding {
 				: new CompositeType(CompositeType.Kind.OBJECT, typeOwner, null, typeName, typeName));
 	}
 
-	private static String typecodeOf(Dictionary dictionary, String owner, String container, String typeName) {
-		return dictionary.typecodeOf(owner, container, typeName).orElseThrow(() -> new PlsqlMappingException(
+	private static String typecodeOf(TypeDescriptions types, Dictionary dictionary, String owner, String container,
+			String typeName) {
+		return types.typecode(new TypeDescription.TypeName(owner, container, typeName), dictionary)
+				.orElseThrow(() -> new PlsqlMappingException(
 				"could not find type " + (container != null ? List.of(owner, container, typeName)
 						: List.of(owner, typeName)) + " in the dictionary; does it exist and is it visible to this user?"));
 	}

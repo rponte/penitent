@@ -732,37 +732,37 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 	 * {@code elem_type_name} itself already comes with the literal suffix, which is exactly the name
 	 * {@code createStruct} accepts.
 	 */
-	static CompositeType elementTypeOf(Dictionary dictionary, Argument collection, String schema) {
-		return collectionTypeOf(dictionary, collection, schema).compositeElement();
+	static CompositeType elementTypeOf(TypeDescriptions types, Dictionary dictionary, Argument collection, String schema) {
+		return collectionTypeOf(types, dictionary, collection, schema).compositeElement();
 	}
 
 	/** The collection of an argument, with what it holds, read from the dictionary. */
-	public static CollectionType collectionTypeOf(Dictionary dictionary, Argument collection, String schema) {
+	public static CollectionType collectionTypeOf(TypeDescriptions types, Dictionary dictionary, Argument collection, String schema) {
 		if (!collection.isCollection()) {
 			throw new PlsqlMappingException(collection.name() + " is " + collection.dataType()
 					+ ", not a collection");
 		}
 		String owner = collection.ownerOr(schema);
 		return collection.typeSubname() != null
-				? collectionTypeOf(dictionary, owner, collection.typeName(), collection.typeSubname())
-				: collectionTypeOf(dictionary, owner, null, collection.typeName());
+				? collectionTypeOf(types, dictionary, owner, collection.typeName(), collection.typeSubname())
+				: collectionTypeOf(types, dictionary, owner, null, collection.typeName());
 	}
 
 	/** The index type of a collection, such as {@code PLS_INTEGER}, or {@code null} if it is not {@code INDEX BY}. */
-	public static String indexByOf(Dictionary dictionary, String schema, String container, String typeName) {
-		return dictionary.indexByOf(schema, container, typeName).orElse(null);
+	public static String indexByOf(TypeDescriptions types, Dictionary dictionary, String schema, String container, String typeName) {
+		return types.collection(new TypeDescription.TypeName(schema, container, typeName), dictionary).indexBy();
 	}
 
-	static String elementTypeNameOf(Dictionary dictionary, Argument collection, String schema) {
+	static String elementTypeNameOf(TypeDescriptions types, Dictionary dictionary, Argument collection, String schema) {
 		String owner = collection.ownerOr(schema);
 		return collection.typeSubname() != null
-				? elementTypeNameOf(dictionary, owner, collection.typeName(), collection.typeSubname())
-				: elementTypeNameOf(dictionary, owner, null, collection.typeName());
+				? elementTypeNameOf(types, dictionary, owner, collection.typeName(), collection.typeSubname())
+				: elementTypeNameOf(types, dictionary, owner, null, collection.typeName());
 	}
 
 	/** The name as the dictionary spells it, including for a scalar element: {@code TIMESTAMP(6) WITH TIME ZONE}. */
-	public static String elementTypeNameOf(Dictionary dictionary, String schema, String container, String typeName) {
-		return dictionary.elementTypeNameOf(schema, container, typeName).orElse("");
+	public static String elementTypeNameOf(TypeDescriptions types, Dictionary dictionary, String schema, String container, String typeName) {
+		return types.collection(new TypeDescription.TypeName(schema, container, typeName), dictionary).elementTypeName();
 	}
 
 	public static Class<?> elementClassOf(java.lang.reflect.Type declared) {
@@ -778,12 +778,12 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 	}
 
 	/**
-	 * The same lookup as {@link #elementTypeOf(Dictionary, Argument, String)}, addressed by name: it
+	 * The same lookup as {@link #elementTypeOf(TypeDescriptions, Dictionary, Argument, String)}, addressed by name: it
 	 * serves a collection that is an attribute of a composite type, not a routine parameter. A null
 	 * {@code container} means a collection declared in the schema.
 	 */
-	static CompositeType elementTypeOf(Dictionary dictionary, String schema, String container, String typeName) {
-		return collectionTypeOf(dictionary, schema, container, typeName).compositeElement();
+	static CompositeType elementTypeOf(TypeDescriptions types, Dictionary dictionary, String schema, String container, String typeName) {
+		return collectionTypeOf(types, dictionary, schema, container, typeName).compositeElement();
 	}
 
 	/**
@@ -791,8 +791,9 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 	 * {@code TABLE OF NAME_LIST_T}, has an owner like an OBJECT, so only the {@code typecode} tells them
 	 * apart; treated as an OBJECT, it would be looked up for attributes it does not have.
 	 */
-	public static CollectionType collectionTypeOf(Dictionary dictionary, String schema, String container, String typeName) {
-		java.util.Optional<Dictionary.Element> element = dictionary.elementOf(schema, container, typeName);
+	public static CollectionType collectionTypeOf(TypeDescriptions types, Dictionary dictionary, String schema, String container, String typeName) {
+		java.util.Optional<Dictionary.Element> element = java.util.Optional.ofNullable(
+				types.collection(new TypeDescription.TypeName(schema, container, typeName), dictionary).element());
 		if (element.isPresent() && element.get().isRef()) {
 			throw new PlsqlMappingException("collection " + (container == null ? typeName : container + "." + typeName)
 					+ " holds REFs to " + element.get().name() + ", pointers to rows of an object table, which"
@@ -807,22 +808,24 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 		String elementOwner = element.get().owner();
 		String elementContainer = element.get().packageName();
 		String elementName = element.get().name();
-		if (isCollection(dictionary, schema, elementOwner, elementContainer, elementName)) {
-			return new CollectionType(bindName, null, collectionTypeOf(dictionary,
+		if (isCollection(types, dictionary, schema, elementOwner, elementContainer, elementName)) {
+			return new CollectionType(bindName, null, collectionTypeOf(types, dictionary,
 					elementOwner != null ? elementOwner : schema, elementContainer, elementName), null);
 		}
 		CompositeType composite = elementOf(schema, elementOwner, elementContainer, elementName);
 		return new CollectionType(bindName, composite, null, composite == null ? elementName : null);
 	}
 
-	private static boolean isCollection(Dictionary dictionary, String schema, String owner, String container,
+	private static boolean isCollection(TypeDescriptions types, Dictionary dictionary, String schema, String owner, String container,
 			String name) {
 		String typeOwner = owner != null ? owner : schema;
 		if (container != null) {
-			return dictionary.typecodeOf(typeOwner, container, name).filter("COLLECTION"::equals).isPresent();
+			return types.typecode(new TypeDescription.TypeName(typeOwner, container, name), dictionary)
+					.filter("COLLECTION"::equals).isPresent();
 		}
 		return owner != null && name != null && !name.endsWith("%ROWTYPE")
-				&& dictionary.typecodeOf(typeOwner, null, name).filter("COLLECTION"::equals).isPresent();
+				&& types.typecode(new TypeDescription.TypeName(typeOwner, null, name), dictionary)
+						.filter("COLLECTION"::equals).isPresent();
 	}
 
 	/** The {@code T} of a {@code List<T>} or {@code T[]}, which may itself be generic, as in {@code List<List<String>>}. */
