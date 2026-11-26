@@ -293,46 +293,14 @@ public final class TypeBinding {
 	 * See {@link CompositeType} for the table of the three.
 	 */
 	private static List<OracleAttribute> readAttributes(Dictionary dictionary, CompositeType type) {
-		List<OracleAttribute> attributes = switch (type.kind()) {
-			// an OBJECT only references schema-level types, so the attribute's container is null
-			case OBJECT -> dictionary.query("""
-					select attr_no, attr_name, attr_type_name, attr_type_owner
-					  from all_type_attrs
-					 where owner = ? and type_name = ?
-					 order by attr_no
-					""",
-					(rs, n) -> new OracleAttribute(rs.getInt("attr_no"), rs.getString("attr_name"),
-							rs.getString("attr_type_name"),
-							shapeOf(dictionary, type.schema(), null, rs.getString("attr_type_owner"),
-									rs.getString("attr_type_name"))),
-					type.schema(), type.simpleName());
-
-			case PLSQL_RECORD -> dictionary.query("""
-					select attr_no, attr_name, attr_type_name, attr_type_owner, attr_type_package
-					  from all_plsql_type_attrs
-					 where owner = ? and package_name = ? and type_name = ?
-					 order by attr_no
-					""",
-					(rs, n) -> new OracleAttribute(rs.getInt("attr_no"), rs.getString("attr_name"),
-							rs.getString("attr_type_name"),
-							shapeOf(dictionary, type.schema(), rs.getString("attr_type_package"),
-									rs.getString("attr_type_owner"), rs.getString("attr_type_name"))),
-					type.schema(), type.container(), type.simpleName());
-
-			// %ROWTYPE: the "attributes" are the table's columns, in declared order. An invisible column has no
-			// COLUMN_ID, and PL/SQL leaves it out of a %ROWTYPE; a column of an object type or a collection has its
-			// type's owner, and is one in the record too
-			case ROWTYPE -> dictionary.query("""
-					select column_id, column_name, data_type, data_type_owner
-					  from all_tab_columns
-					 where owner = ? and table_name = ? and column_id is not null
-					 order by column_id
-					""",
-					(rs, n) -> new OracleAttribute(rs.getInt("column_id"), rs.getString("column_name"),
-							rs.getString("data_type"), shapeOf(dictionary, type.schema(), null,
-									rs.getString("data_type_owner"), rs.getString("data_type"))),
-					type.schema(), type.simpleName());
-		};
+		// a %ROWTYPE's column of an object type or a collection has its type's owner, and is one in the record too
+		List<OracleAttribute> attributes = new java.util.ArrayList<>();
+		for (Dictionary.Attribute attribute : dictionary.attributesOf(type.kind(), type.schema(), type.container(),
+				type.simpleName())) {
+			attributes.add(new OracleAttribute(attribute.position(), attribute.name(), attribute.typeName(),
+					shapeOf(dictionary, type.schema(), attribute.typePackage(), attribute.typeOwner(),
+							attribute.typeName())));
+		}
 
 		if (attributes.isEmpty()) {
 			throw new PlsqlMappingException("type " + type + " in " + type.schema()
@@ -359,12 +327,8 @@ public final class TypeBinding {
 
 		String typeOwner = owner != null ? owner : schema;
 		String typecode = container != null
-				? typecodeOf(dictionary, """
-						select typecode from all_plsql_types
-						 where owner = ? and package_name = ? and type_name = ?
-						""", typeOwner, container, typeName)
-				: typecodeOf(dictionary, "select typecode from all_types where owner = ? and type_name = ?",
-						typeOwner, typeName);
+				? typecodeOf(dictionary, typeOwner, container, typeName)
+				: typecodeOf(dictionary, typeOwner, null, typeName);
 
 		if ("COLLECTION".equals(typecode)) {
 			String indexBy = RoutineMetadata.indexByOf(dictionary, typeOwner, container, typeName);
@@ -380,13 +344,10 @@ public final class TypeBinding {
 				: new CompositeType(CompositeType.Kind.OBJECT, typeOwner, null, typeName, typeName));
 	}
 
-	private static String typecodeOf(Dictionary dictionary, String sql, Object... parameters) {
-		List<String> found = dictionary.strings(sql, parameters);
-		if (found.isEmpty()) {
-			throw new PlsqlMappingException("could not find type " + java.util.Arrays.toString(parameters)
-					+ " in the dictionary; does it exist and is it visible to this user?");
-		}
-		return found.get(0);
+	private static String typecodeOf(Dictionary dictionary, String owner, String container, String typeName) {
+		return dictionary.typecodeOf(owner, container, typeName).orElseThrow(() -> new PlsqlMappingException(
+				"could not find type " + (container != null ? List.of(owner, container, typeName)
+						: List.of(owner, typeName)) + " in the dictionary; does it exist and is it visible to this user?"));
 	}
 
 	// --- conversion -----------------------------------------------------------------

@@ -405,7 +405,7 @@ final class RoutineCall {
 		if (known != null) {
 			return known;
 		}
-		RoutineSignatures read = RoutineSignatures.read(dictionary, target.owner(), target.packageName(), routines);
+		RoutineSignatures read = dictionary.signatures(target.owner(), target.packageName(), routines);
 		// none found, as before the package is deployed: nothing worth keeping
 		if (read.isEmpty()) {
 			return read;
