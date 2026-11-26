@@ -29,7 +29,7 @@ Three layers keep something about a routine, each for a different time:
 
 | Layer | What it keeps | Until |
 |---|---|---|
-| **Penitent**, in each proxy | each routine's signature, read from the dictionary on the method's first call, and the attributes of each composite type | the proxy goes away; for a Spring bean, until the application restarts |
+| **Penitent**, in each proxy | the signatures of the routines a package interface maps, read in one query on the first call of any of its methods, and the attributes of each composite type | the proxy goes away; for a Spring bean, until the application restarts |
 | **The Oracle driver**, in each connection | the description of each object type it has sent or read | the connection leaves the pool |
 | **The database**, in each session | the values of a package's variables, its *state* | the session ends |
 
@@ -70,9 +70,12 @@ lead to silent data corruption". To avoid the error, Oracle offers:
 
 ### The signature
 
-Penitent describes each routine once, on the method's first call, and keeps that description. Every call names the
-parameters as that description did, by position too: `F(P_A => ?, P_B => ?)`. When a call fails as if the routine
-had changed, Penitent describes the routine again, and says what no longer fits. While the application runs:
+Penitent reads the signatures of a package interface's routines once, in one query, on the first call of any of its
+methods, and keeps them. Each method is described from them on its own first call. Every call names the parameters as
+that description did, by position too: `F(P_A => ?, P_B => ?)`. When a call fails as if the routine had changed,
+Penitent describes the routine again, and says what no longer fits. That holds for a method first called after the
+change, too: its description comes from the signatures read before it, so its first call fails as the table says, and
+the next one uses the new signature. While the application runs:
 
 | Change | What the next call does |
 |---|---|

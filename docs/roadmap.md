@@ -41,9 +41,10 @@ Each proxy reads the dictionary on the first call of each method and keeps the r
 `PlsqlPackages.validate` warms it. Still open:
 
 - **Fewer queries** ([#169](https://github.com/rponte/penitent/issues/169)): the current schema and the package are
-  resolved once per proxy, and a method's versions are counted in the query of its parameters, so an interface costs
-  about one query per method. Still open: reading an interface's routines in a single query, instead of one per
-  method, and reading each composite type in one query, instead of one per question about it.
+  resolved once per proxy, and a package interface's routines are read in a single query, so an interface costs a
+  few queries whatever its number of methods. Still open: an `@PlsqlSchema` interface, whose routines each resolve
+  their own name, still reads one routine at a time; and each composite type is read in one query per question about
+  it, instead of one query.
   `DictionaryQueriesTest` holds today's numbers, and `DescribeTimingReport` the time.
 - **Cache shared between proxies** ([#170](https://github.com/rponte/penitent/issues/170)): two interfaces that use
   the same type read it twice. It cannot be static, because of the classloader trap, and it touches rules the library
