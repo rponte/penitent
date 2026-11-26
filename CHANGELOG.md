@@ -11,11 +11,15 @@ All notable changes to this project are listed here. The format follows
 - Describing routines reads the dictionary in fewer queries and round trips
   ([#169](https://github.com/rponte/penitent/issues/169)). A proxy resolves the current schema and its package,
   through synonyms, once instead of for every method; resolving a name asks once whether it exists; a routine's
-  versions are counted in the query of its parameters; and dictionary queries fetch 100 rows per round trip. The first
-  call of a scalar routine goes from 5 queries to 3, and validating an interface of 38 methods from 196 queries and
-  round trips to 46: at 1 ms per round trip, from about 240 ms to about 60 ms. **Upgrading:** a proxy's methods resolve
-  the package to where its first describe found it, even if they are first called on sessions with different
-  `current_schema`s; a name not found is resolved again on the next call.
+  versions are counted in the query of its parameters; dictionary queries fetch 100 rows per round trip; and a package
+  interface reads the signatures of all the routines it maps in one query, on the first call of any of its methods,
+  each method still described and checked on its own first call. The first call of a scalar routine goes from 5
+  queries to 3, and validating an interface of 38 methods from 196 queries and round trips to 9: at 1 ms per round
+  trip, from about 240 ms to about 13 ms. **Upgrading:** a proxy's methods resolve the package to where its first
+  describe found it, even if they are first called on sessions with different `current_schema`s; a name not found is
+  resolved again on the next call. A spec changed while the application runs, which a method not yet called used to
+  read as it is now, fails that method's first call once, without running, saying the routine changed, and the next
+  call uses the new signature.
 
 - A call that fails after its routine changed, while the method still fits the new signature, as a parameter renamed
   binding by position, says so ([#165](https://github.com/rponte/penitent/issues/165)): the routine changed since
