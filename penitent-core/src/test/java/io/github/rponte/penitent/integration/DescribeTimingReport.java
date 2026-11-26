@@ -97,6 +97,8 @@ class DescribeTimingReport extends OracleIntegrationTest {
 					DescribeTimingReport::validate));
 			rows.add(scenario(profiler, "validate, 38 methods", TimeZoneTest.TimeZones.class,
 					DescribeTimingReport::validate));
+			rows.add(scenario(profiler, "validate, 30 standalone, 10 through synonyms",
+					StandaloneResolutionTest.Legacy.class, DescribeTimingReport::validate));
 		}
 		StringBuilder table = new StringBuilder(String.format(Locale.ROOT,
 				"Oracle %d, driver %d, %d runs each%n%n", DATABASE_MAJOR_VERSION,

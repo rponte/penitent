@@ -129,6 +129,12 @@ class DictionaryQueriesTest extends OracleIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("validating an @PlsqlSchema interface of 30 standalone routines, some through synonyms")
+	void validate_standalone() {
+		assertCost(StandaloneResolutionTest.Legacy.class, DictionaryQueriesTest::validate, 9, 9);
+	}
+
+	@Test
 	@DisplayName("after validate, a call reads nothing from the dictionary")
 	void validate_warms_the_cache() {
 		ObjectTypesTest.Composites composites = PlsqlPackages.create(ObjectTypesTest.Composites.class,

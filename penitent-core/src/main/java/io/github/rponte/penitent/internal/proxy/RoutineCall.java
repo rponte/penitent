@@ -9,7 +9,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.atomic.AtomicReference;
 
 import io.github.rponte.penitent.PlsqlBind;
 import io.github.rponte.penitent.PlsqlBlock;
@@ -59,12 +58,17 @@ final class RoutineCall {
 	private final RoutineMetadata.Names names = new RoutineMetadata.Names();
 
 	/**
-	 * The signatures of the package's routines that the interface maps, read in one query on the first call of any
-	 * method, or by validate, and kept while the proxy lives (#169). Each method is still described from them when
-	 * it is first used. No lock is held while reading them: two threads may both read, and the first stored wins, as
-	 * in {@link Caches}. Outside a package, as {@code @PlsqlSchema}, each routine is read on its own.
+	 * The signatures of the routines the interface maps, read in one query on the first call of any method, or by
+	 * validate, and kept while the proxy lives (#169): by owner and package, since an {@code @PlsqlSchema} interface's
+	 * routines may resolve to more than one owner, each read in a query of its own. Each method is still described
+	 * from them when it is first used. No lock is held while reading them: two threads may both read, and the first
+	 * stored wins, as in {@link Caches}.
 	 */
-	private final AtomicReference<RoutineSignatures> signatures = new AtomicReference<>();
+	private final ConcurrentMap<SignaturesOf, RoutineSignatures> signatures = new ConcurrentHashMap<>();
+
+	/** Whose signatures: an owner, and its package or {@code null} for the routines outside one. */
+	private record SignaturesOf(String owner, String packageName) {
+	}
 
 	/** The names of the routines the interface's methods call, for {@link #signatures}. */
 	private final List<String> routineNames;
@@ -121,7 +125,7 @@ final class RoutineCall {
 
 	Object call(Method method, Object[] arguments, Connection connection) {
 		// described before this call, or from signatures read before it: a failure may then be a change since (#165)
-		boolean described = routines.containsKey(method) || signatures.get() != null;
+		boolean described = routines.containsKey(method) || !signatures.isEmpty();
 		RoutineMetadata routine = Caches.get(routines, method, m -> describe(m, connection, false));
 		requireToAgree(method, routine, arguments.length);
 		try {
@@ -349,9 +353,23 @@ final class RoutineCall {
 		long start = System.nanoTime();
 		Dictionary dictionary = new Dictionary(connection);
 		RoutineMetadata routine;
-		RoutineMetadata.Target target = packageName == null || fresh ? null
-				: RoutineMetadata.target(dictionary, names, schema, packageName, routineName);
-		RoutineSignatures listed = target == null ? null : signaturesOf(target, dictionary);
+		RoutineMetadata.Target target = null;
+		RoutineSignatures listed = null;
+		// fresh, the routine is read below on its own, as it is now
+		if (!fresh && packageName != null) {
+			target = RoutineMetadata.target(dictionary, names, schema, packageName, routineName);
+			listed = signaturesOf(target, routineNames, dictionary);
+		} else if (!fresh) {
+			// every routine of the interface resolved at once: each to its owner, and its real name
+			java.util.Map<String, RoutineMetadata.Target> targets = RoutineMetadata.targets(dictionary, names, schema,
+					routineNames);
+			target = targets.get(routineName);
+			if (target != null) {
+				String owner = target.owner();
+				listed = signaturesOf(target, targets.values().stream().filter(t -> t.owner().equals(owner))
+						.map(RoutineMetadata.Target::routine).toList(), dictionary);
+			}
+		}
 		if (listed != null && listed.of(target.routine()).isPresent()) {
 			routine = RoutineMetadata.of(dictionary, target, listed, method, types.converters(),
 					bind == PlsqlBind.BY_NAME);
@@ -376,22 +394,24 @@ final class RoutineCall {
 		return routine;
 	}
 
-	/** The interface's signatures, read now if they were not, or if the package now resolves elsewhere. */
-	private RoutineSignatures signaturesOf(RoutineMetadata.Target target, Dictionary dictionary) {
-		RoutineSignatures known = signatures.get();
-		if (known != null && known.isOf(target.owner(), target.packageName())) {
+	/**
+	 * The signatures of {@code routines}, at {@code target}'s owner and package, read now if they were not: if the
+	 * package now resolves elsewhere, they are another owner's or package's, and read as well.
+	 */
+	private RoutineSignatures signaturesOf(RoutineMetadata.Target target, List<String> routines,
+			Dictionary dictionary) {
+		SignaturesOf key = new SignaturesOf(target.owner(), target.packageName());
+		RoutineSignatures known = signatures.get(key);
+		if (known != null) {
 			return known;
 		}
-		RoutineSignatures read = RoutineSignatures.read(dictionary, target.owner(), target.packageName(), routineNames);
+		RoutineSignatures read = RoutineSignatures.read(dictionary, target.owner(), target.packageName(), routines);
 		// none found, as before the package is deployed: nothing worth keeping
 		if (read.isEmpty()) {
 			return read;
 		}
-		if (signatures.compareAndSet(known, read)) {
-			return read;
-		}
-		RoutineSignatures raced = signatures.get();
-		return raced != null && raced.isOf(target.owner(), target.packageName()) ? raced : read;
+		RoutineSignatures raced = signatures.putIfAbsent(key, read);
+		return raced != null ? raced : read;
 	}
 
 	/** A BOOLEAN that comes back, which some versions read wrong when null: see {@link NullBooleanOutputs}. */
