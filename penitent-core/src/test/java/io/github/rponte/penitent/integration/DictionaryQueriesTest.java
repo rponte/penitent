@@ -105,6 +105,41 @@ class DictionaryQueriesTest extends OracleIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("the first call of a routine that takes a package RECORD")
+	void record() {
+		assertCost(RecordAndRowtypeTest.Composites.class,
+				s -> s.echoRecord(new RecordAndRowtypeTest.MiniItem(1L, "one", BigDecimal.ONE)), 3, 4);
+	}
+
+	@Test
+	@DisplayName("the first call of a routine that takes a %ROWTYPE")
+	void rowtype() {
+		assertCost(RecordAndRowtypeTest.Composites.class, s -> s.echoRowtype(new RecordAndRowtypeTest.Item(1L, "one",
+				BigDecimal.ONE, LocalDate.parse("2018-01-15"))), 3, 4);
+	}
+
+	@Test
+	@DisplayName("the first call of a routine that takes a collection of RECORD")
+	void collection_of_records() {
+		assertCost(RecordAndRowtypeTest.Composites.class,
+				s -> s.echoRecords(List.of(new RecordAndRowtypeTest.MiniItem(1L, "one", BigDecimal.ONE))), 9, 10);
+	}
+
+	@Test
+	@DisplayName("the first call of a routine that takes a collection of collections")
+	void collection_of_collections() {
+		assertCost(CollectionsTest.Shapes.class, s -> s.echoMatrix(List.of(List.of("a"))), 11, 12);
+	}
+
+	@Test
+	@DisplayName("the first call of a routine that takes a RECORD with a RECORD, an OBJECT and collections")
+	void rich_record() {
+		assertCost(RecordAndRowtypeTest.Composites.class, s -> s.echoRichRecord(new RecordAndRowtypeTest.RichRecord(1L,
+				new RecordAndRowtypeTest.MiniItem(1L, "one", BigDecimal.ONE), new RecordAndRowtypeTest.Address("A", 1),
+				List.of("a"), List.of("b"))), 14, 15);
+	}
+
+	@Test
 	@DisplayName("validating an interface of 24 scalar methods")
 	void validate_scalars() {
 		assertCost(ScalarsTest.Scalars.class, DictionaryQueriesTest::validate, 4, 4);
