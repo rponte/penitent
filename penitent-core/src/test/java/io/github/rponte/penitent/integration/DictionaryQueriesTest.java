@@ -107,25 +107,25 @@ class DictionaryQueriesTest extends OracleIntegrationTest {
 	@Test
 	@DisplayName("validating an interface of 24 scalar methods")
 	void validate_scalars() {
-		assertCost(ScalarsTest.Scalars.class, DictionaryQueriesTest::validate, 27, 27);
+		assertCost(ScalarsTest.Scalars.class, DictionaryQueriesTest::validate, 5, 5);
 	}
 
 	@Test
 	@DisplayName("validating an interface of 33 methods with OUT parameters and composites")
 	void validate_outputs() {
-		assertCost(OutParametersTest.Outputs.class, DictionaryQueriesTest::validate, 49, 49);
+		assertCost(OutParametersTest.Outputs.class, DictionaryQueriesTest::validate, 17, 17);
 	}
 
 	@Test
 	@DisplayName("validating an interface of 36 methods over overloaded routines: more rows, so more round trips")
 	void validate_overloads() {
-		assertCost(OverloadingTest.Overload.class, DictionaryQueriesTest::validate, 42, 42);
+		assertCost(OverloadingTest.Overload.class, DictionaryQueriesTest::validate, 7, 7);
 	}
 
 	@Test
 	@DisplayName("validating an interface of 38 methods")
 	void validate_time_zones() {
-		assertCost(TimeZoneTest.TimeZones.class, DictionaryQueriesTest::validate, 46, 46);
+		assertCost(TimeZoneTest.TimeZones.class, DictionaryQueriesTest::validate, 9, 9);
 	}
 
 	@Test
