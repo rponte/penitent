@@ -297,6 +297,12 @@ public final class TypeBinding {
 		List<OracleAttribute> attributes = new java.util.ArrayList<>();
 		for (Dictionary.Attribute attribute : dictionary.attributesOf(type.kind(), type.schema(), type.container(),
 				type.simpleName())) {
+			if (attribute.isRef()) {
+				// not the object it points to, which it was read as before, and a type refers to itself only so
+				throw new PlsqlMappingException("attribute " + attribute.name() + " of " + type.simpleName()
+						+ " is a REF to " + attribute.typeName() + ", a pointer to a row of an object table, which"
+						+ " Penitent does not map: pass the object itself, or follow the REF in PL/SQL");
+			}
 			attributes.add(new OracleAttribute(attribute.position(), attribute.name(), attribute.typeName(),
 					shapeOf(dictionary, type.schema(), attribute.typePackage(), attribute.typeOwner(),
 							attribute.typeName())));

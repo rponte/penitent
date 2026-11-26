@@ -230,6 +230,7 @@ Where the PL/SQL guarantees the value is never `null`, driver 23 works as it is.
 | `CLOB` when reading | `String` | Validated |
 | `CLOB` when writing | `String`, in a temporary LOB | Validated |
 | `BLOB` | `byte[]`, in a temporary LOB when writing | Validated |
+| `REF` to an object type, a pointer to a row of an object table, as an attribute or as a collection's element ([#125](https://github.com/rponte/penitent/issues/125)) | Refused with `PlsqlMappingException`, naming the attribute or the collection, by `validate` and by the call alike, even when the value is `null` | Not supported, with a clear error |
 
 ## Collections
 
