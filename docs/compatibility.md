@@ -440,8 +440,9 @@ Where the PL/SQL guarantees the value is never `null`, driver 23 works as it is.
 | `PlsqlPackages.validate`: every mismatch in one exception, nested composites and collection elements, cursor not in a `List`, block placeholders, database failure translated | Validated |
 | `PlsqlPackages.validate` finds without calling the same mismatches that the calls find | Validated |
 | After `validate`, calls read nothing from the dictionary | Validated |
-| Dictionary queries on the first call: 2 for a scalar, 3 for an OBJECT, 9 for a collection of OBJECT, 13 for nested composites; none after | Validated |
-| Validating an interface: a few dictionary queries, whatever its number of methods, plus its composite types: 8 for 38 methods | Validated |
+| Dictionary queries on the first call: 2 for a scalar, 3 for an OBJECT, 6 for a collection of OBJECT, 11 for nested composites; none after | Validated |
+| Each type a proxy uses described once, whole, and read by the validation, the collections and the bindings alike; a problem deep in a type still shows when that type is first used | Validated |
+| Validating an interface: a few dictionary queries, whatever its number of methods, plus its composite types: 4 for 38 methods | Validated |
 | A package interface's signatures read in one query, on the first call of any method; each method described and checked on its own first call, so one that does not fit fails only when called | Validated |
 | Signatures of more than 1000 routines read in chunks of 1000, an `IN` list's limit | Validated |
 | Routine names resolved by Oracle itself, `DBMS_UTILITY.NAME_RESOLVE`, every name of an interface in one round trip: an object of the schema over a public synonym of its name, a private synonym over a public one, no public one with a schema declared, synonyms of synonyms, a package with errors; a cycle, a synonym to nothing, a missing name and a routine this user sees but may not execute fail as not existing | Validated |

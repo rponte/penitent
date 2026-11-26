@@ -8,6 +8,12 @@ All notable changes to this project are listed here. The format follows
 
 ### Changed
 
+- Each type a proxy uses is described once, whole, and the validation of a method, the collections of its
+  parameters and the bindings of their values read that description, instead of each asking the dictionary again
+  ([#169](https://github.com/rponte/penitent/issues/169)). The first call of a routine that takes a collection of
+  OBJECT goes from 9 dictionary queries to 6, a collection of collections from 11 to 7, and validating an interface
+  of 38 methods from 8 to 4. A type is still read when it is first used, so a problem deep in one shows when it did.
+
 - An attribute that is an object-relational `REF`, a pointer to a row of an object table, and a collection of `REF`s,
   are refused with a `PlsqlMappingException` that names them, by `validate` and by the call alike
   ([#125](https://github.com/rponte/penitent/issues/125)). They were read as the object they point to: `validate`
