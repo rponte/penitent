@@ -443,6 +443,8 @@ Where the PL/SQL guarantees the value is never `null`, driver 23 works as it is.
 | Validating an interface: a few dictionary queries, whatever its number of methods, plus its composite types: 9 for 38 methods | Validated |
 | A package interface's signatures read in one query, on the first call of any method; each method described and checked on its own first call, so one that does not fit fails only when called | Validated |
 | Signatures of more than 1000 routines read in chunks of 1000, an `IN` list's limit | Validated |
+| An `@PlsqlSchema` interface's routines resolved together, in Oracle's order: an object of the schema over a public synonym of its name, a private synonym over a public one, no public one with a schema declared, synonyms of synonyms; a cycle, a synonym to nothing and a missing name fail as not existing | Validated |
+| Validating an `@PlsqlSchema` interface of 30 standalone routines, 10 of them through synonyms, two owners: 9 dictionary queries | Validated |
 | First calls of many methods at once, on a new proxy: each right, the signatures read at most once per thread | Validated |
 | A spec changed after the signatures were read: a method's first call fails without running, saying it changed, and the next call works | Validated |
 | A proxy resolves its package and the current schema once; a name not found is resolved again, so a package or synonym deployed later is found | Validated |

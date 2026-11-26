@@ -13,7 +13,9 @@ All notable changes to this project are listed here. The format follows
   through synonyms, once instead of for every method; resolving a name asks once whether it exists; a routine's
   versions are counted in the query of its parameters; dictionary queries fetch 100 rows per round trip; and a package
   interface reads the signatures of all the routines it maps in one query, on the first call of any of its methods,
-  each method still described and checked on its own first call. The first call of a scalar routine goes from 5
+  each method still described and checked on its own first call. An `@PlsqlSchema` interface resolves its routines'
+  names together, in Oracle's order, and reads their signatures in a query per owner: validating one of 30 standalone
+  routines, 10 of them through synonyms, goes from 85 queries to 9. The first call of a scalar routine goes from 5
   queries to 3, and validating an interface of 38 methods from 196 queries and round trips to 9: at 1 ms per round
   trip, from about 240 ms to about 13 ms. **Upgrading:** a proxy's methods resolve the package to where its first
   describe found it, even if they are first called on sessions with different `current_schema`s; a name not found is
