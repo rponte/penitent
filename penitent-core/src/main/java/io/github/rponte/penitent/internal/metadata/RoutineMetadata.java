@@ -530,44 +530,163 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 	}
 
 	/**
-	 * Where the package, or the standalone routine, actually is. It follows Oracle's resolution: an
-	 * object in the schema itself takes precedence, then a private synonym and, without an explicit
-	 * schema, a public one. This has to be done here because {@code ALL_ARGUMENTS} only knows the real
-	 * name. A synonym can point to another, hence the loop; the limit only keeps it from running
-	 * forever on a synonym cycle. Each name is asked about once (#169).
+	 * Where the package, or the standalone routine, actually is: see {@link #resolveAll}. A name not found resolves to
+	 * itself, in the schema, so that the error names it there.
 	 */
 	private static ObjectName resolve(Dictionary dictionary, Names names, String schema, String objectName,
 			boolean standalone) {
-		Names.Key key = new Names.Key(schema, objectName, standalone);
-		ObjectName known = names.found.get(key);
-		if (known != null) {
-			return known;
+		ObjectName found = resolveAll(dictionary, names, schema, List.of(objectName), standalone).get(objectName);
+		return found != null ? found : new ObjectName(schema != null ? schema : names.currentSchema(dictionary),
+				objectName);
+	}
+
+	/**
+	 * Where each standalone routine of {@code routineNames} is, after synonyms: only those found, by the name the
+	 * method declares (#169).
+	 */
+	public static Map<String, Target> targets(Dictionary dictionary, Names names, String schema,
+			java.util.Collection<String> routineNames) {
+		Map<String, Target> targets = new LinkedHashMap<>();
+		resolveAll(dictionary, names, schema, routineNames, true)
+				.forEach((routine, at) -> targets.put(routine, new Target(at.owner(), null, at.name())));
+		return targets;
+	}
+
+	/**
+	 * Where each of {@code objectNames} actually is, following Oracle's resolution: an object in the schema itself
+	 * takes precedence, then a private synonym and, without an explicit schema, a public one. This has to be done here
+	 * because {@code ALL_ARGUMENTS} only knows the real name. A synonym can point to another, hence the rounds; the
+	 * limit only keeps a cycle of synonyms from going on forever. Only the names found are returned, and kept in
+	 * {@code names}.
+	 *
+	 * <p>The names are resolved together, in rounds (#169): which exist, then the synonyms of those that do not, then
+	 * which of their targets exist, and so on, each round a query per owner, not per name. An {@code @PlsqlSchema}
+	 * interface's routines each resolve on their own, to an owner each, and one at a time cost a few queries per
+	 * routine. The rule is the one each name followed alone: a name is asked whether it exists, then, if not, for its
+	 * synonym, the private one first, and so on.
+	 */
+	private static Map<String, ObjectName> resolveAll(Dictionary dictionary, Names names, String schema,
+			java.util.Collection<String> objectNames, boolean standalone) {
+		Map<String, ObjectName> found = new LinkedHashMap<>();
+		Map<String, ObjectName> pending = new LinkedHashMap<>();
+		for (String objectName : new java.util.LinkedHashSet<>(objectNames)) {
+			ObjectName known = names.found.get(new Names.Key(schema, objectName, standalone));
+			if (known != null) {
+				found.put(objectName, known);
+			} else {
+				pending.put(objectName, null);
+			}
+		}
+		if (pending.isEmpty()) {
+			return found;
 		}
 		String owner = schema != null ? schema : names.currentSchema(dictionary);
-		ObjectName current = new ObjectName(owner, objectName);
+		pending.replaceAll((objectName, none) -> new ObjectName(owner, objectName));
 
-		boolean found = exists(dictionary, current, standalone);
-		for (int i = 0; i < MAX_SYNONYMS && !found; i++) {
-			List<ObjectName> next = dictionary.query("""
-					select table_owner, table_name
-					  from all_synonyms
-					 where synonym_name = ? and db_link is null
-					   and (owner = ? or (owner = 'PUBLIC' and ? = 'S'))
-					 order by case when owner = 'PUBLIC' then 1 else 0 end
-					""",
-					(rs, n) -> new ObjectName(rs.getString("table_owner"), rs.getString("table_name")),
-					current.name(), current.owner(), schema == null ? "S" : "N");
-			if (next.isEmpty()) {
-				break;
+		for (int hop = 0;; hop++) {
+			java.util.Set<ObjectName> existing = existing(dictionary, pending.values(), standalone);
+			for (java.util.Iterator<Map.Entry<String, ObjectName>> it = pending.entrySet().iterator(); it.hasNext();) {
+				Map.Entry<String, ObjectName> entry = it.next();
+				if (existing.contains(entry.getValue())) {
+					found.put(entry.getKey(), entry.getValue());
+					names.found.put(new Names.Key(schema, entry.getKey(), standalone), entry.getValue());
+					it.remove();
+				}
 			}
-			current = next.get(0);
-			found = exists(dictionary, current, standalone);
+			if (pending.isEmpty() || hop == MAX_SYNONYMS) {
+				return found;
+			}
+			Map<ObjectName, ObjectName> synonyms = synonymsOf(dictionary, pending.values(), schema == null);
+			// a name without a synonym does not exist: it stops here, not found
+			pending.replaceAll((objectName, current) -> synonyms.get(current));
+			pending.values().removeIf(java.util.Objects::isNull);
+			if (pending.isEmpty()) {
+				return found;
+			}
 		}
-		if (!found) {
-			return new ObjectName(owner, objectName);
+	}
+
+	/** Which of {@code candidates} exist, as a package or as a standalone routine: a query per owner. */
+	private static java.util.Set<ObjectName> existing(Dictionary dictionary, java.util.Collection<ObjectName> candidates,
+			boolean standalone) {
+		java.util.Set<ObjectName> existing = new java.util.HashSet<>();
+		byOwner(candidates).forEach((owner, objectNames) -> {
+			for (List<String> chunk : chunks(objectNames)) {
+				List<Object> binds = new ArrayList<>(List.of(owner));
+				binds.addAll(chunk);
+				dictionary.query((standalone
+						? """
+								select object_name from all_objects
+								 where owner = ? and object_name in (:names)
+								   and object_type in ('FUNCTION', 'PROCEDURE')
+								"""
+						: """
+								select object_name from all_objects
+								 where owner = ? and object_name in (:names) and object_type = 'PACKAGE'
+								""").replace(":names", marks(chunk.size())),
+						(rs, n) -> existing.add(new ObjectName(owner, rs.getString(1))), binds.toArray());
+			}
+		});
+		return existing;
+	}
+
+	/**
+	 * The synonym each of {@code names} has, as the object it points to: the private one, of the name's owner, over a
+	 * public one, which counts only when {@code withPublic}. A query per owner.
+	 */
+	private static Map<ObjectName, ObjectName> synonymsOf(Dictionary dictionary, java.util.Collection<ObjectName> names,
+			boolean withPublic) {
+		Map<ObjectName, ObjectName> privates = new java.util.HashMap<>();
+		Map<String, ObjectName> publics = new java.util.HashMap<>();
+		byOwner(names).forEach((owner, synonymNames) -> {
+			for (List<String> chunk : chunks(synonymNames)) {
+				List<Object> binds = new ArrayList<>(chunk);
+				binds.add(owner);
+				binds.add(withPublic ? "S" : "N");
+				dictionary.query("""
+						select owner, synonym_name, table_owner, table_name
+						  from all_synonyms
+						 where synonym_name in (:names) and db_link is null
+						   and (owner = ? or (owner = 'PUBLIC' and ? = 'S'))
+						""".replace(":names", marks(chunk.size())), (rs, n) -> {
+					ObjectName target = new ObjectName(rs.getString("table_owner"), rs.getString("table_name"));
+					if ("PUBLIC".equals(rs.getString("owner"))) {
+						publics.put(rs.getString("synonym_name"), target);
+					} else {
+						privates.put(new ObjectName(rs.getString("owner"), rs.getString("synonym_name")), target);
+					}
+					return null;
+				}, binds.toArray());
+			}
+		});
+		Map<ObjectName, ObjectName> synonyms = new java.util.HashMap<>();
+		for (ObjectName name : names) {
+			ObjectName target = privates.containsKey(name) ? privates.get(name) : publics.get(name.name());
+			if (target != null) {
+				synonyms.put(name, target);
+			}
 		}
-		names.found.put(key, current);
-		return current;
+		return synonyms;
+	}
+
+	private static Map<String, List<String>> byOwner(java.util.Collection<ObjectName> names) {
+		Map<String, List<String>> byOwner = new LinkedHashMap<>();
+		for (ObjectName name : names) {
+			byOwner.computeIfAbsent(name.owner(), k -> new ArrayList<>()).add(name.name());
+		}
+		return byOwner;
+	}
+
+	private static List<List<String>> chunks(List<String> names) {
+		List<List<String>> chunks = new ArrayList<>();
+		for (int from = 0; from < names.size(); from += RoutineSignatures.NAMES_PER_QUERY) {
+			chunks.add(names.subList(from, Math.min(names.size(), from + RoutineSignatures.NAMES_PER_QUERY)));
+		}
+		return chunks;
+	}
+
+	private static String marks(int count) {
+		return String.join(", ", java.util.Collections.nCopies(count, "?"));
 	}
 
 	/** A package has its routines in {@code procedure_name}; a standalone routine is the object itself. */
@@ -583,18 +702,6 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 				select count(*) from all_procedures
 				 where owner = ? and object_name = ? and procedure_name = ?
 				""", target.owner(), target.name(), routineName);
-	}
-
-	private static boolean exists(Dictionary dictionary, ObjectName name, boolean standalone) {
-		return dictionary.count(standalone
-				? """
-						select count(*) from all_objects
-						 where owner = ? and object_name = ? and object_type in ('FUNCTION', 'PROCEDURE')
-						"""
-				: """
-						select count(*) from all_objects
-						 where owner = ? and object_name = ? and object_type = 'PACKAGE'
-						""", name.owner(), name.name()) > 0;
 	}
 
 	private static void requireRoutineExists(Dictionary dictionary, ObjectName target, String routineName) {

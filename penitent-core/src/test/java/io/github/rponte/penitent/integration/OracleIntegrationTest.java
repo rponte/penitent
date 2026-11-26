@@ -47,7 +47,13 @@ abstract class OracleIntegrationTest {
 				.load()
 				.migrate();
 
-		ORACLE.executeAsAdmin("CREATE PUBLIC SYNONYM FIXTURE_OWNER_PUBLIC FOR plsql_owner.FIXTURE_OF_OWNER");
+		ORACLE.executeAsAdmin("CREATE PUBLIC SYNONYM FIXTURE_OWNER_PUBLIC FOR plsql_owner.FIXTURE_OF_OWNER",
+				"CREATE PUBLIC SYNONYM LEG_PUB_01 FOR plsql_owner.LEG_PUB_01_T",
+				"CREATE PUBLIC SYNONYM LEG_PUB_02 FOR plsql_owner.LEG_PUB_02_T",
+				"CREATE PUBLIC SYNONYM LEG_PUB_03 FOR plsql_owner.LEG_PUB_03_T",
+				"CREATE PUBLIC SYNONYM PREC_SHADOWED FOR plsql_owner.PREC_SHADOWED_T",
+				"CREATE PUBLIC SYNONYM PREC_BOTH FOR plsql_owner.PREC_BOTH_PUB_T",
+				"CREATE PUBLIC SYNONYM PREC_PUBLIC_ONLY FOR plsql_owner.PREC_PUBLIC_ONLY_T");
 
 		Flyway.configure()
 				.dataSource(ORACLE.jdbcUrl(), OracleUnderTest.USER, OracleUnderTest.PASSWORD)

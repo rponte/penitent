@@ -7,7 +7,6 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -34,13 +33,9 @@ public final class RoutineSignatures {
 	public record Listing(Map<String, List<Argument>> versions, int counted) {
 	}
 
-	private final String owner;
-	private final String packageName;
 	private final Map<String, Listing> routines;
 
-	private RoutineSignatures(String owner, String packageName, Map<String, Listing> routines) {
-		this.owner = owner;
-		this.packageName = packageName;
+	private RoutineSignatures(Map<String, Listing> routines) {
 		this.routines = routines;
 	}
 
@@ -95,7 +90,7 @@ public final class RoutineSignatures {
 			byOverload.forEach((overload, arguments) -> copied.put(overload, List.copyOf(arguments)));
 			routines.put(routine, new Listing(java.util.Collections.unmodifiableMap(copied), counted.get(routine)));
 		});
-		return new RoutineSignatures(owner, packageName, Map.copyOf(routines));
+		return new RoutineSignatures(Map.copyOf(routines));
 	}
 
 	private static String sql(boolean inPackage, String marks) {
@@ -140,8 +135,4 @@ public final class RoutineSignatures {
 		return routines.isEmpty();
 	}
 
-	/** Whether these are of the routines in {@code packageName} of {@code owner}, as resolved now. */
-	public boolean isOf(String owner, String packageName) {
-		return this.owner.equals(owner) && Objects.equals(this.packageName, packageName);
-	}
 }
