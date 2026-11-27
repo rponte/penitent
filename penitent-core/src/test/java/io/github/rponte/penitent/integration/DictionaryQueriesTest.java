@@ -143,14 +143,14 @@ class DictionaryQueriesTest extends OracleIntegrationTest {
 	@DisplayName("the first call of a block whose @PlsqlType names a type through a synonym")
 	void block_type_through_synonym() {
 		assertCost(BlockTypesElsewhereTest.Blocks.class,
-				s -> s.streetOfSynonym(new BlockTypesElsewhereTest.Address("A", 1)), 6, 7);
+				s -> s.streetOfSynonym(new BlockTypesElsewhereTest.Address("A", 1)), 4, 5);
 	}
 
 	@Test
 	@DisplayName("the first call of a block whose @PlsqlType names a type through a synonym of a synonym")
 	void block_type_through_chained_synonym() {
 		assertCost(BlockTypesElsewhereTest.Blocks.class,
-				s -> s.streetOfChainedSynonym(new BlockTypesElsewhereTest.Address("A", 1)), 8, 9);
+				s -> s.streetOfChainedSynonym(new BlockTypesElsewhereTest.Address("A", 1)), 4, 5);
 	}
 
 	@Test

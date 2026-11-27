@@ -130,17 +130,27 @@ public final class Dictionary {
 	 * PL/SQL would take them: quoted, to be taken as they are.
 	 */
 	public List<Resolution> resolve(List<String> names) {
+		return resolve(names, PLSQL);
+	}
+
+	/** {@code NAME_RESOLVE}'s contexts: a table or a view, PL/SQL, a type. */
+	private static final int TABLE = 0;
+	private static final int PLSQL = 1;
+	private static final int TYPE = 7;
+
+	/** Each of {@code names}, resolved in {@code context}, in one round trip. */
+	private List<Resolution> resolve(List<String> names, int context) {
 		StringBuilder block = new StringBuilder("begin\n");
 		for (int i = 0; i < names.size(); i++) {
 			block.append("""
 					  begin
-					    dbms_utility.name_resolve(?, 1, ?, ?, ?, ?, ?, ?);
+					    dbms_utility.name_resolve(?, :context, ?, ?, ?, ?, ?, ?);
 					  exception when others then
 					    ? := -sqlcode; ? := sqlerrm;
 					  end;
 					""");
 		}
-		String sql = block.append("end;").toString();
+		String sql = block.append("end;").toString().replace(":context", String.valueOf(context));
 		try (CallableStatement statement = connection.prepareCall(sql)) {
 			for (int i = 0; i < names.size(); i++) {
 				int first = 1 + i * BINDS_PER_NAME;
@@ -184,42 +194,40 @@ public final class Dictionary {
 	public record ObjectName(String owner, String name) {
 	}
 
-	private static final int MAX_SYNONYMS = 10;
-
 	/**
-	 * Where the object of one of {@code types}, as {@code TYPE}, {@code PACKAGE} or {@code TABLE}, named {@code name}
-	 * in {@code owner} actually is, or empty: the object itself, then a private synonym of {@code owner} and, unless
-	 * {@code schemaNamed}, a public one. A synonym can point to another, hence the loop; the limit only keeps it from
-	 * running forever on a cycle. A block's {@code @PlsqlType} names resolve so; {@code NAME_RESOLVE}, which resolves
-	 * the routines' (#174), takes a type with another context, not measured yet.
+	 * Where the object of one of {@code types}, {@code TYPE}, {@code PACKAGE}, or {@code TABLE} and {@code VIEW}, named
+	 * {@code name} actually is, or empty: resolved by Oracle itself, with {@code NAME_RESOLVE} (#174), as PL/SQL would
+	 * resolve the name a block declares. Unless {@code schemaNamed}, the name is resolved in the session's
+	 * {@code current_schema}, which {@code owner} is: the object itself, then a private synonym, then a public one,
+	 * through synonyms of synonyms; with the schema named, no public synonym counts. The object must be of a kind
+	 * asked for: a name that is a function, for a package, does not resolve.
+	 *
+	 * <p>It replaced a loop of {@code ALL_OBJECTS} and {@code ALL_SYNONYMS}, a query or two per synonym, and
+	 * {@code ALL_SYNONYMS} costs about 50 ms a query on 21c: a type through a synonym took about 50 ms there, through a
+	 * synonym of a synonym about 100 ms, against under a millisecond.
 	 */
 	public java.util.Optional<ObjectName> objectBehind(String owner, String name, boolean schemaNamed,
 			String... types) {
-		String in = String.join(", ", java.util.Collections.nCopies(types.length, "?"));
-		ObjectName current = new ObjectName(owner, name);
-		for (int i = 0; i <= MAX_SYNONYMS; i++) {
-			List<Object> parameters = new ArrayList<>(List.of(current.owner(), current.name()));
-			parameters.addAll(List.of(types));
-			if (count("select count(*) from all_objects where owner = ? and object_name = ?"
-					+ " and object_type in (" + in + ")", parameters.toArray()) > 0) {
-				return java.util.Optional.of(current);
-			}
-			List<ObjectName> next = query("""
-					select table_owner, table_name
-					  from all_synonyms
-					 where synonym_name = ? and db_link is null
-					   and (owner = ? or (owner = 'PUBLIC' and ? = 'S'))
-					 order by case when owner = 'PUBLIC' then 1 else 0 end
-					""",
-					(rs, n) -> new ObjectName(rs.getString("table_owner"), rs.getString("table_name")),
-					current.name(), current.owner(), schemaNamed ? "N" : "S");
-			if (next.isEmpty()) {
-				return java.util.Optional.empty();
-			}
-			current = next.get(0);
-			schemaNamed = true;
+		List<String> kinds = List.of(types);
+		int context = kinds.contains("TYPE") ? TYPE : kinds.contains("PACKAGE") ? PLSQL : TABLE;
+		String quoted = schemaNamed ? '"' + owner + "\".\"" + name + '"' : '"' + name + '"';
+		Resolution resolution = resolve(List.of(quoted), context).get(0);
+		if (!resolution.resolved() || resolution.dblink() != null || !kinds.contains(kindOf(resolution.type()))) {
+			return java.util.Optional.empty();
 		}
-		return java.util.Optional.empty();
+		return java.util.Optional.of(new ObjectName(resolution.schema(),
+				resolution.part2() != null ? resolution.part2() : resolution.part1()));
+	}
+
+	/** The kind of object {@code NAME_RESOLVE}'s {@code part1_type} names, as the dictionary's object types. */
+	private static String kindOf(int type) {
+		return switch (type) {
+			case 2 -> "TABLE";
+			case 4 -> "VIEW";
+			case 9 -> "PACKAGE";
+			case 13 -> "TYPE";
+			default -> "";
+		};
 	}
 
 	// ── Routines ─────────────────────────────────────────────────────────────────────────────────────────
