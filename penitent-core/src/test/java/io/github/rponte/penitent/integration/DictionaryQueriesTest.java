@@ -140,6 +140,20 @@ class DictionaryQueriesTest extends OracleIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("the first call of a block whose @PlsqlType names a type through a synonym")
+	void block_type_through_synonym() {
+		assertCost(BlockTypesElsewhereTest.Blocks.class,
+				s -> s.streetOfSynonym(new BlockTypesElsewhereTest.Address("A", 1)), 6, 7);
+	}
+
+	@Test
+	@DisplayName("the first call of a block whose @PlsqlType names a type through a synonym of a synonym")
+	void block_type_through_chained_synonym() {
+		assertCost(BlockTypesElsewhereTest.Blocks.class,
+				s -> s.streetOfChainedSynonym(new BlockTypesElsewhereTest.Address("A", 1)), 8, 9);
+	}
+
+	@Test
 	@DisplayName("validating an interface of 24 scalar methods")
 	void validate_scalars() {
 		assertCost(ScalarsTest.Scalars.class, DictionaryQueriesTest::validate, 4, 4);

@@ -57,6 +57,25 @@ class BlockTypesElsewhereTest extends OracleIntegrationTest {
 
 		@PlsqlBlock("begin :result := :value.street; end;")
 		String streetOfMissing(@PlsqlType("PLSQL_OWNER.NO_SUCH_T") Address value);
+
+		@PlsqlBlock("begin :result := :value.street; end;")
+		String streetOfPublicSynonym(@PlsqlType("BLOCK_PUB_ADDRESS") Address value);
+
+		@PlsqlBlock("begin :result := :value.street; end;")
+		String streetOfChainedSynonym(@PlsqlType("BLOCK_CHAIN_ADDRESS") Address value);
+
+		/** With the schema named, a public synonym does not count, as PL/SQL does not take it either. */
+		@PlsqlBlock("begin :result := :value.street; end;")
+		String streetOfSchemaNamedPublicSynonym(@PlsqlType("PLSQL_TEST.BLOCK_PUB_ADDRESS") Address value);
+
+		@PlsqlBlock("begin :result := :value.description; end;")
+		String descriptionOfPublicSynonymRecord(@PlsqlType("FIXTURE_OWNER_PUBLIC.OWNER_ENTRY") Entry value);
+
+		@PlsqlBlock("begin :result := :value.description; end;")
+		String descriptionOfViewRow(@PlsqlType("OWNER_ITEM_V%ROWTYPE") Entry value);
+
+		@PlsqlBlock("begin :result := :value.description; end;")
+		String descriptionOfPublicSynonymRow(@PlsqlType("BLOCK_PUB_ITEM%ROWTYPE") Entry value);
 	}
 
 	private final Blocks blocks = pkg(Blocks.class);
@@ -92,6 +111,33 @@ class BlockTypesElsewhereTest extends OracleIntegrationTest {
 	void rowtype() {
 		assertThat(blocks.descriptionOfOwnerRow(ENTRY)).isEqualTo("one");
 		assertThat(blocks.descriptionOfSynonymRow(ENTRY)).isEqualTo("one");
+	}
+
+	@Test
+	@DisplayName("an object type through a public synonym, and through a synonym of a synonym")
+	void object_through_public_and_chained_synonyms() {
+		assertThat(blocks.streetOfPublicSynonym(ADDRESS)).isEqualTo("Street A");
+		assertThat(blocks.streetOfChainedSynonym(ADDRESS)).isEqualTo("Street A");
+	}
+
+	@Test
+	@DisplayName("with the schema named, a public synonym of the name does not count")
+	void schema_named_ignores_public_synonyms() {
+		assertThatThrownBy(() -> blocks.streetOfSchemaNamedPublicSynonym(ADDRESS))
+				.isInstanceOf(PlsqlMappingException.class).hasMessageContaining("BLOCK_PUB_ADDRESS");
+	}
+
+	@Test
+	@DisplayName("a RECORD through a public synonym of its package")
+	void package_record_through_public_synonym() {
+		assertThat(blocks.descriptionOfPublicSynonymRecord(ENTRY)).isEqualTo("one");
+	}
+
+	@Test
+	@DisplayName("a %ROWTYPE of a view, and of a table through a public synonym")
+	void rowtype_of_view_and_public_synonym() {
+		assertThat(blocks.descriptionOfViewRow(ENTRY)).isEqualTo("one");
+		assertThat(blocks.descriptionOfPublicSynonymRow(ENTRY)).isEqualTo("one");
 	}
 
 	@Test
