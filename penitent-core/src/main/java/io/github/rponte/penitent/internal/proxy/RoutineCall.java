@@ -192,7 +192,9 @@ final class RoutineCall {
 			// with Oracle's error after it, as its cause and with its code, so that it does not read as a broken package
 			return new SqlFailure(failure.failure().sql(), new SQLException(routine.qualifiedName()
 					+ " changed since this proxy described it, and was described again: the call did not run, and the"
-					+ " next one uses the new signature. Parameters before: " + routine.parameters() + "; now: "
+					+ " next one uses the new signature. "
+					+ fresh.repointedFrom(routine).map(moved -> moved + ". ").orElse("")
+					+ "Parameters before: " + routine.parameters() + "; now: "
 					+ fresh.parameters() + ". " + cause.getMessage(), cause.getSQLState(), cause.getErrorCode(), cause),
 					failure.failure().phase());
 		} else if (StaleTypes.OLDER_SHAPE.contains(cause.getErrorCode())) {
