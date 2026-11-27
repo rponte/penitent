@@ -79,6 +79,17 @@ All notable changes to this project are listed here. The format follows
   used to accept, fails one call without running, with `PLS-00306`, and the next call uses the new name. A tool that
   reads the logged SQL sees the names.
 
+### Fixed
+
+- A value of a composite that comes back with fewer attributes than the proxy described its type with, or more while
+  of that type itself, is refused with a `PlsqlExecutionException` that names the type and both counts
+  ([#183](https://github.com/rponte/penitent/issues/183)), and the proxy reads its types again on the next call. With
+  fewer, it threw a raw `ArrayIndexOutOfBoundsException`; with more, it was read by the old positions, its other
+  attributes lost, with no error. A subtype returned as its supertype is read as before, by the supertype's
+  attributes. It happens after a type changed while the application ran, and when the database
+  or the driver hands back a type's old shape, as after a `%ROWTYPE`'s table gained a column that an old session read
+  ([#184](https://github.com/rponte/penitent/issues/184)): with driver 19, the old shape comes back with no error.
+
 ## [0.32.0]
 
 Oracle's `JSON` type, as its text or as a `Map` or a `List`, checked the same way on every driver and database, in a
