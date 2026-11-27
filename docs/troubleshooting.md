@@ -186,7 +186,7 @@ each case.
 
 **What to do:** run [validation](validation.md) at startup, to pay that cost before the first request.
 
-The first call of each method reads the dictionary, with 2 queries for a scalar routine and up to about 11 with
+The first call of each method reads the dictionary, with 2 queries for a scalar routine and up to about 6 with
 nested composites, each a round trip to the database. Later calls use the cache. See [How Penitent works](concepts.md#what-happens-in-a-call).
 
 ## Connections run out
