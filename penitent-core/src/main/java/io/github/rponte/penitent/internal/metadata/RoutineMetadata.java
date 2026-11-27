@@ -844,7 +844,7 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 	}
 
 	/** The same decision order as {@link Argument#compositeType}, applied to the element. */
-	private static CompositeType elementOf(String schema, String owner, String container, String name) {
+	static CompositeType elementOf(String schema, String owner, String container, String name) {
 		String elementOwner = owner != null ? owner : schema;
 		if (container != null) {
 			return new CompositeType(CompositeType.Kind.PLSQL_RECORD, elementOwner, container, name,

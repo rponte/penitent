@@ -95,13 +95,13 @@ class DictionaryQueriesTest extends OracleIntegrationTest {
 	@DisplayName("the first call of a routine that takes a collection of OBJECT")
 	void collection_of_objects() {
 		assertCost(CollectionsTest.Composites.class,
-				s -> s.echoAddresses(List.of(new CollectionsTest.Address("A", 1))), 6, 7);
+				s -> s.echoAddresses(List.of(new CollectionsTest.Address("A", 1))), 5, 6);
 	}
 
 	@Test
 	@DisplayName("the first call of a routine that takes an OBJECT with nested OBJECTs and collections")
 	void nested_object() {
-		assertCost(ObjectTypesTest.Composites.class, s -> s.echoCustomer(customer()), 11, 12);
+		assertCost(ObjectTypesTest.Composites.class, s -> s.echoCustomer(customer()), 6, 7);
 	}
 
 	@Test
@@ -122,13 +122,13 @@ class DictionaryQueriesTest extends OracleIntegrationTest {
 	@DisplayName("the first call of a routine that takes a collection of RECORD")
 	void collection_of_records() {
 		assertCost(RecordAndRowtypeTest.Composites.class,
-				s -> s.echoRecords(List.of(new RecordAndRowtypeTest.MiniItem(1L, "one", BigDecimal.ONE))), 7, 8);
+				s -> s.echoRecords(List.of(new RecordAndRowtypeTest.MiniItem(1L, "one", BigDecimal.ONE))), 5, 6);
 	}
 
 	@Test
 	@DisplayName("the first call of a routine that takes a collection of collections")
 	void collection_of_collections() {
-		assertCost(CollectionsTest.Shapes.class, s -> s.echoMatrix(List.of(List.of("a"))), 7, 8);
+		assertCost(CollectionsTest.Shapes.class, s -> s.echoMatrix(List.of(List.of("a"))), 5, 6);
 	}
 
 	@Test
@@ -136,7 +136,7 @@ class DictionaryQueriesTest extends OracleIntegrationTest {
 	void rich_record() {
 		assertCost(RecordAndRowtypeTest.Composites.class, s -> s.echoRichRecord(new RecordAndRowtypeTest.RichRecord(1L,
 				new RecordAndRowtypeTest.MiniItem(1L, "one", BigDecimal.ONE), new RecordAndRowtypeTest.Address("A", 1),
-				List.of("a"), List.of("b"))), 14, 15);
+				List.of("a"), List.of("b"))), 9, 10);
 	}
 
 	@Test
@@ -148,13 +148,13 @@ class DictionaryQueriesTest extends OracleIntegrationTest {
 	@Test
 	@DisplayName("validating an interface of 33 methods with OUT parameters and composites")
 	void validate_outputs() {
-		assertCost(OutParametersTest.Outputs.class, DictionaryQueriesTest::validate, 13, 13);
+		assertCost(OutParametersTest.Outputs.class, DictionaryQueriesTest::validate, 9, 9);
 	}
 
 	@Test
 	@DisplayName("validating an interface of 36 methods over overloaded routines: more rows, so more round trips")
 	void validate_overloads() {
-		assertCost(OverloadingTest.Overload.class, DictionaryQueriesTest::validate, 5, 5);
+		assertCost(OverloadingTest.Overload.class, DictionaryQueriesTest::validate, 4, 4);
 	}
 
 	@Test

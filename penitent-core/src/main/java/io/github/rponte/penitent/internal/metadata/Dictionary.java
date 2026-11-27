@@ -68,11 +68,6 @@ public final class Dictionary {
 		this.connection = connection;
 	}
 
-	/** The first row's value, or empty when there is no row or its value is null, as an {@code INDEX_BY} may be. */
-	private static java.util.Optional<String> first(List<String> values) {
-		return values.isEmpty() ? java.util.Optional.empty() : java.util.Optional.ofNullable(values.get(0));
-	}
-
 	private <T> List<T> query(String sql, RowMapper<T> mapper, Object... parameters) {
 		try (PreparedStatement statement = connection.prepareStatement(sql)) {
 			statement.setFetchSize(FETCH_SIZE);
@@ -343,17 +338,6 @@ public final class Dictionary {
 
 	// ── Types ────────────────────────────────────────────────────────────────────────────────────────────
 
-	/** A type's {@code typecode}, as {@code OBJECT} or {@code COLLECTION}, of a package or of the schema; or empty. */
-	public java.util.Optional<String> typecodeOf(String owner, String packageName, String type) {
-		List<String> found = packageName != null
-				? strings("""
-						select typecode from all_plsql_types
-						 where owner = ? and package_name = ? and type_name = ?
-						""", owner, packageName, type)
-				: strings("select typecode from all_types where owner = ? and type_name = ?", owner, type);
-		return first(found);
-	}
-
 	/**
 	 * One attribute of a composite, or a column of a {@code %ROWTYPE}: its position, name and type, and the type's
 	 * modifier, {@code REF} for a pointer to a row of an object table, or null.
@@ -367,58 +351,6 @@ public final class Dictionary {
 		}
 	}
 
-	/**
-	 * The attributes of a composite, in order, each from the view the dictionary keeps them in: an {@code OBJECT}'s
-	 * in {@code ALL_TYPE_ATTRS}, a {@code RECORD}'s in {@code ALL_PLSQL_TYPE_ATTRS}, a {@code %ROWTYPE}'s as its
-	 * table's columns. An invisible column has no {@code COLUMN_ID}, and PL/SQL leaves it out of a {@code %ROWTYPE}.
-	 * An {@code OBJECT} only references schema-level types, so its attributes have no package.
-	 */
-	public List<Attribute> attributesOf(CompositeType.Kind kind, String owner, String packageName, String type) {
-		return switch (kind) {
-			case OBJECT -> query("""
-					select attr_no, attr_name, attr_type_name, attr_type_owner, attr_type_mod
-					  from all_type_attrs
-					 where owner = ? and type_name = ?
-					 order by attr_no
-					""", (rs, n) -> new Attribute(rs.getInt("attr_no"), rs.getString("attr_name"),
-					rs.getString("attr_type_name"), rs.getString("attr_type_owner"), null,
-					rs.getString("attr_type_mod")), owner, type);
-			case PLSQL_RECORD -> query("""
-					select attr_no, attr_name, attr_type_name, attr_type_owner, attr_type_package, attr_type_mod
-					  from all_plsql_type_attrs
-					 where owner = ? and package_name = ? and type_name = ?
-					 order by attr_no
-					""", (rs, n) -> new Attribute(rs.getInt("attr_no"), rs.getString("attr_name"),
-					rs.getString("attr_type_name"), rs.getString("attr_type_owner"),
-					rs.getString("attr_type_package"), rs.getString("attr_type_mod")), owner, packageName, type);
-			case ROWTYPE -> query("""
-					select column_id, column_name, data_type, data_type_owner, data_type_mod
-					  from all_tab_columns
-					 where owner = ? and table_name = ? and column_id is not null
-					 order by column_id
-					""", (rs, n) -> new Attribute(rs.getInt("column_id"), rs.getString("column_name"),
-					rs.getString("data_type"), rs.getString("data_type_owner"), null, rs.getString("data_type_mod")),
-					owner, type);
-		};
-	}
-
-	/** The names of the JSON fields of a {@code RECORD}, or of the JSON columns behind a {@code %ROWTYPE}. */
-	public List<String> jsonAttributesOf(CompositeType.Kind kind, String owner, String packageName, String type) {
-		return switch (kind) {
-			case PLSQL_RECORD -> strings("""
-					select attr_name from all_plsql_type_attrs
-					 where owner = ? and package_name = ? and type_name = ? and attr_type_name = 'JSON'
-					 order by attr_no
-					""", owner, packageName, type);
-			case ROWTYPE -> strings("""
-					select column_name from all_tab_columns
-					 where owner = ? and table_name = ? and column_id is not null and data_type = 'JSON'
-					 order by column_id
-					""", owner, type);
-			case OBJECT -> List.of();
-		};
-	}
-
 	/** What a collection holds: its element's owner, package and name, as the dictionary lists them, and modifier. */
 	public record Element(String owner, String packageName, String name, String modifier) {
 
@@ -428,52 +360,131 @@ public final class Dictionary {
 		}
 	}
 
-	/** The element of {@code collection}, of a package or of the schema; or empty. */
-	public java.util.Optional<Element> elementOf(String owner, String packageName, String collection) {
-		RowMapper<Element> toElement = (rs, n) -> new Element(rs.getString("elem_type_owner"),
-				rs.getString("elem_type_package"), rs.getString("elem_type_name"), rs.getString("elem_type_mod"));
-		List<Element> elements = packageName != null
-				? query("""
-						select elem_type_owner, elem_type_package, elem_type_name, elem_type_mod
-						  from all_plsql_coll_types
-						 where owner = ? and package_name = ? and type_name = ?
-						""", toElement, owner, packageName, collection)
-				: query("""
-						select elem_type_owner, null as elem_type_package, elem_type_name, elem_type_mod
-						  from all_coll_types
-						 where owner = ? and type_name = ?
-						""", toElement, owner, collection);
-		return elements.isEmpty() ? java.util.Optional.empty() : java.util.Optional.of(elements.get(0));
-	}
-
-	/** The element's type name as the dictionary spells it, even a scalar's: {@code TIMESTAMP(6) WITH TIME ZONE}. */
-	public java.util.Optional<String> elementTypeNameOf(String owner, String packageName, String collection) {
-		List<String> names = packageName != null
-				? strings("""
-						select elem_type_name
-						  from all_plsql_coll_types
-						 where owner = ? and package_name = ? and type_name = ?
-						""", owner, packageName, collection)
-				: strings("""
-						select elem_type_name
-						  from all_coll_types
-						 where owner = ? and type_name = ?
-						""", owner, collection);
-		return first(names);
+	/**
+	 * What the dictionary says of a collection, in one query: its element, whose name is the element's type name as
+	 * the dictionary spells it, even a scalar's, as {@code TIMESTAMP(6) WITH TIME ZONE}; and its {@code INDEX BY}, as
+	 * {@code PLS_INTEGER}, or {@code null}, as a collection of the schema always is.
+	 */
+	public record CollectionOf(Element element, String indexBy) {
 	}
 
 	/**
-	 * A package collection's index, as {@code PLS_INTEGER}; or empty when it is not {@code INDEX BY}, as no
-	 * collection of the schema is, which is not asked.
+	 * The typecode of each of {@code types}, as {@code OBJECT} or {@code COLLECTION}, of {@code packageName} or, when
+	 * it is {@code null}, of the schema, in a query per {@value RoutineSignatures#NAMES_PER_QUERY} names (#169). A type
+	 * that is not there is left out.
 	 */
-	public java.util.Optional<String> indexByOf(String owner, String packageName, String collection) {
-		if (packageName == null) {
-			return java.util.Optional.empty();
+	public Map<String, String> typecodesOf(String owner, String packageName, Collection<String> types) {
+		Map<String, String> typecodes = new HashMap<>();
+		for (List<String> chunk : chunks(types)) {
+			List<Object> binds = new ArrayList<>(List.of(owner));
+			if (packageName != null) {
+				binds.add(packageName);
+			}
+			binds.addAll(chunk);
+			query((packageName != null
+					? "select type_name, typecode from all_plsql_types"
+							+ " where owner = ? and package_name = ? and type_name in (:names)"
+					: "select type_name, typecode from all_types where owner = ? and type_name in (:names)")
+					.replace(":names", marks(chunk.size())), (rs, n) -> {
+						if (rs.getString("typecode") != null) {
+							typecodes.put(rs.getString("type_name"), rs.getString("typecode"));
+						}
+						return null;
+					}, binds.toArray());
 		}
-		return first(strings("""
-				select index_by
-				  from all_plsql_coll_types
-				 where owner = ? and package_name = ? and type_name = ?
-				""", owner, packageName, collection));
+		return typecodes;
+	}
+
+	/**
+	 * The attributes of each of {@code types}, of one kind, in order, each from the view the dictionary keeps them in:
+	 * an {@code OBJECT}'s in {@code ALL_TYPE_ATTRS}, a {@code RECORD}'s in {@code ALL_PLSQL_TYPE_ATTRS}, a
+	 * {@code %ROWTYPE}'s as its table's columns, in a query per {@value RoutineSignatures#NAMES_PER_QUERY} names. An
+	 * invisible column has no {@code COLUMN_ID}, and PL/SQL leaves it out of a {@code %ROWTYPE}. An {@code OBJECT}
+	 * only references schema-level types, so its attributes have no package. A type that is not there is left out.
+	 */
+	public Map<String, List<Attribute>> attributesOf(CompositeType.Kind kind, String owner, String packageName,
+			Collection<String> types) {
+		Map<String, List<Attribute>> attributes = new HashMap<>();
+		for (List<String> chunk : chunks(types)) {
+			List<Object> binds = new ArrayList<>(List.of(owner));
+			if (kind == CompositeType.Kind.PLSQL_RECORD) {
+				binds.add(packageName);
+			}
+			binds.addAll(chunk);
+			String sql = switch (kind) {
+				case OBJECT -> """
+						select type_name, attr_no, attr_name, attr_type_name, attr_type_owner,
+						       null as attr_type_package, attr_type_mod
+						  from all_type_attrs
+						 where owner = ? and type_name in (:names)
+						 order by type_name, attr_no
+						""";
+				case PLSQL_RECORD -> """
+						select type_name, attr_no, attr_name, attr_type_name, attr_type_owner, attr_type_package,
+						       attr_type_mod
+						  from all_plsql_type_attrs
+						 where owner = ? and package_name = ? and type_name in (:names)
+						 order by type_name, attr_no
+						""";
+				case ROWTYPE -> """
+						select table_name as type_name, column_id as attr_no, column_name as attr_name,
+						       data_type as attr_type_name, data_type_owner as attr_type_owner,
+						       null as attr_type_package, data_type_mod as attr_type_mod
+						  from all_tab_columns
+						 where owner = ? and table_name in (:names) and column_id is not null
+						 order by table_name, column_id
+						""";
+			};
+			query(sql.replace(":names", marks(chunk.size())), (rs, n) -> attributes
+					.computeIfAbsent(rs.getString("type_name"), k -> new ArrayList<>())
+					.add(new Attribute(rs.getInt("attr_no"), rs.getString("attr_name"), rs.getString("attr_type_name"),
+							rs.getString("attr_type_owner"), rs.getString("attr_type_package"),
+							rs.getString("attr_type_mod"))), binds.toArray());
+		}
+		return attributes;
+	}
+
+	/**
+	 * What each of {@code collections} holds, of {@code packageName} or, when it is {@code null}, of the schema, in a
+	 * query per {@value RoutineSignatures#NAMES_PER_QUERY} names. A collection that is not there is left out.
+	 */
+	public Map<String, CollectionOf> collectionsOf(String owner, String packageName, Collection<String> collections) {
+		Map<String, CollectionOf> found = new HashMap<>();
+		for (List<String> chunk : chunks(collections)) {
+			List<Object> binds = new ArrayList<>(List.of(owner));
+			if (packageName != null) {
+				binds.add(packageName);
+			}
+			binds.addAll(chunk);
+			query((packageName != null
+					? """
+							select type_name, elem_type_owner, elem_type_package, elem_type_name, elem_type_mod, index_by
+							  from all_plsql_coll_types
+							 where owner = ? and package_name = ? and type_name in (:names)
+							"""
+					: """
+							select type_name, elem_type_owner, null as elem_type_package, elem_type_name, elem_type_mod,
+							       null as index_by
+							  from all_coll_types
+							 where owner = ? and type_name in (:names)
+							""").replace(":names", marks(chunk.size())), (rs, n) -> found.put(rs.getString("type_name"),
+					new CollectionOf(new Element(rs.getString("elem_type_owner"), rs.getString("elem_type_package"),
+							rs.getString("elem_type_name"), rs.getString("elem_type_mod")), rs.getString("index_by"))),
+					binds.toArray());
+		}
+		return found;
+	}
+
+	private static List<List<String>> chunks(Collection<String> names) {
+		List<String> distinct = List.copyOf(new LinkedHashSet<>(names));
+		List<List<String>> chunks = new ArrayList<>();
+		for (int from = 0; from < distinct.size(); from += RoutineSignatures.NAMES_PER_QUERY) {
+			chunks.add(distinct.subList(from, Math.min(distinct.size(), from + RoutineSignatures.NAMES_PER_QUERY)));
+		}
+		return chunks;
+	}
+
+	private static String marks(int count) {
+		return String.join(", ", java.util.Collections.nCopies(count, "?"));
 	}
 }
