@@ -630,7 +630,8 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 		dictionary.statusOf(owner, name, types).filter(Dictionary.ObjectStatus::isInvalid).ifPresent(status -> {
 			throw new PlsqlMappingException(what + " " + owner + "." + name + " is INVALID, and what it takes and"
 					+ " returns cannot be read until it compiles: compile it, as ALTER " + status.type() + " " + owner
-					+ "." + name + " COMPILE, and its errors, if any, are in ALL_ERRORS");
+					+ "." + name + " COMPILE, or have each migration compile what it left invalid, as"
+					+ " DBMS_UTILITY.COMPILE_SCHEMA does; its errors, if any, are in ALL_ERRORS");
 		});
 	}
 
