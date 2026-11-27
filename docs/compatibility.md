@@ -338,6 +338,7 @@ Where the PL/SQL guarantees the value is never `null`, driver 23 works as it is.
 | `@PlsqlBoolean` on the parameter or on the method: replaces `BOOLEAN` with the literal | Validated |
 | Composite or collection parameter, with `@PlsqlType` on the parameter or on the composite's class: OBJECT, collection of scalars, of OBJECT or of collections, and `null` | Validated |
 | A block's `@PlsqlType` and `resultType` naming a type of another schema, `SCHEMA.TYPE`, `SCHEMA.PACKAGE.TYPE` and `SCHEMA.TABLE%ROWTYPE`, or reached through a private synonym of an OBJECT, a collection, a package or a table, resolved as PL/SQL resolves them; one that does not exist, refused naming it; on 23ai, 21c and 19c | Validated |
+| A block's `@PlsqlType` resolved by Oracle itself, `DBMS_UTILITY.NAME_RESOLVE`, in a round trip whatever the synonyms: through a public synonym, a synonym of a synonym, a package's public synonym, a view's `%ROWTYPE`; with the schema named, no public synonym counts | Validated |
 | Composite or collection parameter without `@PlsqlType` | Not supported, with a clear error |
 | `:` inside a string literal, including `q'[...]'`, a comment or a quoted identifier: not a placeholder | Validated |
 | `?` inside a string literal and a comment | Validated |
