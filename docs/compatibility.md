@@ -231,6 +231,7 @@ Where the PL/SQL guarantees the value is never `null`, driver 23 works as it is.
 | `CLOB` when writing | `String`, in a temporary LOB | Validated |
 | `BLOB` | `byte[]`, in a temporary LOB when writing | Validated |
 | `REF` to an object type, a pointer to a row of an object table, as an attribute or as a collection's element ([#125](https://github.com/rponte/penitent/issues/125)) | Refused with `PlsqlMappingException`, naming the attribute or the collection, by `validate` and by the call alike, even when the value is `null` | Not supported, with a clear error |
+| A value of a composite that comes back with fewer attributes than the proxy described its type with, or more while of that type itself, as after the type changed, or as the database or the driver hands back its old shape; a subtype returned as its supertype is read by the supertype's attributes | Refused with `PlsqlExecutionException`, naming the type and both counts, after the routine ran; the proxy's types read again on the next call | Validated |
 
 ## Collections
 
