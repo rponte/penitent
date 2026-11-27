@@ -165,7 +165,10 @@ the old types in each connection, or the session had state in a package that was
   or the standalone routine, invalid, and a compilation of it failed, as when a type it uses was dropped and created
   again. Oracle then lists none of its routines, so Penitent cannot read them, and a proxy that cannot read them does
   not call them, which is what would make Oracle compile them. Compile it, as the message says, and read its errors
-  in `ALL_ERRORS`. On 19c, Penitent's lookup of the name compiles it already, and the call works.
+  in `ALL_ERRORS`; better, have each migration compile what it left invalid, as
+  `DBMS_UTILITY.COMPILE_SCHEMA(schema => USER, compile_all => FALSE)` does in a Flyway `afterMigrate` callback.
+  Penitent does not compile it itself: it does not change the database. On 19c, Penitent's lookup of the name
+  compiles it already, and the call works.
 - **`ORA-21700: object does not exist or is marked for deletion`, with "A type this call uses was most likely
   replaced":** a type was replaced with `CREATE OR REPLACE TYPE ... FORCE` since the proxy described it. The call
   fails once; the next one reads the types again and works.
