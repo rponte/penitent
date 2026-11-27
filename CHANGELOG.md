@@ -8,6 +8,13 @@ All notable changes to this project are listed here. The format follows
 
 ### Changed
 
+- A routine named through a synonym is called through the synonym, as PL/SQL calls it, not at its target
+  ([#184](https://github.com/rponte/penitent/issues/184), A4). A synonym pointed to another package, as a blue/green
+  deploy does, now takes the proxy's next call there, and keeps it working once the old package is dropped; it went on
+  calling the old package, and once that was dropped failed with `PLS-00201` on every call until a restart. The
+  routine is still described, and its types bound, at its target. A call that fails as a changed signature, with
+  the synonym pointed elsewhere, says where it points now.
+
 - `ORA-21700: object does not exist or is marked for deletion` is a `PlsqlExecutionException`, not a
   `PlsqlRoutineRaisedException`, and says that a type the call uses was most likely replaced in the database, as
   `CREATE OR REPLACE TYPE ... FORCE` does; the proxy reads its types again on the next call, which works

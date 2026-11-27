@@ -301,7 +301,9 @@ interface declares `@PlsqlPackage` or `@PlsqlSchema`, never both, and one made o
 
 - **Another schema:** `@PlsqlPackage(value = "ORDERS_PKG", schema = "SALES")`.
 - **Synonyms:** name the synonym your application already uses. Private, public and chained synonyms are resolved;
-  a synonym that points through a database link is not.
+  a synonym that points through a database link is not. The call goes through the synonym, as PL/SQL's does, so a
+  synonym pointed to another package reaches it on the next call: see
+  [Deploying](deploying.md#a-synonym-pointed-elsewhere).
 
 ### Upper case, lower case and quotes
 
