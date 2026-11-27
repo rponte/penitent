@@ -54,6 +54,8 @@ public record PlsqlFailure(String sql, SQLException cause, Phase phase) {
 			{ 200, 369 }, { 430, 439 }, { 1100, 1250 },
 			// PL/SQL internal failure
 			{ 6500, 6501 },
+			// an object the session no longer has, as of a type replaced in the database with FORCE (#184, A3)
+			{ 21700, 21700 },
 	};
 
 	/**

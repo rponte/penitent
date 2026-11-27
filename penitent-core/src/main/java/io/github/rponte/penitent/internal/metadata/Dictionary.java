@@ -335,6 +335,29 @@ public final class Dictionary {
 				""", owner, packageName, routine);
 	}
 
+	/** An object's type, as {@code PACKAGE} or {@code FUNCTION}, and its status, {@code VALID} or {@code INVALID}. */
+	public record ObjectStatus(String type, String status) {
+
+		public boolean isInvalid() {
+			return "INVALID".equals(status);
+		}
+	}
+
+	/**
+	 * The status of {@code name}, of one of {@code types}, in {@code owner}, or empty if there is none (#184, A2): a
+	 * routine that failed to compile has no rows in {@code ALL_ARGUMENTS} nor in {@code ALL_PROCEDURES}, and only
+	 * {@code ALL_OBJECTS} still lists it.
+	 */
+	public java.util.Optional<ObjectStatus> statusOf(String owner, String name, String... types) {
+		List<Object> binds = new ArrayList<>(List.of(owner, name));
+		binds.addAll(List.of(types));
+		List<ObjectStatus> found = query(("select object_type, status from all_objects"
+				+ " where owner = ? and object_name = ? and object_type in (:types)")
+				.replace(":types", marks(types.length)),
+				(rs, n) -> new ObjectStatus(rs.getString("object_type"), rs.getString("status")), binds.toArray());
+		return found.stream().findFirst();
+	}
+
 	/** The routines of a package, by name: for the error that says which exist. */
 	public List<String> routinesOf(String owner, String packageName) {
 		return strings("""
