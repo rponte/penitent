@@ -38,7 +38,18 @@ import io.github.rponte.penitent.internal.driver.Carriers;
  * everything, including {@code type_name} for composite parameters.
  */
 public record RoutineMetadata(String schema, String packageName, String routineName, List<Argument> arguments,
-		boolean byName) {
+		boolean byName, String via) {
+
+	/**
+	 * {@code via}, when not {@code null}, is the object as the interface named it, a synonym, quoted as a call names it:
+	 * the call goes through it, as PL/SQL's does, so that a synonym pointed elsewhere, as a blue/green deploy does,
+	 * takes the next call there (#184, A4). The routine is still described, and its types bound, at its real place,
+	 * {@code schema} and {@code packageName}: the dictionary only knows real names.
+	 */
+	public RoutineMetadata(String schema, String packageName, String routineName, List<Argument> arguments,
+			boolean byName) {
+		this(schema, packageName, routineName, arguments, byName, null);
+	}
 
 
 	/**
@@ -257,8 +268,11 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 		}
 	}
 
-	/** Where a routine is, after synonyms: its owner, its package, {@code null} outside one, and its name. */
-	public record Target(String owner, String packageName, String routine) {
+	/**
+	 * Where a routine is, after synonyms: its owner, its package, {@code null} outside one, and its name; and
+	 * {@code via}, the synonym it was named through, quoted as a call names it, or {@code null} when none was.
+	 */
+	public record Target(String owner, String packageName, String routine, String via) {
 	}
 
 	/** Where {@code routineName}, of {@code packageName} or outside a package when it is {@code null}, is. */
@@ -267,8 +281,8 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 		boolean standalone = packageName == null;
 		ObjectName resolved = resolve(dictionary, names, schema, standalone ? routineName : packageName, standalone);
 		// outside a package, the synonym points to the routine itself, and it is the routine that gets the real name
-		return standalone ? new Target(resolved.owner(), null, resolved.name())
-				: new Target(resolved.owner(), resolved.name(), routineName);
+		return standalone ? new Target(resolved.owner(), null, resolved.name(), resolved.via())
+				: new Target(resolved.owner(), resolved.name(), routineName, resolved.via());
 	}
 
 	/** Reads the signature of one routine, and describes it for {@code method}: see {@link #of}. */
@@ -295,15 +309,17 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 		if (listing.isEmpty()) {
 			requireRoutineExists(dictionary, new ObjectName(target.owner(), target.packageName()), routine);
 			RoutineMetadata empty = new RoutineMetadata(target.owner(), target.packageName(), routine, List.of(),
-					false);
+					false, target.via());
 			return byName ? empty.boundByName(method) : empty;
 		}
 		List<RoutineMetadata> routines = new ArrayList<>(listing.get().versions().values().stream()
-				.map(arguments -> new RoutineMetadata(target.owner(), target.packageName(), routine, arguments, false))
+				.map(arguments -> new RoutineMetadata(target.owner(), target.packageName(), routine, arguments, false,
+						target.via()))
 				.toList());
 		// a procedure without arguments does not show up in ALL_ARGUMENTS, not even as one version of an overload
 		if (listing.get().counted() > routines.size()) {
-			routines.add(new RoutineMetadata(target.owner(), target.packageName(), routine, List.of(), false));
+			routines.add(new RoutineMetadata(target.owner(), target.packageName(), routine, List.of(), false,
+					target.via()));
 		}
 		if (byName) {
 			return chooseByName(routines, method, converters);
@@ -374,7 +390,7 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 			throw new PlsqlMappingException(qualifiedName() + " requires " + missing
 					+ ", which has no DEFAULT, and the method declares no parameter for it. Parameters: " + params);
 		}
-		return new RoutineMetadata(schema, packageName, routineName, bound, true);
+		return new RoutineMetadata(schema, packageName, routineName, bound, true, via);
 	}
 
 	/** The Oracle name: the one from {@link PlsqlParam}, or the Java name in SNAKE_CASE, like the method's. */
@@ -525,7 +541,12 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 		}
 	}
 
-	private record ObjectName(String owner, String name) {
+	/** An object's real owner and name, and {@code via}, the synonym it was named through, or {@code null}. */
+	private record ObjectName(String owner, String name, String via) {
+
+		ObjectName(String owner, String name) {
+			this(owner, name, null);
+		}
 	}
 
 	/**
@@ -547,7 +568,7 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 			java.util.Collection<String> routineNames) {
 		Map<String, Target> targets = new LinkedHashMap<>();
 		resolveAll(dictionary, names, schema, routineNames, true)
-				.forEach((routine, at) -> targets.put(routine, new Target(at.owner(), null, at.name())));
+				.forEach((routine, at) -> targets.put(routine, new Target(at.owner(), null, at.name(), at.via())));
 		return targets;
 	}
 
@@ -582,9 +603,16 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 			// quoted, so that Oracle takes each name as the library normalized it, and the schema too when declared
 			List<String> quoted = chunk.stream()
 					.map(n -> schema != null ? quote(schema) + "." + quote(n) : quote(n)).toList();
-			List<Dictionary.Resolution> resolutions = dictionary.resolve(quoted);
+			Dictionary.Resolutions resolutions = dictionary.resolve(quoted);
+			names.currentSchema = resolutions.currentSchema();
+			// in the schema declared, or else in the one the session resolved it in: another owner or another name is
+			// a synonym's target, and the call goes through the synonym, as the interface named it
+			String in = schema != null ? schema : resolutions.currentSchema();
 			for (int k = 0; k < chunk.size(); k++) {
-				ObjectName at = resolved(resolutions.get(k), standalone);
+				ObjectName at = resolved(resolutions.each().get(k), standalone);
+				if (at != null && !(at.owner().equals(in) && at.name().equals(chunk.get(k)))) {
+					at = new ObjectName(at.owner(), at.name(), quoted.get(k));
+				}
 				if (at != null) {
 					found.put(chunk.get(k), at);
 					names.found.put(new Names.Key(schema, chunk.get(k), standalone), at);
@@ -694,7 +722,23 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 
 	/** For the call: a name created in quotes, such as {@code "fixtureLowercase"}, only matches in quotes. */
 	private String callName() {
+		if (via != null) {
+			return packageName == null ? via : via + "." + quoted(routineName);
+		}
 		return quoted(schema) + "." + (packageName == null ? "" : quoted(packageName) + ".") + quoted(routineName);
+	}
+
+	/**
+	 * When the synonym this routine is called through points elsewhere than it did for {@code before}, which says so:
+	 * {@code SVC now points to APP.SVC_GREEN, not APP.SVC_BLUE}; empty otherwise.
+	 */
+	public java.util.Optional<String> repointedFrom(RoutineMetadata before) {
+		String now = schema + "." + (packageName != null ? packageName : routineName);
+		String then = before.schema() + "." + (before.packageName() != null ? before.packageName() : before.routineName());
+		if (via == null || !via.equals(before.via()) || now.equals(then)) {
+			return java.util.Optional.empty();
+		}
+		return java.util.Optional.of(via.replace("\"", "") + " now points to " + now + ", not " + then);
 	}
 
 	/**

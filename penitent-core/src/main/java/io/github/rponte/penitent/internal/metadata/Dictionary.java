@@ -127,10 +127,15 @@ public final class Dictionary {
 	 * which follows synonyms, of synonyms too, in Oracle's own order, in the session's {@code current_schema} and
 	 * edition, with the caller's privileges. Each name in a block of its own, so that one that does not resolve does
 	 * not stop the others; the answers come back as {@code OUT} binds, never as text to parse. The names go as
-	 * PL/SQL would take them: quoted, to be taken as they are.
+	 * PL/SQL would take them: quoted, to be taken as they are. The session's {@code current_schema} comes back with
+	 * them, in the same round trip, as the schema an unqualified name resolved in.
 	 */
-	public List<Resolution> resolve(List<String> names) {
+	public Resolutions resolve(List<String> names) {
 		return resolve(names, PLSQL);
+	}
+
+	/** What {@link #resolve} said of each name, in order, and the {@code current_schema} they resolved in. */
+	public record Resolutions(List<Resolution> each, String currentSchema) {
 	}
 
 	/** {@code NAME_RESOLVE}'s contexts: a table or a view, PL/SQL, a type. */
@@ -139,7 +144,7 @@ public final class Dictionary {
 	private static final int TYPE = 7;
 
 	/** Each of {@code names}, resolved in {@code context}, in one round trip. */
-	private List<Resolution> resolve(List<String> names, int context) {
+	private Resolutions resolve(List<String> names, int context) {
 		StringBuilder block = new StringBuilder("begin\n");
 		for (int i = 0; i < names.size(); i++) {
 			block.append("""
@@ -150,7 +155,8 @@ public final class Dictionary {
 					  end;
 					""");
 		}
-		String sql = block.append("end;").toString().replace(":context", String.valueOf(context));
+		String sql = block.append("  ? := sys_context('userenv', 'current_schema');\nend;").toString()
+				.replace(":context", String.valueOf(context));
 		try (CallableStatement statement = connection.prepareCall(sql)) {
 			for (int i = 0; i < names.size(); i++) {
 				int first = 1 + i * BINDS_PER_NAME;
@@ -163,6 +169,8 @@ public final class Dictionary {
 				statement.registerOutParameter(first + 7, Types.NUMERIC);
 				statement.registerOutParameter(first + 8, Types.VARCHAR);
 			}
+			int currentSchema = 1 + names.size() * BINDS_PER_NAME;
+			statement.registerOutParameter(currentSchema, Types.VARCHAR);
 			statement.execute();
 			List<Resolution> resolutions = new ArrayList<>();
 			for (int i = 0; i < names.size(); i++) {
@@ -179,7 +187,7 @@ public final class Dictionary {
 								statement.getString(first + 3), statement.getString(first + 4),
 								statement.getInt(first + 5)));
 			}
-			return resolutions;
+			return new Resolutions(resolutions, statement.getString(currentSchema));
 		} catch (SQLException e) {
 			throw new SqlFailure(sql, e, PlsqlFailure.Phase.DICTIONARY);
 		} catch (io.github.rponte.penitent.internal.driver.DriverFailure e) {
@@ -211,7 +219,7 @@ public final class Dictionary {
 		List<String> kinds = List.of(types);
 		int context = kinds.contains("TYPE") ? TYPE : kinds.contains("PACKAGE") ? PLSQL : TABLE;
 		String quoted = schemaNamed ? '"' + owner + "\".\"" + name + '"' : '"' + name + '"';
-		Resolution resolution = resolve(List.of(quoted), context).get(0);
+		Resolution resolution = resolve(List.of(quoted), context).each().get(0);
 		if (!resolution.resolved() || resolution.dblink() != null || !kinds.contains(kindOf(resolution.type()))) {
 			return java.util.Optional.empty();
 		}
