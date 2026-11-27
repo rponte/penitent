@@ -619,6 +619,21 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 		return '"' + identifier + '"';
 	}
 
+	/**
+	 * Fails if {@code name} is there, but INVALID (#184, A2): one that failed to compile has no rows in
+	 * {@code ALL_ARGUMENTS} nor in {@code ALL_PROCEDURES}, and keeps none once what it needs is back, until it
+	 * compiles; but a proxy that cannot read it does not call it, so Oracle never compiles it. Penitent does not compile
+	 * it either, since it does not change the database: it says so, and how.
+	 */
+	private static void requireCompiled(Dictionary dictionary, String what, String owner, String name,
+			String... types) {
+		dictionary.statusOf(owner, name, types).filter(Dictionary.ObjectStatus::isInvalid).ifPresent(status -> {
+			throw new PlsqlMappingException(what + " " + owner + "." + name + " is INVALID, and what it takes and"
+					+ " returns cannot be read until it compiles: compile it, as ALTER " + status.type() + " " + owner
+					+ "." + name + " COMPILE, and its errors, if any, are in ALL_ERRORS");
+		});
+	}
+
 	private static void requireRoutineExists(Dictionary dictionary, ObjectName target, String routineName) {
 		String owner = target.owner();
 		String packageName = target.name();
@@ -626,6 +641,7 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 			return;
 		}
 		if (packageName == null) {
+			requireCompiled(dictionary, "standalone routine", owner, routineName, "FUNCTION", "PROCEDURE");
 			throw new PlsqlMappingException("standalone routine " + owner + "." + routineName
 					+ " does not exist or is not visible to this user (@PlsqlSchema maps the functions and"
 					+ " procedures outside a package)");
@@ -633,6 +649,7 @@ public record RoutineMetadata(String schema, String packageName, String routineN
 		List<String> available = dictionary.routinesOf(owner, packageName);
 
 		if (available.isEmpty()) {
+			requireCompiled(dictionary, "package", owner, packageName, "PACKAGE");
 			throw new PlsqlMappingException("package " + owner + "." + packageName
 					+ " does not exist or is not visible to this user");
 		}

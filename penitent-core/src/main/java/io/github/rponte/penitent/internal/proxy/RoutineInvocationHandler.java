@@ -35,6 +35,22 @@ public final class RoutineInvocationHandler implements InvocationHandler {
 	private final Class<?> type;
 	private final Connections connections;
 	private final PlsqlExceptionTranslator translator;
+	/**
+	 * {@code ORA-21700: object does not exist or is marked for deletion}: the session's object of a type the call sent
+	 * is gone, as when the type was replaced in the database with {@code FORCE} since this proxy described it (#184,
+	 * A3). Not the routine's error; the next call, its types read again, works.
+	 */
+	private static final int OBJECT_GONE = 21700;
+
+	/** {@code failure}, saying what {@code ORA-21700} most likely means, with its code and cause kept. */
+	private static PlsqlFailure objectGone(PlsqlFailure failure) {
+		java.sql.SQLException cause = failure.cause();
+		return new PlsqlFailure(failure.sql(), new java.sql.SQLException(cause.getMessage() + "\nA type this call uses"
+				+ " was most likely replaced in the database since this proxy described it, as CREATE OR REPLACE TYPE"
+				+ " ... FORCE does: the session no longer has its object. This proxy reads its types again on the next"
+				+ " call.", cause.getSQLState(), cause.getErrorCode(), cause), failure.phase());
+	}
+
 	/** The proxy's types, which a value of another shape clears (#183). */
 	private final TypeCache types;
 	private final RoutineCall routines;
@@ -121,6 +137,10 @@ public final class RoutineInvocationHandler implements InvocationHandler {
 			if (e.failure().cause() instanceof StructShapeMismatch) {
 				// a value came back in a shape the proxy's types do not describe: the next call reads them again (#183)
 				types.clear();
+			}
+			if (e.failure().cause().getErrorCode() == OBJECT_GONE) {
+				types.clear();
+				throw translator.translate(objectGone(e.failure()));
 			}
 			throw translator.translate(e.failure());
 		} catch (SQLException e) {
