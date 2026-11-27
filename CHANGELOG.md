@@ -8,6 +8,12 @@ All notable changes to this project are listed here. The format follows
 
 ### Changed
 
+- A block's `@PlsqlType` and `resultType` are resolved by Oracle itself, with `DBMS_UTILITY.NAME_RESOLVE`, as the
+  routines' names are ([#174](https://github.com/rponte/penitent/issues/174)), instead of a loop of `ALL_OBJECTS`
+  and `ALL_SYNONYMS`. A type through a synonym goes from 6 dictionary queries to 4 on the block's first call, and
+  through a synonym of a synonym from 8 to 4; on 21c, where `ALL_SYNONYMS` costs about 50 ms a query, from about 50
+  ms and 100 ms to under a millisecond. Penitent no longer reads `ALL_SYNONYMS`.
+
 - Each type a proxy uses is described once, whole, and the validation of a method, the collections of its
   parameters and the bindings of their values read that description, instead of each asking the dictionary again
   ([#169](https://github.com/rponte/penitent/issues/169)). The first call of a routine that takes a collection of
