@@ -161,6 +161,14 @@ the old types in each connection, or the session had state in a package that was
 - **`PLS-00306` alone, the same on every call:** the routine raises it itself, from its own dynamic PL/SQL, and its
   signature did not change. Penitent checks that by reading the routine again, at most once a second, and leaves the
   error as Oracle says it.
+- **`... is INVALID, and what it takes and returns cannot be read until it compiles`:** a migration left the package,
+  or the standalone routine, invalid, and a compilation of it failed, as when a type it uses was dropped and created
+  again. Oracle then lists none of its routines, so Penitent cannot read them, and a proxy that cannot read them does
+  not call them, which is what would make Oracle compile them. Compile it, as the message says, and read its errors
+  in `ALL_ERRORS`. On 19c, Penitent's lookup of the name compiles it already, and the call works.
+- **`ORA-21700: object does not exist or is marked for deletion`, with "A type this call uses was most likely
+  replaced":** a type was replaced with `CREATE OR REPLACE TYPE ... FORCE` since the proxy described it. The call
+  fails once; the next one reads the types again and works.
 - **`ORA-17049`, with "The driver keeps, in each connection, a type as it was when the connection first used it":**
   a type changed, and the connection still has the old one. Renew the pool's connections, or restart the
   application.
