@@ -485,7 +485,24 @@ public final class TypeBinding {
 
 	/** {@link Struct} → Java. */
 	public Object fromStruct(Struct struct, Connection connection) throws SQLException {
-		return instantiate(attributesOf(struct, connection), connection);
+		Object[] values = attributesOf(struct, connection);
+		// read by the binding's positions, a value of another shape would run past its end, or fill the wrong properties;
+		// a subtype, as a CHILD_T returned as its BASE_T, has more, after its supertype's, which are the ones read
+		if (values.length < attributes.size() || values.length > attributes.size() && isOfThisType(struct)) {
+			throw new StructShapeMismatch(oracleTypeName, values.length,
+					attributes.stream().map(Attribute::oracleName).toList());
+		}
+		return instantiate(values, connection);
+	}
+
+	/**
+	 * Whether {@code struct} is of this binding's type itself, not of a subtype: by its name, without quotes. A name the
+	 * driver spells otherwise, as a {@code %ROWTYPE}'s may be, reads as a subtype, whose attributes beyond this type's
+	 * are left: the check stays on the side of reading, never of refusing a value it cannot tell.
+	 */
+	private boolean isOfThisType(Struct struct) throws SQLException {
+		String name = struct.getSQLTypeName();
+		return name != null && name.replace("\"", "").equals(oracleTypeName.replace("\"", ""));
 	}
 
 	/**

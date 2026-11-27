@@ -14,6 +14,7 @@ import io.github.rponte.penitent.convert.PlsqlConverters;
 import io.github.rponte.penitent.exception.PlsqlExceptionTranslator;
 import io.github.rponte.penitent.exception.PlsqlFailure;
 import io.github.rponte.penitent.exception.PlsqlMappingException;
+import io.github.rponte.penitent.internal.binding.StructShapeMismatch;
 import io.github.rponte.penitent.internal.binding.TemporaryLobs;
 import io.github.rponte.penitent.internal.driver.DriverBoundary;
 import io.github.rponte.penitent.internal.driver.DriverFailure;
@@ -34,6 +35,8 @@ public final class RoutineInvocationHandler implements InvocationHandler {
 	private final Class<?> type;
 	private final Connections connections;
 	private final PlsqlExceptionTranslator translator;
+	/** The proxy's types, which a value of another shape clears (#183). */
+	private final TypeCache types;
 	private final RoutineCall routines;
 	private final BlockCall blocks;
 	private final ValueEncoder encoder;
@@ -44,7 +47,7 @@ public final class RoutineInvocationHandler implements InvocationHandler {
 		this.type = type;
 		this.connections = new Connections.FromDataSource(dataSource);
 		this.translator = translator;
-		TypeCache types = new TypeCache(converters);
+		this.types = new TypeCache(converters);
 		this.encoder = new ValueEncoder(types);
 		ValueDecoder decoder = new ValueDecoder(types);
 		this.routines = new RoutineCall(type, defaultBind, types, encoder, decoder);
@@ -58,6 +61,7 @@ public final class RoutineInvocationHandler implements InvocationHandler {
 		this.routines = original.routines;
 		this.blocks = original.blocks;
 		this.encoder = original.encoder;
+		this.types = original.types;
 	}
 
 	public Class<?> type() {
@@ -114,6 +118,10 @@ public final class RoutineInvocationHandler implements InvocationHandler {
 		} catch (DriverFailure e) {
 			throw driverFailure(method, e);
 		} catch (SqlFailure e) {
+			if (e.failure().cause() instanceof StructShapeMismatch) {
+				// a value came back in a shape the proxy's types do not describe: the next call reads them again (#183)
+				types.clear();
+			}
 			throw translator.translate(e.failure());
 		} catch (SQLException e) {
 			throw translator.translate(new PlsqlFailure(null, e, PlsqlFailure.Phase.CONNECTION));
