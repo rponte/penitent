@@ -315,6 +315,7 @@ Where the PL/SQL guarantees the value is never `null`, driver 23 works as it is.
 | Overload with more than one version fitting the method and none more restrictive in every parameter | Not supported, with a clear error. For OBJECT, `@PlsqlType` breaks the tie |
 | Interface that inherits methods from another | Validated |
 | Package accessed through a private, public or chained synonym | Validated |
+| A routine named through a synonym is called through it, and described at its target: a private or public synonym, of a package or a standalone function, with the schema declared or not, pointed to another package while the proxy exists, goes there on the next call, and on once the old one is dropped; to a package of another signature, or with a RECORD of its own, the call fails once, saying where the synonym points now, and the next one works | Validated |
 | Package and types in another schema | Validated |
 | Package with a quoted name (lower case), with `@PlsqlPackage("\"name\"")`; unquoted, the name is read in upper case | Validated |
 | Standalone function and procedure, with `@PlsqlSchema`: by position and `BY_NAME`, with `OUT`, omitted `DEFAULT`, no parameters, through a synonym, with an explicit schema, and next to `@PlsqlBlock` methods | Validated |

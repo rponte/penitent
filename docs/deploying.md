@@ -11,6 +11,7 @@ parameter, a table gets a column. Most changes need nothing from you. In short:
 | the order of a routine's parameters | right while the application runs; **after a restart, binding by position sends values to other parameters, with no error** | bind [by name](routines.md#by-position-or-by-name) where the order may change |
 | an object type | the next call says what changed | update the Java type, and renew the pool's connections, [as below](#recovering-without-a-restart) |
 | the table of a `%ROWTYPE` | the database closes the connection, which the pool replaces | update the Java type if a column was added |
+| the package a synonym points to, as a blue/green deploy does | the next call goes to the new one | nothing, if both packages have the same signatures |
 
 ## Before and after a deploy
 
@@ -116,6 +117,23 @@ Only new connections read the new type: the database session already sees the ne
 old one in a cache of its own, which its public methods do not clear. Restart the application, or renew the pool's
 connections, [as below](#recovering-without-a-restart). Then also update the Java record or JavaBean, since a
 composite has to cover every attribute.
+
+### A synonym pointed elsewhere
+
+A blue/green deploy can install the new version of a package beside the old one, and switch the application to it by
+pointing a synonym there, as `CREATE OR REPLACE SYNONYM orders_pkg FOR orders_pkg_v2`. Penitent calls a routine
+through the synonym the interface names, as PL/SQL calls it, so the proxy's next call goes to the new package, without
+a restart, and keeps working once the old one is dropped. It describes the routine, and binds its types, at the
+synonym's target, since the dictionary only knows real names.
+
+| The new package | What the next call does |
+|---|---|
+| has the same signatures | runs in the new package |
+| changed a signature | fails once, without running, saying so and where the synonym points now: `ORDERS_PKG now points to SALES.ORDERS_PKG_V2, not SALES.ORDERS_PKG_V1`; the one after uses the new signature, as for [a signature](#the-signature) |
+| takes a RECORD of its own | fails once the same way, since a RECORD of the old package is not one of the new: the one after works |
+
+A synonym with no schema declared resolves in the session's schema, as PL/SQL's does: one with
+`ALTER SESSION SET CURRENT_SCHEMA` may reach another object.
 
 ## Recovering without a restart
 
