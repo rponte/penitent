@@ -95,6 +95,14 @@ All notable changes to this project are listed here. The format follows
 
 ### Fixed
 
+- [Deploying](docs/deploying.md) said what the measures of [#184](https://github.com/rponte/penitent/issues/184)
+  contradict or add to. A column added to the table of a `%ROWTYPE` did not only close the connection that read it
+  again: that read can break the `%ROWTYPE` for every session after it, until the shared pool is cleared, or, with
+  driver 19, have new sessions read its old shape without an error (B1). A package spec that changed fails every call
+  until its body is compiled again, even without state, and the DDL that replaces a package waits for the calls in
+  progress while the calls after it wait behind it (C2). It now says so, with what to do, and how to compile at the end
+  of a migration what it left invalid (A2); Troubleshooting points there.
+
 - A package, or a standalone routine, left INVALID by a compilation that failed, which then lists none of its routines,
   is refused saying it is INVALID and how to compile it, `ALTER PACKAGE ... COMPILE`, not that it does not exist
   ([#184](https://github.com/rponte/penitent/issues/184), A2). A new proxy, not calling it, never made Oracle compile

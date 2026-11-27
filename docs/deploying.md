@@ -5,12 +5,14 @@ parameter, a table gets a column. Most changes need nothing from you. In short:
 
 | The deploy changes | What the calls do | What to do |
 |---|---|---|
-| a package body | pick it up at once | nothing; a package that keeps state between calls fails each connection once with `ORA-04068` |
+| a package body | pick it up once the DDL runs, which waits for the calls in progress and makes the new ones wait behind it | nothing; a package that keeps state between calls fails each connection once with `ORA-04068` |
+| a package spec, changed | wait behind the DDL, then **fail on every call until the body is compiled again** | deploy the spec and the body together, [as below](#the-spec-and-the-ddl-itself) |
+| a package, or a routine, left INVALID by a compilation that failed | a new proxy refuses it, saying it is INVALID | compile what the migration left invalid, [at its end](#a-compilation-that-fails) |
 | a routine's signature, in a way the method no longer fits | the next call says what changed | update the method |
 | a routine's signature, in a way the method still fits, as a renamed parameter | the next call says so, without running, and the one after works | nothing |
 | the order of a routine's parameters | right while the application runs; **after a restart, binding by position sends values to other parameters, with no error** | bind [by name](routines.md#by-position-or-by-name) where the order may change |
 | an object type | the next call says what changed | update the Java type, and renew the pool's connections, [as below](#recovering-without-a-restart) |
-| the table of a `%ROWTYPE` | the database closes the connection, which the pool replaces | update the Java type if a column was added |
+| the table of a `%ROWTYPE`, a column added | **a session that reads the `%ROWTYPE` again can break it for every session after it**, until a DBA clears the shared pool | read [below](#a-composite-type) before adding a column under a running application |
 | the package a synonym points to, as a blue/green deploy does | the next call goes to the new one | nothing, if both packages have the same signatures |
 
 ## Before and after a deploy
@@ -18,7 +20,9 @@ parameter, a table gets a column. Most changes need nothing from you. In short:
 - **Before:** prefer packages without state, and bind by name where the order of a routine's parameters could
   change.
 - **During:** a change of signature or type is a change of the application's contract with the database: deploy it
-  with the application, not under it.
+  with the application, not under it. Replace a package's spec and body in the same script, at a quiet moment, since
+  the DDL waits for every call in progress and the calls after it wait behind it.
+- **At the end of the migration:** compile what it left invalid, [as below](#a-compilation-that-fails).
 - **After:** update the methods and types that no longer fit, as the calls' errors say, and renew the pool's
   connections, or restart the application, when a type changed. Run
   [validation](validation.md) at startup, so that a method that no longer matches fails then, with a clear message,
@@ -106,12 +110,91 @@ the order the Java method was written for is gone: measured with `f(p_a, p_b)` c
 - **Treat a parameter's type change as a change of the routine's contract**, as you would in Java, and review the
   callers.
 
+### The spec, and the DDL itself
+
+The DDL that replaces a package, its body or its spec, needs the package to itself: it waits for every call in
+progress, and every call that starts meanwhile waits behind it. Measured on every version supported, three runs each,
+with a call taking 4 s, the DDL started 1 s into it, and another call 0.5 s later, a package without state:
+
+| DDL | The DDL | A call started meanwhile | The next call |
+|---|---|---|---|
+| the body replaced | waits **about 3 s**, until the long call ends | waits **about 2.5 s**, behind the DDL, then runs the new body | works |
+| the spec replaced, identical | about 6 ms, with no wait: Oracle sees the same text | runs | works |
+| the spec changed, a function added | waits **about 3 s** | waits about 2.5 s, then fails: `ORA-04068` or `ORA-04065`, or `ORA-04063: package body ... has errors` | **`ORA-04063`, until the new body is compiled** |
+
+A spec that changed invalidates its body, even in a package without state, so the package fails every call until the
+body is compiled again. Penitent can do nothing about either: it is Oracle's locking, and the calls fail inside the
+database. To keep the window short:
+
+- **replace the spec and the body in the same script,** the body right after the spec, and leave the spec alone when
+  it does not change: an identical one costs nothing;
+- **deploy at a quiet moment,** since every call to the package waits for the longest one in progress: with long
+  calls, the wait can take every connection of the pool;
+- **give the calls a timeout,** such as the pool's or the transaction's, so that a wait behind the DDL fails rather
+  than holds a connection for good;
+- **use edition-based redefinition** to avoid it altogether: the new code is compiled in a new edition, while the
+  sessions keep running the old one.
+
+### A compilation that fails
+
+A migration can leave a package, or a standalone routine, INVALID: when a type it uses is dropped and created again,
+say, and a compilation runs in between. Oracle then lists none of its routines in the dictionary, so a new proxy,
+which reads them there, cannot call it, and, not calling it, never makes Oracle compile it again. It says so:
+
+<!-- snippet: untested -->
+```text
+plus(BigDecimal): package APP.ORDERS_PKG is INVALID, and what it takes and returns cannot be read until it compiles:
+compile it, as ALTER PACKAGE APP.ORDERS_PKG COMPILE, or have each migration compile what it left invalid, as
+DBMS_UTILITY.COMPILE_SCHEMA does; its errors, if any, are in ALL_ERRORS
+```
+
+On Oracle 19c, Penitent's lookup of the name compiles it already, and the call works: do not rely on it. Have the
+migration, which changed the database, compile what it left invalid, at its end; with Flyway, in an `afterMigrate`
+callback:
+
+<!-- snippet: untested -->
+```sql
+BEGIN
+  DBMS_UTILITY.COMPILE_SCHEMA(schema => USER, compile_all => FALSE);  -- only what is invalid
+END;
+```
+
+`UTL_RECOMP` does the same in parallel, in the order of the dependencies. Penitent does not compile anything itself:
+it does not change the database, and a compilation started by a call would make the other calls of the package wait,
+as above, and discard a package's state in every session that used it.
+
 ### A composite type
 
 | Change | What the next call does |
 |---|---|
 | an object type gains an attribute, with `ALTER TYPE ... ADD ATTRIBUTE ... CASCADE` | the database refuses the value in the old shape: `ORA-03101: invalid input data`, or, on 21c, an internal `ORA-00600 [kope2_readstr232]` that also closes the connection. Penitent reads the type again and, if the Java type no longer covers it, says so: `a type of ... changed since this proxy described it: Pair does not cover attribute(s) of PAIR_T: [C NUMBER]`, at that call or, on 21c, at the next one. Once the Java type covers it, the connections that used the old type still fail, with `ORA-17049: Inconsistent Java and SQL object types`, because the driver keeps the old type in each connection: Penitent keeps that error, with its code, and adds what to do |
-| the table of a `%ROWTYPE` gains a column | **the database closes the connection**: `ORA-03138: connection terminated due to security policy violation`, or, with driver 19, `No more data to read from socket` |
+| the table of a `%ROWTYPE` gains a column | **the database closes the connection** that reads the `%ROWTYPE` again: `ORA-03138: connection terminated due to security policy violation`, `ORA-03113`, or, with driver 19, `No more data to read from socket`; and that read can break it for every session after it, as below |
+
+#### A column added to the table of a `%ROWTYPE`
+
+**This one can take every session down.** Measured with plain JDBC, without Penitent, on every version supported: a
+session reads a routine's `%ROWTYPE` as a `Struct`, a column is added to its table, and **the same session reads it
+again**, as the old version of an application does in a rolling deploy. From then on:
+
+| | The session that read it again | Every **new** connection that reads it | What undoes it |
+|---|---|---|---|
+| 23ai, driver 23 | `ORA-03113`, its connection closed | **`ORA-03113`, its connection closed** | only `ALTER SYSTEM FLUSH SHARED_POOL`; not `ALTER PACKAGE ... COMPILE`, nor the package created again |
+| 21c, driver 23 | `ORA-03113` | **`ORA-03113`** | only `ALTER SYSTEM FLUSH SHARED_POOL` |
+| 19c, driver 23 | `ORA-03113` | **`ORA-03113`** | `ALTER PACKAGE ... COMPILE`; on an Autonomous Database, `FLUSH SHARED_POOL` is refused, `ORA-01031` |
+| 23ai, driver 19 | `No more data to read from socket` | **the old shape, without the new column, and no error** | only `ALTER SYSTEM FLUSH SHARED_POOL` |
+
+Without that second read, everything works, on every version: new connections read the new column, and the package
+compiles again on its first call. The database seems to keep the description of the type behind the `%ROWTYPE` in its
+shared pool, left stale by the read: that is inferred, not confirmed by Oracle. With driver 19, the old shape is a
+value with fewer attributes than a proxy that described the new type expects, and Penitent refuses it, saying so,
+rather than read it into the wrong properties. The details are in
+[#184](https://github.com/rponte/penitent/issues/184), B1.
+
+So, until a safer order is measured, add a column to the table of a `%ROWTYPE` that a routine takes or returns only
+while no running version of the application reads it, and be ready, if one does, to clear the shared pool, at a cost
+to the whole database, or, on 19c, to compile the package.
+
+#### What the driver keeps
 
 Only new connections read the new type: the database session already sees the new one, but the driver keeps the
 old one in a cache of its own, which its public methods do not clear. Restart the application, or renew the pool's

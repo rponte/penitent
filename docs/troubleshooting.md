@@ -166,7 +166,8 @@ the old types in each connection, or the session had state in a package that was
   again. Oracle then lists none of its routines, so Penitent cannot read them, and a proxy that cannot read them does
   not call them, which is what would make Oracle compile them. Compile it, as the message says, and read its errors
   in `ALL_ERRORS`; better, have each migration compile what it left invalid, as
-  `DBMS_UTILITY.COMPILE_SCHEMA(schema => USER, compile_all => FALSE)` does in a Flyway `afterMigrate` callback.
+  `DBMS_UTILITY.COMPILE_SCHEMA(schema => USER, compile_all => FALSE)` does in a Flyway `afterMigrate` callback, as in
+  [A compilation that fails](deploying.md#a-compilation-that-fails).
   Penitent does not compile it itself: it does not change the database. On 19c, Penitent's lookup of the name
   compiles it already, and the call works.
 - **`ORA-21700: object does not exist or is marked for deletion`, with "A type this call uses was most likely
@@ -175,8 +176,16 @@ the old types in each connection, or the session had state in a package that was
 - **`ORA-17049`, with "The driver keeps, in each connection, a type as it was when the connection first used it":**
   a type changed, and the connection still has the old one. Renew the pool's connections, or restart the
   application.
+- **`ORA-04063: package body ... has errors`, or `ORA-04065`, on every call, after a deploy:** the package's spec
+  changed, and its body was not compiled again yet. The calls fail until it is: deploy the spec and the body together,
+  as in [The spec, and the DDL itself](deploying.md#the-spec-and-the-ddl-itself).
+- **Calls that wait, during a deploy:** the DDL that replaces a package waits for the calls in progress, and the calls
+  after it wait behind it. See [The spec, and the DDL itself](deploying.md#the-spec-and-the-ddl-itself).
 - **`ORA-03138`, `ORA-03113` or "No more data to read from socket"** on a call with a `%ROWTYPE`: the database closed
-  the connection, after the table changed. The pool replaces it; update the Java type if a column was added.
+  the connection, after the table changed. The pool replaces it; update the Java type if a column was added. **If new
+  connections fail the same way**, a session read the `%ROWTYPE` again past a column added, and the database keeps it
+  broken for every session, until a DBA runs `ALTER SYSTEM FLUSH SHARED_POOL`, or, on 19c, compiles the package: see
+  [A column added to the table of a `%ROWTYPE`](deploying.md#a-column-added-to-the-table-of-a-rowtype).
 
 What each change does, and how to avoid the errors, is in
 [Changing PL/SQL while the application runs](deploying.md).
