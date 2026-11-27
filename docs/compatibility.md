@@ -440,8 +440,9 @@ Where the PL/SQL guarantees the value is never `null`, driver 23 works as it is.
 | `PlsqlPackages.validate`: every mismatch in one exception, nested composites and collection elements, cursor not in a `List`, block placeholders, database failure translated | Validated |
 | `PlsqlPackages.validate` finds without calling the same mismatches that the calls find | Validated |
 | After `validate`, calls read nothing from the dictionary | Validated |
-| Dictionary queries on the first call: 2 for a scalar, 3 for an OBJECT, 6 for a collection of OBJECT, 11 for nested composites; none after | Validated |
+| Dictionary queries on the first call: 2 for a scalar, 3 for an OBJECT, 5 for a collection of OBJECT, 6 for nested composites; none after | Validated |
 | Each type a proxy uses described once, whole, and read by the validation, the collections and the bindings alike; a problem deep in a type still shows when that type is first used | Validated |
+| The types a type refers to read ahead, a level at a time, each kind in a query per owner and package; a type read ahead that is not there, or a failure reading ahead, raises nothing until the type is asked for | Validated |
 | Validating an interface: a few dictionary queries, whatever its number of methods, plus its composite types: 4 for 38 methods | Validated |
 | A package interface's signatures read in one query, on the first call of any method; each method described and checked on its own first call, so one that does not fit fails only when called | Validated |
 | Signatures of more than 1000 routines read in chunks of 1000, an `IN` list's limit | Validated |

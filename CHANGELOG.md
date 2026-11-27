@@ -14,6 +14,13 @@ All notable changes to this project are listed here. The format follows
   OBJECT goes from 9 dictionary queries to 6, a collection of collections from 11 to 7, and validating an interface
   of 38 methods from 8 to 4. A type is still read when it is first used, so a problem deep in one shows when it did.
 
+- The types a type refers to, through its attributes or its element, are read ahead, a level at a time, each kind in
+  a query per owner and package, and a collection's element, its element's type name and its `INDEX BY` in one query
+  ([#169](https://github.com/rponte/penitent/issues/169)). The first call of a routine that takes a nested OBJECT
+  goes from 11 dictionary queries to 6, a RECORD with a RECORD, an OBJECT and collections from 14 to 9, and a
+  collection of OBJECT from 6 to 5. Reading ahead raises nothing: a type read ahead that is not there, or a failure
+  reading ahead, shows only when the type is asked for, as before.
+
 - An attribute that is an object-relational `REF`, a pointer to a row of an object table, and a collection of `REF`s,
   are refused with a `PlsqlMappingException` that names them, by `validate` and by the call alike
   ([#125](https://github.com/rponte/penitent/issues/125)). They were read as the object they point to: `validate`
