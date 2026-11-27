@@ -349,6 +349,7 @@ Where the PL/SQL guarantees the value is never `null`, driver 23 works as it is.
 | Situation | Behavior | Status |
 |---|---|---|
 | Nonexistent routine, package or standalone routine, wrong arity, procedure × function | `PlsqlMappingException` saying what the database expects | Validated |
+| A package or standalone routine left INVALID by a failed compilation, which lists none of its routines: `PlsqlMappingException` saying it is INVALID and how to compile it, not that it does not exist; on 19c, resolving its name compiles it, and the call works | `PlsqlMappingException` | Validated |
 | Attribute without a property, mismatched `@PlsqlType`, duplicate Oracle name | `PlsqlMappingException` naming the problem | Validated |
 | Any mapping error of a method, in a call or in `validate` | The message starts with `method(types): `, once, and the detail does not repeat the method; the routines that exist are listed once each, overloads included | Validated |
 | `RAISE_APPLICATION_ERROR` | `PlsqlRoutineRaisedException` with Oracle's message in `getMessage()`, the unsigned number in `getCode()` and the text in `getReason()`, including multi-line text. The `SQLException` is kept as the cause | Validated |

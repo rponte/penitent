@@ -8,6 +8,13 @@ All notable changes to this project are listed here. The format follows
 
 ### Changed
 
+- `ORA-21700: object does not exist or is marked for deletion` is a `PlsqlExecutionException`, not a
+  `PlsqlRoutineRaisedException`, and says that a type the call uses was most likely replaced in the database, as
+  `CREATE OR REPLACE TYPE ... FORCE` does; the proxy reads its types again on the next call, which works
+  ([#184](https://github.com/rponte/penitent/issues/184), A3). It was taken for the routine's own error. **Upgrading:**
+  a routine that itself follows a `REF` to an object deleted, which raises the same code, now gives a
+  `PlsqlExecutionException` too: the object-relational `REF` is not mapped by Penitent (#125).
+
 - A block's `@PlsqlType` and `resultType` are resolved by Oracle itself, with `DBMS_UTILITY.NAME_RESOLVE`, as the
   routines' names are ([#174](https://github.com/rponte/penitent/issues/174)), instead of a loop of `ALL_OBJECTS`
   and `ALL_SYNONYMS`. A type through a synonym goes from 6 dictionary queries to 4 on the block's first call, and
@@ -80,6 +87,12 @@ All notable changes to this project are listed here. The format follows
   reads the logged SQL sees the names.
 
 ### Fixed
+
+- A package, or a standalone routine, left INVALID by a compilation that failed, which then lists none of its routines,
+  is refused saying it is INVALID and how to compile it, `ALTER PACKAGE ... COMPILE`, not that it does not exist
+  ([#184](https://github.com/rponte/penitent/issues/184), A2). A new proxy, not calling it, never made Oracle compile
+  it: an application started after such a migration refused it on every call, sending whoever read the message looking
+  for a package that exists. On 19c, Penitent's lookup of the name compiles it, and the call works.
 
 - A value of a composite that comes back with fewer attributes than the proxy described its type with, or more while
   of that type itself, is refused with a `PlsqlExecutionException` that names the type and both counts
