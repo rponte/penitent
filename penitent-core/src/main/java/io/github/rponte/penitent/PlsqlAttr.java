@@ -19,6 +19,11 @@ import java.lang.annotation.Target;
  *
  * <p>No name may be claimed by two properties of the same class; if it is, the library fails saying
  * which ones, instead of picking one.
+ *
+ * <p>On a JavaBean, it goes on the field, preferably, or on the getter or the setter, a superclass's too, in
+ * <b>one place only</b>: in two, even agreeing, the library fails naming them, since which one counts would be a
+ * rule of its own. A field is found by its property's name, so an annotated field that no getter reads by its name
+ * is refused too, rather than its annotation ignored.
  */
 @Retention(RUNTIME)
 @Target({ FIELD, METHOD, RECORD_COMPONENT })

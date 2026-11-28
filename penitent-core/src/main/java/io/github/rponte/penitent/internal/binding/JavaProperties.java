@@ -2,7 +2,9 @@ package io.github.rponte.penitent.internal.binding;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.AccessibleObject;
+import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.RecordComponent;
@@ -187,12 +189,85 @@ public final class JavaProperties {
 					return annotationOf(javaType, method, writer, propertyName, type);
 				}
 			};
+			requireOnePlace(javaType, propertyName, method, writer);
 			register(byName, javaType,
 					oracleNamesOf(annotationOf(javaType, method, writer, propertyName, PlsqlAttr.class),
 							propertyName),
 					property);
 		}
+		requireAnnotatedFieldsToBeProperties(javaType, readers.keySet());
 		return byName;
+	}
+
+	/**
+	 * Fails if an annotation of Penitent's is in more than one place of the property, the getter, the setter or the
+	 * field, even when they agree (#189): which one counts would be a rule of the library's, and two that disagree
+	 * would map the property otherwise than one of them says, without a word. One place, the field preferably.
+	 */
+	private static void requireOnePlace(Class<?> javaType, String propertyName, Method reader, Method writer) {
+		Field field = fieldOf(javaType, propertyName);
+		Map<Class<? extends Annotation>, List<String>> places = new LinkedHashMap<>();
+		for (AnnotatedElement place : new AnnotatedElement[] { field, reader, writer }) {
+			if (place == null) {
+				continue;
+			}
+			for (Annotation annotation : place.getAnnotations()) {
+				if (isPenitents(annotation)) {
+					places.computeIfAbsent(annotation.annotationType(), k -> new ArrayList<>()).add(placeName(place));
+				}
+			}
+		}
+		places.forEach((type, where) -> {
+			if (where.size() > 1) {
+				throw new PlsqlMappingException(javaType.getSimpleName() + "." + propertyName + " declares @"
+						+ type.getSimpleName() + " in more than one place: " + String.join(" and ", where)
+						+ "; keep it in one, the field preferably");
+			}
+		});
+	}
+
+	/**
+	 * Fails if a field carries an annotation of Penitent's, but is no property: no getter reads it by its name, as a
+	 * field {@code rua} behind {@code getStreet()} (#189). Penitent finds a property's field by the property's name,
+	 * so the annotation would be ignored, without a word.
+	 */
+	private static void requireAnnotatedFieldsToBeProperties(Class<?> javaType, java.util.Set<String> properties) {
+		for (Class<?> type = javaType; type != null && type != Object.class; type = type.getSuperclass()) {
+			for (Field field : type.getDeclaredFields()) {
+				if (java.lang.reflect.Modifier.isStatic(field.getModifiers()) || properties.contains(field.getName())) {
+					continue;
+				}
+				for (Annotation annotation : field.getAnnotations()) {
+					if (isPenitents(annotation)) {
+						throw new PlsqlMappingException(javaType.getSimpleName() + "." + field.getName()
+								+ " carries @" + annotation.annotationType().getSimpleName() + ", but is no property:"
+								+ " Penitent reads a property through its getter, and finds its field by the"
+								+ " property's name, which no getter of " + javaType.getSimpleName() + " has. Name"
+								+ " the field as its property, or annotate the getter");
+					}
+				}
+			}
+		}
+	}
+
+	private static boolean isPenitents(Annotation annotation) {
+		return annotation.annotationType().getPackageName().equals(PlsqlAttr.class.getPackageName());
+	}
+
+	private static String placeName(AnnotatedElement place) {
+		return place instanceof Field field ? "the field " + field.getName() : ((Method) place).getName() + "()";
+	}
+
+	/** The field named {@code propertyName}, declared by {@code javaType} or a superclass; or {@code null}. */
+	private static Field fieldOf(Class<?> javaType, String propertyName) {
+		for (Class<?> type = javaType; type != null && type != Object.class; type = type.getSuperclass()) {
+			try {
+				return type.getDeclaredField(propertyName);
+			} catch (NoSuchFieldException e) {
+				// not in this class: its superclass
+			}
+		}
+		return null;
 	}
 
 	/**
@@ -234,7 +309,10 @@ public final class JavaProperties {
 		}
 	}
 
-	/** The annotation may be on the getter, the setter or the field; we look in all three. */
+	/**
+	 * The annotation may be on the getter, the setter or the field, a superclass's too; in one of them only, which
+	 * {@link #requireOnePlace} makes sure of.
+	 */
 	static <A extends Annotation> A annotationOf(Class<?> javaType, Method reader, Method writer,
 			String propertyName, Class<A> annotationType) {
 		for (AccessibleObject candidate : new AccessibleObject[] { reader, writer }) {
@@ -242,11 +320,8 @@ public final class JavaProperties {
 				return candidate.getAnnotation(annotationType);
 			}
 		}
-		try {
-			return javaType.getDeclaredField(propertyName).getAnnotation(annotationType);
-		} catch (NoSuchFieldException e) {
-			return null;
-		}
+		Field field = fieldOf(javaType, propertyName);
+		return field == null ? null : field.getAnnotation(annotationType);
 	}
 
 	/**
