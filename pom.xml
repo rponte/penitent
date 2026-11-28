@@ -55,7 +55,7 @@
 			in this build, not the version of the database the tests connect to.
 		-->
 		<oracle.jdbc.artifact>ojdbc17</oracle.jdbc.artifact>
-		<spring-boot.version>4.1.2</spring-boot.version>
+		<spring-boot.version>4.2.0</spring-boot.version>
 	</properties>
 
 	<dependencyManagement>
