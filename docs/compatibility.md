@@ -198,8 +198,10 @@ Where the PL/SQL guarantees the value is never `null`, driver 23 works as it is.
 | OBJECT containing OBJECT and collections | Validated |
 | Mapping to `record` and to JavaBean, matched by attribute name | Validated |
 | JavaBean with inherited properties or extra properties | Validated |
+| A JavaBean's `@PlsqlAttr` on a field of a superclass | Validated |
 | JavaBean `boolean` and `Boolean` properties read through `isX()`, in a `VARCHAR2(1)` and a `NUMBER(1)`, both ways; `@PlsqlBoolean` on the field, the `isX()` getter or the setter | Validated |
 | JavaBean with both `isX()` and `getX()` for one property | Not supported, with a clear error |
+| A JavaBean's `@PlsqlAttr` or other annotation of Penitent's in two places of one property, the field, the getter or the setter, even agreeing; or on a field that no getter reads by its name | Not supported, with a clear error naming the places, or the field |
 | OBJECT inheritance (`UNDER`) | Validated |
 | `null` in place of a whole OBJECT | Validated |
 | `null` in place of a RECORD or `%ROWTYPE` | Validated: a RECORD is never null in PL/SQL, and comes back with null fields |
