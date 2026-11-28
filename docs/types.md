@@ -505,7 +505,11 @@ CustomerSummary summary(long id);
 - **JavaBeans** need a no-argument constructor and setters to be read. Inherited properties count. A `boolean` or
   `Boolean` property can be read through `isX()` as well as `getX()`, but not through both: they may answer
   differently, as a `boolean` and a `Boolean` that is `null`, so the library refuses the class rather than pick one.
-  `@PlsqlBoolean` and `@PlsqlAttr` go on the field, the getter or the setter.
+  `@PlsqlBoolean` and `@PlsqlAttr` go on the field, preferably, or on the getter or the setter, a superclass's
+  too: **in one place only**. The same annotation in two places, even agreeing, is an error, and so is an annotated
+  field that no getter reads by its name, as a field `rua` behind `getStreet()`: Penitent finds a property's field by
+  the property's name, and would ignore the annotation. Values are always read and written through the getter and
+  the setter, never through the field.
 - **Inheritance:** an OBJECT type created `UNDER` another works too.
 - **`null`:** a whole OBJECT can be `null`. A RECORD cannot be null in PL/SQL, so it comes back with null fields.
 - **`@PlsqlType("POSTAL_ADDRESS_T")`** on the class is optional for a routine, and must agree with the dictionary if

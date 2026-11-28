@@ -8,6 +8,15 @@ All notable changes to this project are listed here. The format follows
 
 ### Changed
 
+- A JavaBean's property declares itself in one place, with no ambiguity
+  ([#189](https://github.com/rponte/penitent/issues/189)). An annotation of Penitent's, as `@PlsqlAttr`, in two places
+  of the same property, the field, the getter or the setter, is an error naming them, even when they agree: the
+  getter's won, without a word, so a field and a getter that disagreed mapped the property against the field. A field
+  that carries one, but that no getter reads by its name, as a field `rua` behind `getStreet()`, is an error: its
+  annotation was ignored. And a field of a superclass is now found, so its `@PlsqlAttr` is honored: it was ignored,
+  and the class refused as not covering the attribute it named. **Upgrading:** keep each annotation in one place, the
+  field preferably, and put an annotation on the getter when its field has another name.
+
 - A routine named through a synonym is called through the synonym, as PL/SQL calls it, not at its target
   ([#184](https://github.com/rponte/penitent/issues/184), A4). A synonym pointed to another package, as a blue/green
   deploy does, now takes the proxy's next call there, and keeps it working once the old package is dropped; it went on
